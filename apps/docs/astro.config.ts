@@ -5,6 +5,7 @@ import { defineConfig } from "astro/config";
 import cloudflareArtifacts from "./src/integrations/cloudflare-artifacts";
 import { SITE_BASE_PATH, SITE_ORIGIN } from "./src/lib/paths";
 import { REFERENCE, SIDEBAR } from "./src/lib/reference";
+import { TERMINAL_STYLE_HASHES } from "./src/lib/terminal-style-hashes";
 
 const ASSET_ROOT = new URL("dist/", import.meta.url);
 
@@ -13,6 +14,7 @@ export default defineConfig({
   base: SITE_BASE_PATH,
   outDir: `dist${SITE_BASE_PATH}`,
   output: "static",
+  build: { inlineStylesheets: "never" },
   trailingSlash: "always",
   compressHTML: true,
   markdown: { syntaxHighlight: "prism" },
@@ -29,7 +31,7 @@ export default defineConfig({
         "object-src 'none'",
       ],
       scriptDirective: { resources: [{ resource: "'self'", kind: "element" }] },
-      styleDirective: { resources: [{ resource: "'unsafe-inline'", kind: "attribute" }] },
+      styleDirective: { hashes: [...TERMINAL_STYLE_HASHES], resources: [{ resource: "'unsafe-inline'", kind: "attribute" }] },
     },
   },
   integrations: [

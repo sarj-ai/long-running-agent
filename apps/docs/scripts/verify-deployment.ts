@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 
 import metadata from "../package.json" with { type: "json" };
 import { SOURCE_REVISION } from "../src/lib/source-revision.ts";
+import { TERMINAL_STYLE_HASHES } from "../src/lib/terminal-style-hashes.ts";
 
 const SITE_URL = new URL(metadata.homepage);
 const DIST_ROOT = new URL("../dist/", import.meta.url);
@@ -30,7 +31,25 @@ async function main(): Promise<void> {
     commit: SOURCE_REVISION,
     referenceSha256: hash("sha256", referenceBytes, "hex"),
   });
+  if (mode === "artifact") await verifyTerminalStyles();
   process.stdout.write("Deployment verified.\n");
+}
+
+async function verifyTerminalStyles(): Promise<void> {
+  const [headers, homepage] = await Promise.all([
+    readFile(new URL("_headers", DIST_ROOT), "utf8"),
+    readFile(new URL("index.html", ARTIFACT_ROOT), "utf8"),
+  ]);
+  const policy = /Content-Security-Policy: ([^\n]+)/u.exec(headers)?.[1];
+  assert.ok(policy);
+  for (const digest of TERMINAL_STYLE_HASHES) assert.ok(policy.includes(`'${digest}'`));
+  for (const style of homepage.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gu)) {
+    assert.ok(policy.includes(`'sha256-${hash("sha256", style[1], "base64")}'`));
+  }
+  const stylesheets = homepage.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"/gu).toArray();
+  assert.ok(stylesheets.length > 0);
+  const styles = await Promise.all(stylesheets.map(async (link) => readFile(new URL(`.${link[1]}`, DIST_ROOT), "utf8")));
+  assert.ok(styles.some((css) => css.includes(".demo-viewport") && css.includes(".xterm-helper-textarea")));
 }
 
 async function responseBytes(mode: "artifact" | "live", name: string): Promise<Buffer> {
