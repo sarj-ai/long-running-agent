@@ -235,32 +235,6 @@ def adapter(target: str) -> EntrypointAdapter:
     return EntrypointAdapter(command)
 
 
-def environment_prefix(loader: ast.FunctionDef) -> str:
-    return next(
-        node.left.value
-        for node in ast.walk(loader)
-        if isinstance(node, ast.BinOp)
-        and isinstance(node.op, ast.Add)
-        and isinstance(node.left, ast.Constant)
-        and isinstance(node.left.value, str)
-        and isinstance(node.right, ast.Call)
-        and isinstance(node.right.func, ast.Attribute)
-        and node.right.func.attr == "upper"
-    )
-
-
-def profile_selector(loader: ast.FunctionDef) -> str:
-    return next(
-        node.slice.value
-        for node in ast.walk(loader)
-        if isinstance(node, ast.Subscript)
-        and isinstance(node.value, ast.Name)
-        and node.value.id == "env"
-        and isinstance(node.slice, ast.Constant)
-        and isinstance(node.slice.value, str)
-    )
-
-
 def profile_path(source: ast.Module) -> str:
     relative = next(
         node.right.value
@@ -273,40 +247,16 @@ def profile_path(source: ast.Module) -> str:
     return "~/" + relative
 
 
-def setting_field(name: str, node: ast.AnnAssign, detail: Document, required: list[JsonValue], prefix: str) -> Document:
-    factory = isinstance(node.value, ast.Call) and any(
-        keyword.arg == "default_factory" for keyword in node.value.keywords
-    )
-    return {
-        "name": name,
-        "type": ast.unparse(node.annotation),
-        "description": detail.get("description", ""),
-        "default": detail.get("default"),
-        "defaultExpression": ast.unparse(node.value) if node.value else "",
-        "defaultKind": "factory" if factory else "value" if "default" in detail else "unset",
-        "required": name in required,
-        "envvar": prefix + name.upper(),
-    }
-
-
 def settings_reference() -> Document:
     source = tree("long_running_agent.config")
-    model = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == "Settings")
     schema = DocumentModel.model_validate(Settings.model_json_schema()).root
     properties = dictionary(schema["properties"])
-    loader = function(source, "load_settings")
-    prefix = environment_prefix(loader)
-    required = array(schema.get("required", []))
-    fields: list[JsonValue] = []
-    for node in model.body:
-        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            name = node.target.id
-            fields.append(setting_field(name, node, dictionary(properties[name]), required, prefix))
     return {
         "schema": schema,
-        "fields": fields,
         "profilePath": profile_path(source),
-        "configEnv": profile_selector(loader),
+        "example": "\n".join(
+            name + " = " + json.dumps(array(dictionary(detail)["examples"])[0]) for name, detail in properties.items()
+        ),
     }
 
 

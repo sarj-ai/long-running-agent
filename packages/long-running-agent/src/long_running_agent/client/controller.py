@@ -82,7 +82,7 @@ class Client:
                 message = f"Unexpected VM state: {state}; no power operation attempted"
                 raise RuntimeError(message)
             self.sleeper(min(2, max(0, deadline - self.clock())))
-        message = "VM wake exceeded five minutes; inspect vm status before trying again"
+        message = "VM wake exceeded five minutes; check the VM in Google Cloud before trying again"
         raise TimeoutError(message)
 
     def _request_wake(self, action: PowerAction, deadline: float) -> bool:

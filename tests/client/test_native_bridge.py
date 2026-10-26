@@ -8,7 +8,7 @@ import shlex
 import stat
 import struct
 from subprocess import CompletedProcess
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, ClassVar, override
 import zlib
 
 from long_running_agent.client import transfer
@@ -83,10 +83,14 @@ class FileEvidence(BaseModel):
     batch_mode: int
 
 
+class NativeSettings(Settings):
+    ssh_alias: ClassVar[str] = ALIAS
+
+
 class NativeController(Client):
     def __init__(self) -> None:
         self.opened: list[str] = []
-        super().__init__(Settings(ssh_alias=ALIAS), runner=self.execute)
+        super().__init__(NativeSettings(), runner=self.execute)
 
     @override
     def ensure_connection(self) -> None:

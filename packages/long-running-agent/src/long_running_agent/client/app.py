@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Annotated
 
 from rich.console import Console
@@ -46,30 +45,6 @@ def browser(
 ) -> None:
     """Open your VM browser with its saved tabs and sign-ins."""
     raise typer.Exit(_client(ctx).browser(no_open=no_open, url=url))
-
-
-@app.command()
-def info(
-    ctx: typer.Context,
-    *,
-    json_output: Annotated[bool, typer.Option("--json", help="Print compact JSON for scripts.")] = False,
-) -> None:
-    """Show VM identity, state, and capacity without waking it."""
-    client = _client(ctx)
-    state = client.cloud.state(timeout=15)
-    result: dict[str, object] = {
-        "instance": client.settings.instance,
-        "project": client.settings.project,
-        "zone": client.settings.zone,
-        "state": state,
-    }
-    if state == "RUNNING":
-        reply = client.remote("runtime host info", capture_output=True, timeout=15)
-        result["runtime"] = json.loads(reply.stdout)
-    if json_output:
-        typer.echo(json.dumps(result, separators=(",", ":")))
-    else:
-        typer.echo(json.dumps(result, indent=2))
 
 
 @app.command("ssh-config", hidden=True)

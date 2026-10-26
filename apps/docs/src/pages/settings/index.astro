@@ -1,25 +1,14 @@
 ---
+import { Code } from "@astrojs/starlight/components";
+
 import ReferencePage from "../../components/reference-page.astro";
-import { defaultLabel, REFERENCE } from "../../lib/reference";
+import { REFERENCE } from "../../lib/reference";
 ---
 
 <ReferencePage title="Settings">
   <article class="reference-page">
     <h1>Settings</h1>
-    <p>Save connection settings in <code>{REFERENCE.settings.profilePath}</code>.</p>
-    <p>Command flags override <code>LRA_*</code> environment variables, then your profile. Use <code>--config</code> or <code>{REFERENCE.settings.configEnv}</code> to select another profile.</p>
-    <div aria-label="Settings fields" class="reference-table-wrap" role="region" tabindex="0">
-      <table class="reference-table">
-        <caption>Connection settings</caption>
-        <thead><tr><th scope="col">Setting</th><th scope="col">Default</th></tr></thead>
-        <tbody>{REFERENCE.settings.fields.map((field) => (
-          <tr>
-            <th scope="row"><code>{field.name}</code><small>{field.envvar}</small></th>
-            <td><code>{field.defaultKind === "factory" ? "User-specific path" : field.default === null ? "Active gcloud account" : defaultLabel(field.defaultKind, field.default)}</code></td>
-          </tr>
-        ))}</tbody>
-      </table>
-    </div>
-    <p>Use your own Google account. Keep credentials out of your profile.</p>
+    <p>Set this once in <code>{REFERENCE.settings.profilePath}</code>. Your administrator provides the VM details.</p>
+    <Code code={REFERENCE.settings.example} lang="toml" />
   </article>
 </ReferencePage>

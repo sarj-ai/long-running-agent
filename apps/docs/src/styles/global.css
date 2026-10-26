@@ -58,6 +58,7 @@ starlight-menu-button button {
 .command-list span { color: var(--sl-color-gray-2); }
 .release-note { margin-top: 2rem; color: var(--sl-color-gray-3); font-size: 0.8rem; }
 
+
 @media (max-width: 35rem) {
   .metadata-list > div { grid-template-columns: 1fr; gap: 0.25rem; }
 }
