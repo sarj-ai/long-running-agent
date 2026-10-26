@@ -15,7 +15,7 @@ from long_running_agent.client import transfer
 from long_running_agent.client.browser import await_forward, start_route
 from long_running_agent.client.controller import Client
 from long_running_agent.client.host import HostBridge
-from long_running_agent.config import Settings
+from long_running_agent.config import RUNTIME_DIRECTORY, Settings
 from long_running_agent.host_connection import HostReply
 from long_running_agent.process import DEVNULL, PIPE, ChildProcess, Completed, run, spawn
 from pydantic import BaseModel, ConfigDict
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 ALIAS = "lra-native-check"
-RUNTIME_PYTHON = '"$HOME/.local/share/uv/tools/long-running-agent/bin/python"'
+RUNTIME_PYTHON = f'"$HOME/{RUNTIME_DIRECTORY}/bin/python"'
 REGISTER = """import sys
 from long_running_agent.runtime.host import registered
 with registered(sys.argv[1], 'Validation Mac'):
