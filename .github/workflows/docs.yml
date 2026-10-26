@@ -49,7 +49,7 @@ jobs:
         run: npm --prefix apps/docs run lint
       - name: Check source-derived pages
         run: npm --prefix apps/docs run check
-      - name: Test the interactive terminal demo
+      - name: Test the terminal demo and URL routing
         run: npm --prefix apps/docs test
       - name: Build the static website
         run: npm --prefix apps/docs run build
