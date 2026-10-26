@@ -13,6 +13,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 CloudIdentifier = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{0,62}$")]
+# Connection runtime updates must preserve existing MCP installations.
+RUNTIME_DIRECTORY = ".local/share/long-running-agent/terminal-tools/long-running-agent"
+REMOTE_RUNTIME = f'"$HOME/{RUNTIME_DIRECTORY}/bin/lra"'
 
 
 class Settings(BaseModel):

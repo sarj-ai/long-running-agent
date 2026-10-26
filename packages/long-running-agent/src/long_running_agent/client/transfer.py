@@ -11,6 +11,7 @@ import time
 from typing import TYPE_CHECKING, Final
 
 from long_running_agent.client.connection import close_child
+from long_running_agent.config import REMOTE_RUNTIME
 from long_running_agent.process import DEVNULL, PIPE, ChildProcess, ProcessTimeout, spawn
 from long_running_agent.runtime.transfer import (
     MAX_FILES,
@@ -104,7 +105,7 @@ def check_control(control: TransferControl | None) -> None:
 
 @contextmanager
 def transport(controller: Client, arguments: Sequence[str], control: TransferControl | None) -> Generator[ChildProcess]:
-    command = 'exec "$HOME/.local/bin/lra" ' + shlex.join(["runtime", "transfer", *arguments])
+    command = f"exec {REMOTE_RUNTIME} " + shlex.join(["runtime", "transfer", *arguments])
     native = ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", controller.settings.ssh_alias, command]
     child = spawn(native, stdin=PIPE, stdout=PIPE, stderr=DEVNULL) if control is None else control.launch(native)
     try:

@@ -15,7 +15,7 @@ from long_running_agent.client.connection import launch_master
 from long_running_agent.client.host import HostBridge
 from long_running_agent.client.ssh_config import install
 from long_running_agent.client.terminal import TerminalState
-from long_running_agent.config import Settings, load_settings
+from long_running_agent.config import REMOTE_RUNTIME, Settings, load_settings
 from long_running_agent.process import CommandError, Completed, ProcessTimeout, run
 
 
@@ -27,7 +27,6 @@ SSH_CONNECTION_CLOSED = 255
 WAKE_ACTIONS: Final[dict[str, PowerAction]] = {"TERMINATED": "start", "SUSPENDED": "resume"}
 TRANSITIONAL = frozenset({"PROVISIONING", "STAGING", "REPAIRING", "RESUMING", "STOPPING", "SUSPENDING"})
 CONNECTION_ATTEMPTS = 3
-REMOTE = '"$HOME/.local/bin/lra"'
 
 
 class Client:
@@ -151,7 +150,7 @@ class Client:
         input_text: str | None = None,
     ) -> Completed:
         return self.ssh(
-            ["-tt" if tty else "-T", self.settings.ssh_alias, f"exec {REMOTE} {command}"],
+            ["-tt" if tty else "-T", self.settings.ssh_alias, f"exec {REMOTE_RUNTIME} {command}"],
             timeout=timeout,
             capture_output=capture_output,
             input_text=input_text,

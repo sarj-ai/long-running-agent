@@ -16,4 +16,4 @@ uv tool install --editable ./packages/long-running-agent
 | `sarj-connect browser` | Open your VM browser with its saved tabs and sign-ins. |
 | `sarj-connect info` | Show VM identity, state, and capacity without waking it. |
 
-Version 0.7.0 · Python >=3.14,<3.15 · MIT
+Version 0.7.1 · Python >=3.14,<3.15 · MIT

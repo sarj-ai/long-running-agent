@@ -37,6 +37,10 @@ async function responseBytes(mode: "artifact" | "live", name: string): Promise<B
   if (mode === "artifact") return readFile(new URL(name, ARTIFACT_ROOT));
   const response = await fetch(new URL(name, SITE_URL), {
     cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "sarj-lra-deployment-verifier/1.0 (+https://github.com/sarj-ai/long-running-agent)",
+    },
     redirect: "error",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });

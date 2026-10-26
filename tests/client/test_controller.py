@@ -11,7 +11,7 @@ import subprocess
 
 from long_running_agent.client.cloud import Cloud, PowerAction, sanitized_environment
 from long_running_agent.client.controller import Client
-from long_running_agent.config import Settings
+from long_running_agent.config import REMOTE_RUNTIME, Settings
 from long_running_agent.process import CommandError
 import pytest
 
@@ -194,6 +194,6 @@ def test_setup_only_configures_the_native_runtime() -> None:
     runner = ScriptedRunner([(0, "", "")])
     NativeController(Settings(), runner=runner).setup()
     assert len(runner.commands) == 1
-    assert runner.commands[0] == ["ssh", "-T", "sarj-codex", 'exec "$HOME/.local/bin/lra" runtime setup']
+    assert runner.commands[0] == ["ssh", "-T", "sarj-codex", f"exec {REMOTE_RUNTIME} runtime setup"]
     assert runner.options[0]["timeout"] == 300
     assert runner.options[0]["input_text"] is None

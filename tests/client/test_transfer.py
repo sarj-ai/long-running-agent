@@ -11,7 +11,7 @@ from typing import override
 
 from long_running_agent.client import transfer
 from long_running_agent.client.controller import Client
-from long_running_agent.config import Settings
+from long_running_agent.config import RUNTIME_DIRECTORY, Settings
 from long_running_agent.process import DEVNULL, spawn
 import pytest
 
@@ -32,7 +32,7 @@ class NativeController(Client):
 @pytest.fixture
 def host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> NativeHost:
     vm = tmp_path / "vm home"
-    binaries = vm / ".local/bin"
+    binaries = vm / RUNTIME_DIRECTORY / "bin"
     binaries.mkdir(parents=True, mode=0o700)
     vm.chmod(0o700)
     runtime = binaries / "lra"
@@ -41,6 +41,10 @@ def host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> NativeHost:
         "sys.argv=[sys.argv[0],*sys.argv[3:]]\napp()\n"
     )
     runtime.chmod(0o700)
+    legacy = vm / ".local/bin/lra"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("#!/bin/sh\nexit 97\n")
+    legacy.chmod(0o700)
     local = tmp_path / "native-bin"
     local.mkdir()
     ssh = local / "ssh"
@@ -185,7 +189,7 @@ def test_uploaded_receipt_must_name_private_inbox_and_never_return_terminal_cont
             "sha256": hashlib.sha256(selected.read_bytes()).hexdigest(),
         }
     ]
-    runtime = host.vm / ".local/bin/lra"
+    runtime = host.vm / RUNTIME_DIRECTORY / "bin/lra"
     runtime.write_text(f"#!{sys.executable}\nimport sys\nsys.stdin.buffer.read()\nprint({json.dumps(receipts)!r})\n")
     with pytest.raises(RuntimeError, match="outside a private inbox"):
         transfer.send(host.controller, [selected])
@@ -194,7 +198,7 @@ def test_uploaded_receipt_must_name_private_inbox_and_never_return_terminal_cont
 def test_failed_remote_exit_discards_complete_but_unconfirmed_download(host: NativeHost) -> None:
     selected = host.vm / "image.png"
     selected.write_bytes(b"valid bytes")
-    runtime = host.vm / ".local/bin/lra"
+    runtime = host.vm / RUNTIME_DIRECTORY / "bin/lra"
     runtime.write_text(runtime.read_text().replace("app()", "app(standalone_mode=False)") + "raise SystemExit(3)\n")
     with pytest.raises(RuntimeError, match="Private SSH file transfer failed"):
         transfer.get(host.controller, str(selected), host.downloads)

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Self, override
 from rich.console import Console
 
 from long_running_agent.client import transfer
+from long_running_agent.config import REMOTE_RUNTIME
 from long_running_agent.host_connection import HostReply, HostRequest, read_message
 from long_running_agent.process import DEVNULL, PIPE, ChildProcess, CommandError, ProcessTimeout, spawn
 
@@ -223,7 +224,7 @@ class HostBridge(AbstractContextManager["HostBridge"]):
         except CommandError as error:
             if error.returncode not in {2, 127}:
                 raise
-            message = "Update the VM runtime to 0.6.0 for the Mac return channel. Use sarj-connect terminal --no-host to attach meanwhile."
+            message = "Ask your administrator to install the matching VM connection runtime. Use sarj-connect terminal --no-host to attach meanwhile."
             raise RuntimeError(message) from None
         endpoint = prepared.stdout.strip()
         if (
@@ -277,7 +278,7 @@ class HostBridge(AbstractContextManager["HostBridge"]):
         if self.remote_socket is None or self.local_socket is None:
             message = "The private host connection is not ready"
             raise RuntimeError(message)
-        command = 'exec "$HOME/.local/bin/lra" runtime host attach ' + shlex.join(
+        command = f"exec {REMOTE_RUNTIME} runtime host attach " + shlex.join(
             [self.connection, self.label, "--session", session]
         )
         Console(stderr=True).print(
