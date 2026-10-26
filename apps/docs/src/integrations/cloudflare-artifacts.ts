@@ -3,6 +3,7 @@ import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import type { AstroIntegration } from "astro";
 
+import { ENGINEERING_INDEX, ENGINEERING_POLICY } from "../lib/engineering-index";
 import { SITE_BASE_PATH, SITE_HOMEPAGE, siteHref } from "../lib/paths";
 
 const POLICY_PATTERN = /<meta http-equiv="content-security-policy" content="([^"]+)">/u;
@@ -10,7 +11,7 @@ const POLICY_PATTERN = /<meta http-equiv="content-security-policy" content="([^"
 async function writeLegacyRedirects(projectDirectory: URL, assetRoot: URL): Promise<void> {
   if (SITE_BASE_PATH === "/") return;
   const entries = await readdir(projectDirectory, { withFileTypes: true });
-  const redirects = new Set([`/ ${SITE_HOMEPAGE} 302`]);
+  const redirects = new Set<string>();
   for (const entry of entries) {
     if (entry.name === "_headers" || entry.name === "_redirects" || SITE_BASE_PATH.startsWith(`/${entry.name}/`)) continue;
     const legacy = `/${entry.name}`;
@@ -19,9 +20,8 @@ async function writeLegacyRedirects(projectDirectory: URL, assetRoot: URL): Prom
       redirects.add(`${legacy} ${destination} 301`);
       redirects.add(`${legacy}/ ${destination} 301`);
       redirects.add(`${legacy}/* ${destination}:splat 301`);
-    } else if (entry.isFile()) {
-      const destination = new URL(entry.name === "index.html" ? "" : entry.name, SITE_HOMEPAGE).href;
-      redirects.add(`${legacy} ${destination} ${entry.name === "index.html" ? "302" : "301"}`);
+    } else if (entry.isFile() && entry.name !== "index.html") {
+      redirects.add(`${legacy} ${new URL(entry.name, SITE_HOMEPAGE).href} 301`);
     }
   }
   await writeFile(new URL("_redirects", assetRoot), `${[...redirects].toSorted().join("\n")}\n`, "utf8");
@@ -66,7 +66,9 @@ export default function cloudflareArtifacts(assetRoot: URL): AstroIntegration {
         if (!headers.startsWith("/*\n")) throw new Error("Cloudflare headers must begin with the global route");
         const scoped = headers.replace("/*\n", () => `/*\n${header}\n`).split("\n")
           .map((line) => line.startsWith("/") ? siteHref(line) : line).join("\n");
-        await writeFile(new URL("_headers", assetRoot), scoped, "utf8");
+        const homepageHeaders = `/\n  Content-Security-Policy: ${ENGINEERING_POLICY}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`;
+        await writeFile(new URL("_headers", assetRoot), `${scoped}\n${homepageHeaders}`, "utf8");
+        await writeFile(new URL("index.html", assetRoot), ENGINEERING_INDEX, "utf8");
         await writeLegacyRedirects(dir, assetRoot);
         if (dir.href !== assetRoot.href) await rm(headersUrl);
       },

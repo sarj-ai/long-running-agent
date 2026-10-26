@@ -1,4 +1,4 @@
-import metadata from "../../package.json";
+import metadata from "../../package.json" with { type: "json" };
 
 const SITE_URL = new URL(metadata.homepage);
 
