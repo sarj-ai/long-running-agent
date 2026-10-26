@@ -14,8 +14,11 @@ from long_running_agent.config import Settings
 import pytest
 
 
-def test_managed_host_precedes_includes_and_broad_defaults_without_overwriting_them(tmp_path: Path) -> None:
-    settings = Settings(account="person@example.com", ssh_key=tmp_path / "key with spaces")
+def test_managed_host_precedes_includes_and_broad_defaults_without_overwriting_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "home with spaces"))
+    settings = Settings(account="person@example.com")
     ssh = tmp_path / ".ssh"
     ssh.mkdir()
     includes = ssh / "defaults.conf"

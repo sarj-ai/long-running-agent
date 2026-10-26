@@ -4,11 +4,8 @@ from contextlib import contextmanager
 import errno
 from http import HTTPStatus
 from http.client import HTTPConnection
-from importlib.metadata import version
-import json
 import os
 from pathlib import Path
-import pwd
 import re
 import shlex
 import stat
@@ -289,28 +286,6 @@ def status() -> None:
         typer.echo("No Mac return channel is active. Reconnect from the Mac with sarj-connect terminal.")
     for item in connections:
         typer.echo(f"{item.connection}  {item.label}")
-
-
-@app.command()
-def info() -> None:
-    """Return this Linux user's identity, disk capacity, browser state, and live connection count."""
-    disk = os.statvfs(Path.home())
-    browser = run(
-        ["systemctl", "--user", "is-active", "sarj-browser.service"], check=False, capture_output=True, timeout=5
-    )
-    typer.echo(
-        json.dumps(
-            {
-                "runtime_version": version("long-running-agent"),
-                "uid": os.getuid(),
-                "username": pwd.getpwuid(os.getuid()).pw_name,
-                "disk_free_bytes": disk.f_bavail * disk.f_frsize,
-                "disk_total_bytes": disk.f_blocks * disk.f_frsize,
-                "browser_running": browser.returncode == 0,
-                "host_connections": len(live_connections()),
-            }
-        )
-    )
 
 
 def invoke(application: typer.Typer, name: str) -> None:

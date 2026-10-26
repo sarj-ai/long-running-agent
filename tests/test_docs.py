@@ -92,17 +92,18 @@ def test_reference_only_publishes_daily_commands_and_keeps_existing_aliases(tmp_
     assert entries["vm"].command.path == ["vm"]
     paths = {tuple(command.path): command for entry in entries.values() for command in commands(entry.command)}
     for name in ("vm", "sarj-vm", "sarj-connect"):
-        assert {command.path[-1] for command in entries[name].command.commands} == {"terminal", "browser", "info"}
-    assert {command.path[-1] for command in paths["lra", "vm"].commands} == {"terminal", "browser", "info"}
+        assert {command.path[-1] for command in entries[name].command.commands} == {"terminal", "browser"}
+    assert {command.path[-1] for command in paths["lra", "vm"].commands} == {"terminal", "browser"}
     assert '"api":' not in (tmp_path / REFERENCE).read_text(encoding="utf-8")
-    assert reference.settings["configEnv"] == "LRA_CONFIG"
+    assert reference.settings["profilePath"] == "~/.config/long-running-agent/config.toml"
+    assert set(tomllib.loads(str(reference.settings["example"]))) == {"account", "project", "instance", "zone"}
     inputs = reference.terraform.roots[0].inputs
     assert any(field.name == "project_id" for field in inputs)
     assert all(not field.name.startswith('"') and not field.description.startswith('"') for field in inputs)
     readme = (tmp_path / "README.md").read_text(encoding="utf-8")
     assert "sarj-connect terminal" in readme
     assert "sarj-connect browser" in readme
-    assert "sarj-connect info" in readme
+    assert "sarj-connect info" not in readme
     assert "runtime" not in readme
     assert len(readme.splitlines()) <= 25
 

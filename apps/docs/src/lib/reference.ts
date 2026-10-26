@@ -57,17 +57,7 @@ interface Projection {
   settings: {
     schema: Record<string, unknown>;
     profilePath: string;
-    configEnv: string;
-    fields: {
-      name: string;
-      type: string;
-      description: string;
-      default: unknown;
-      defaultExpression: string;
-      defaultKind: string;
-      required: boolean;
-      envvar: null | string;
-    }[];
+    example: string;
   };
   terraform: {
     roots: {

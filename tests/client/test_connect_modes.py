@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from long_running_agent.cli import app, connect_app, vm_arguments
 from long_running_agent.client.controller import Client
 from long_running_agent.config import Settings
-from pydantic import BaseModel, RootModel
+from pydantic import RootModel
 import pytest
 from rich.text import Text
 from typer.testing import CliRunner
@@ -20,15 +20,6 @@ if TYPE_CHECKING:
 
 class SshCalls(RootModel[list[list[str]]]):
     pass
-
-
-class CommandArguments(RootModel[list[str]]):
-    pass
-
-
-class InfoResponse(BaseModel):
-    state: str
-    runtime: dict[str, int] | None = None
 
 
 @pytest.mark.parametrize("session", [None, "project-work"], ids=["default-session", "selected-session"])
@@ -113,7 +104,8 @@ def test_connect_help_lists_connection_modes_and_existing_vm_aliases_stay_availa
     assert "ui" not in help_text
     assert "terminal" in help_text
     assert "browser" in help_text
-    assert "--account" in help_text
+    assert "--account" not in help_text
+    assert "--config" not in help_text
     assert vm_arguments([]) == ["vm", "terminal"]
     assert vm_arguments(["terminal"]) == ["vm", "terminal"]
     assert runner.invoke(connect_app, ["ui"]).exit_code == 2
@@ -122,40 +114,11 @@ def test_connect_help_lists_connection_modes_and_existing_vm_aliases_stay_availa
     assert runner.invoke(connect_app, ["missing-mode"]).exit_code == 2
 
 
-@pytest.mark.parametrize("retired", ["send", "get", "codex", "ssh", "wake", "sleep", "stop", "status", "health"])
+@pytest.mark.parametrize(
+    "retired", ["send", "get", "codex", "ssh", "wake", "sleep", "stop", "status", "health", "info"]
+)
 def test_unused_commands_are_rejected_before_any_connection(tmp_path: Path, retired: str) -> None:
     runner = CliRunner()
     environment = {"PATH": str(tmp_path), "HOME": str(tmp_path)}
     assert runner.invoke(connect_app, [retired], env=environment).exit_code == 2
     assert runner.invoke(app, ["vm", retired], env=environment).exit_code == 2
-
-
-@pytest.mark.parametrize("state", ["RUNNING", "SUSPENDED", "TERMINATED"])
-def test_info_reports_state_without_waking_or_reconfiguring_the_vm(tmp_path: Path, state: str) -> None:
-    gcloud = tmp_path / "gcloud"
-    record = tmp_path / "cloud.json"
-    gcloud.write_text(
-        f"#!{sys.executable}\nimport json,pathlib,sys\n"
-        f"pathlib.Path({str(record)!r}).write_text(json.dumps(sys.argv[1:]))\n"
-        f"print({state!r})\n"
-    )
-    gcloud.chmod(0o700)
-    ssh = tmp_path / "ssh"
-    ssh_record = tmp_path / "ssh.json"
-    ssh.write_text(
-        f"#!{sys.executable}\nimport json,pathlib,sys\n"
-        f"pathlib.Path({str(ssh_record)!r}).write_text(json.dumps(sys.argv[1:]))\n"
-        "print('{\"vcpus\":8}')\n"
-    )
-    ssh.chmod(0o700)
-    result = CliRunner().invoke(connect_app, ["info", "--json"], env={"PATH": str(tmp_path), "HOME": str(tmp_path)})
-    assert result.exit_code == 0, result.output
-    payload = InfoResponse.model_validate_json(result.stdout)
-    assert payload.state == state
-    cloud_arguments = CommandArguments.model_validate_json(record.read_text()).root
-    assert "describe" in cloud_arguments
-    assert {"start", "resume", "stop", "suspend", "ssh"}.isdisjoint(cloud_arguments)
-    assert ssh_record.exists() == (state == "RUNNING")
-    if state == "RUNNING":
-        assert payload.runtime == {"vcpus": 8}
-        assert CommandArguments.model_validate_json(ssh_record.read_text()).root[-1].endswith("runtime host info")

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 from typing import Annotated
 
@@ -29,19 +28,16 @@ app.add_typer(infra.app, name="infra", hidden=True)
 def configure(
     ctx: typer.Context,
     *,
-    config: Annotated[Path | None, typer.Option("--config", help="Personal TOML connection profile.")] = None,
-    account: Annotated[str | None, typer.Option("--account", help="Your Google account email.")] = None,
-    project: Annotated[str | None, typer.Option("--project", help="Google Cloud project.")] = None,
-    instance: Annotated[str | None, typer.Option("--instance", help="VM name.")] = None,
-    zone: Annotated[str | None, typer.Option("--zone", help="VM zone.")] = None,
+    account: Annotated[str | None, typer.Option("--account", hidden=True)] = None,
+    project: Annotated[str | None, typer.Option("--project", hidden=True)] = None,
+    instance: Annotated[str | None, typer.Option("--instance", hidden=True)] = None,
+    zone: Annotated[str | None, typer.Option("--zone", hidden=True)] = None,
 ) -> None:
-    ctx.obj = load_settings(
-        config, overrides={"account": account, "project": project, "instance": instance, "zone": zone}
-    )
+    ctx.obj = load_settings(overrides={"account": account, "project": project, "instance": instance, "zone": zone})
 
 
 connect_app = typer.Typer(
-    help="Open your terminal or browser, or check your VM.",
+    help="Open your terminal or browser.",
     add_completion=False,
     no_args_is_help=True,
     pretty_exceptions_enable=False,
@@ -49,7 +45,6 @@ connect_app = typer.Typer(
 connect_app.callback()(configure)
 connect_app.command("terminal")(client.terminal)
 connect_app.command("browser")(client.browser)
-connect_app.command("info")(client.info)
 
 
 def invoke(application: typer.Typer, name: str, arguments: list[str] | None = None) -> None:
