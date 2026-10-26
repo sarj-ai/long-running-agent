@@ -1,5 +1,31 @@
 <section aria-busy="true" aria-label="Interactive terminal demo" class="terminal-demo not-content" data-terminal-demo>
-  <p class="demo-instructions" data-instructions>Connect, switch between the sample Codex sessions, then detach and reconnect.</p>
+  <div class="demo-help">
+    <div data-instructions>
+      <p class="demo-instructions">Click the terminal, then use these keys. Alt is Option (⌥) on Mac. You can also use the buttons and tabs.</p>
+      <dl class="demo-shortcuts">
+      <div><dt><kbd>Enter</kbd></dt><dd>Connect, run, send, or reconnect</dd></div>
+      <div><dt><kbd>Alt</kbd> + <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd></dt><dd>Switch tabs</dd></div>
+      <div><dt><kbd>Alt</kbd> + <kbd>D</kbd></dt><dd>Detach; work keeps running</dd></div>
+      <div><dt><kbd>Esc</kbd></dt><dd>Stop the current task</dd></div>
+      </dl>
+    </div>
+    <details class="demo-more-shortcuts">
+      <summary>More shortcuts</summary>
+      <dl class="demo-shortcuts">
+        <div><dt><kbd>Alt</kbd> + <kbd>1</kbd>–<kbd>9</kbd></dt><dd>Select a tab</dd></div>
+        <div><dt><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd></dt><dd>Move between panes or tabs</dd></div>
+        <div><dt><kbd>Alt</kbd> + <kbd>↑</kbd> / <kbd>↓</kbd></dt><dd>Move between stacked panes</dd></div>
+        <div><dt><kbd>Alt</kbd> + <kbd>N</kbd> / <kbd>W</kbd></dt><dd>New / close tab</dd></div>
+        <div><dt><kbd>Alt</kbd> + <kbd>V</kbd> / <kbd>S</kbd></dt><dd>Split right / below</dd></div>
+        <div><dt><kbd>Alt</kbd> + <kbd>Z</kbd> / <kbd>X</kbd></dt><dd>Fullscreen / close pane</dd></div>
+        <div><dt><kbd>Alt</kbd> + <kbd>R</kbd></dt><dd>Rename tab</dd></div>
+        <div><dt><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd></dt><dd>Rename pane</dd></div>
+        <div><dt><kbd>Enter</kbd> / <kbd>Esc</kbd></dt><dd>Save / cancel a rename</dd></div>
+        <div><dt><kbd>Ctrl</kbd> + <kbd>G</kbd></dt><dd>Unlock / lock Zellij modes</dd></div>
+      </dl>
+      <p>Alt shortcuts work in the default locked mode and normal mode. Esc stops work, cancels a rename, or returns to the default mode. Tab moves focus out of the terminal.</p>
+    </details>
+  </div>
   <div class="demo-viewport"><div class="demo-terminal" data-terminal></div></div>
   <footer class="demo-footer">
     <span>Interactive demo · sample data · runs locally</span>
@@ -28,8 +54,19 @@
   @font-face { font-family: LRATerminal; src: url("/projects/lra/fonts/lra-terminal-bold.woff2") format("woff2"); font-weight: 700; font-display: block; }
   .terminal-demo { margin: 1.5rem 0 2rem; min-width: 0; border: 1px solid #313244; border-radius: 0.45rem; overflow: hidden; background: #1e1e2e; color: #cdd6f4; }
   .terminal-demo [hidden] { display: none !important; }
-  .demo-instructions { margin: 0; padding: 0.65rem 0.85rem; border-bottom: 1px solid #313244; color: #bac2de; font: 0.76rem/1.5 var(--sl-font, sans-serif); }
-  .demo-viewport { width: 100%; height: 36rem; padding: 10px; overflow: hidden; }
+  .demo-help { padding: 0.65rem 0.85rem; border-bottom: 1px solid #313244; color: #bac2de; font: 0.76rem/1.5 var(--sl-font, sans-serif); }
+  .demo-instructions { margin: 0 0 0.6rem; }
+  .demo-shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem 1.25rem; margin: 0; }
+  .demo-shortcuts > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.55rem; }
+  .demo-shortcuts dt { color: #cdd6f4; white-space: nowrap; }
+  .demo-shortcuts dd { margin: 0; }
+  .demo-shortcuts kbd { border: 1px solid #585b70; border-radius: 0.2rem; padding: 0.05rem 0.25rem; background: #313244; color: #cdd6f4; font: 0.95em/1.5 var(--sl-font-mono, monospace); }
+  .demo-more-shortcuts { margin-top: 0.3rem; }
+  .demo-more-shortcuts summary { min-height: 44px; width: fit-content; padding: 0.65rem 0; color: #cdd6f4; cursor: pointer; }
+  .demo-more-shortcuts summary:focus-visible { outline: 2px solid #89b4fa; outline-offset: 2px; border-radius: 0.2rem; }
+  .demo-more-shortcuts > p { margin: 0.6rem 0 0; }
+  .demo-viewport { width: 100%; height: clamp(16rem, 45svh, 28rem); padding: 10px; overflow: hidden; }
+  .terminal-demo:not([data-attached=true]) .demo-viewport { height: 15rem; }
   .demo-terminal { width: 100%; height: 100%; }
   .demo-terminal :global(.xterm) { height: 100%; background: #1e1e2e; }
   .demo-terminal :global(.xterm-viewport) { scrollbar-width: none; background: #1e1e2e !important; }
@@ -50,7 +87,8 @@
     .demo-accessible-tabs:not(:focus-within) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   }
   @media (max-width: 35rem) {
-    .demo-viewport { height: 31rem; padding: 6px; }
+    .demo-shortcuts { grid-template-columns: 1fr; }
+    .demo-viewport { padding: 6px; }
     .demo-footer { gap: 0.25rem 0.5rem; }
     .demo-footer > span { flex-basis: 100%; }
   }
