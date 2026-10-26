@@ -1,277 +1,57 @@
-<section aria-label="Interactive terminal demo" class="terminal-demo not-content" data-terminal-demo>
-  <header class="demo-chrome">
-    <span aria-hidden="true" class="demo-dots"><i></i><i></i><i></i></span>
-    <span data-context>Your Mac</span>
-    <button data-reset type="button">Reset</button>
-  </header>
-  <div class="demo-tabs" data-tabs hidden>
-    <div aria-label="VM terminal tabs" class="demo-tab-list" role="tablist">
-    <button aria-selected="true" data-tab="docs" role="tab" type="button">1 Docs <small>Alt + 1</small><span data-busy="docs" hidden> · working</span></button>
-    <button aria-selected="false" data-tab="tests" role="tab" tabindex="-1" type="button">2 Tests <small>Alt + 2</small><span data-busy="tests" hidden> · working</span></button>
-    </div>
-    <button class="demo-detach" data-detach type="button">Detach <small>Alt + D</small></button>
-  </div>
-  <div aria-label="Local terminal" class="demo-panel" data-panel role="region">
-    <div aria-label="Terminal output" class="demo-output" data-output tabindex="0">
-      <p class="demo-welcome" data-welcome>Try it. Connect, start Codex, then switch tabs.<br />Detach and return. Your work stays here.</p>
-      <div data-lines></div>
-      <p class="demo-working" data-working hidden>Working… <span>Switch tabs while Codex works.</span></p>
-    </div>
-    <form class="demo-form" data-form>
-      <label class="demo-sr-only" data-input-label>Local terminal command</label>
-      <span aria-hidden="true" class="demo-prompt" data-prompt>$</span>
-      <input aria-label="Local terminal command" autocapitalize="off" autocomplete="off" data-input maxlength="300" spellcheck="false" type="text" value="sarj-connect terminal" />
-      <button class="demo-submit" data-submit type="submit">Connect <span aria-hidden="true">↵</span></button>
-      <button class="demo-stop" data-stop hidden type="button">Stop <small>Ctrl + C</small></button>
-    </form>
-  </div>
+<section aria-busy="true" aria-label="Interactive terminal demo" class="terminal-demo not-content" data-terminal-demo>
+  <p class="demo-instructions" data-instructions>Connect, switch between the sample Codex sessions, then detach and reconnect.</p>
+  <div class="demo-viewport"><div class="demo-terminal" data-terminal></div></div>
   <footer class="demo-footer">
-    <span>Interactive demo · runs in your browser</span>
-    <span data-hint>Press Enter to connect.</span>
+    <span>Interactive demo · sample data · runs locally</span>
+    <div aria-label="Sample terminal tabs" class="demo-accessible-tabs" data-accessible-tabs hidden role="tablist"></div>
+    <div class="demo-actions">
+      <button data-submit disabled type="button">Connect ↵</button>
+      <button data-detach disabled hidden type="button">Detach</button>
+      <button data-reset disabled type="button">Reset</button>
+    </div>
   </footer>
+  <pre aria-label="Current sample terminal transcript" aria-live="off" class="demo-sr-only" data-transcript></pre>
   <p aria-atomic="true" aria-live="polite" class="demo-sr-only" data-status></p>
-  <noscript><p class="demo-no-script">Enable JavaScript to try the terminal demo.</p></noscript>
+  <noscript><p>Enable JavaScript to try the terminal demo.</p></noscript>
 </section>
 
 <script>
-  import { TerminalDemo, type TabId } from "../lib/terminal-demo";
+  import "@xterm/xterm/css/xterm.css";
 
-  function initialize(root: HTMLElement, index: number): void {
-    const input = root.querySelector("input");
-    const form = root.querySelector("form");
-    const output = root.querySelector<HTMLElement>("[data-output]");
-    const lines = root.querySelector<HTMLElement>("[data-lines]");
-    const panel = root.querySelector<HTMLElement>("[data-panel]");
-    const tabs = root.querySelector<HTMLElement>("[data-tabs]");
-    const welcome = root.querySelector<HTMLElement>("[data-welcome]");
-    const working = root.querySelector<HTMLElement>("[data-working]");
-    const submit = root.querySelector<HTMLButtonElement>("[data-submit]");
-    const stop = root.querySelector<HTMLButtonElement>("[data-stop]");
-    const context = root.querySelector<HTMLElement>("[data-context]");
-    const prompt = root.querySelector<HTMLElement>("[data-prompt]");
-    const status = root.querySelector<HTMLElement>("[data-status]");
-    const hint = root.querySelector<HTMLElement>("[data-hint]");
-    const label = root.querySelector<HTMLLabelElement>("[data-input-label]");
-    if (!input || !form || !output || !lines || !panel || !tabs || !welcome || !working || !submit || !stop || !context || !prompt || !status || !hint || !label) return;
-    const prefix = `lra-demo-${index}`;
-    input.id = `${prefix}-input`;
-    label.htmlFor = input.id;
-    panel.id = `${prefix}-panel`;
-    const tabButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-tab]")];
-    const drafts = new Map<string, string>([["local", input.value]]);
-    const visibleInputs = new Map<string, string>([["local", input.value]]);
-    const histories = new Map<string, string[]>();
-    const cursors = new Map<string, number>();
-    let key = "local";
-    const render = (): void => {
-      const nextKey = demo.attached ? `${demo.active}:${demo.currentTab.mode}` : "local";
-      const contextChanged = nextKey !== key;
-      const previousScroll = output.scrollTop;
-      const wasAtBottom = output.scrollHeight - previousScroll - output.clientHeight <= 8;
-      if (contextChanged) {
-        visibleInputs.set(key, input.value);
-        key = nextKey;
-        const draft = visibleInputs.get(key) ?? drafts.get(key);
-        input.value = key === "local" && !draft?.trim() ? demo.suggestedInput : (draft ?? demo.suggestedInput);
-      }
-      const busy = demo.attached && demo.currentTab.busy;
-      tabs.hidden = !demo.attached;
-      context.textContent = demo.attached ? `VM · ~/demo/${demo.active}${demo.currentTab.mode === "codex" ? " · Codex" : ""}` : "Your Mac";
-      prompt.textContent = demo.prompt;
-      label.textContent = demo.inputLabel;
-      input.setAttribute("aria-label", demo.inputLabel);
-      input.placeholder = demo.suggestedInput;
-      input.readOnly = busy;
-      submit.hidden = busy;
-      stop.hidden = !busy;
-      submit.textContent = demo.attached ? (demo.currentTab.mode === "codex" ? "Send ↵" : "Run ↵") : (demo.connectedBefore ? "Reconnect ↵" : "Connect ↵");
-      const transcript = demo.attached ? demo.currentTab.lines : demo.localLines;
-      const children = transcript.map((line) => {
-        const paragraph = document.createElement("p");
-        paragraph.className = `demo-line demo-line-${line.kind}`;
-        paragraph.textContent = line.text;
-        return paragraph;
-      });
-      lines.replaceChildren(...children);
-      welcome.hidden = demo.connectedBefore || transcript.length > 0;
-      working.hidden = !busy;
-      for (const button of tabButtons) {
-        const selected = button.dataset.tab === demo.active;
-        button.id = `${prefix}-${button.dataset.tab}`;
-        button.setAttribute("aria-controls", panel.id);
-        button.setAttribute("aria-selected", String(selected));
-        button.tabIndex = selected ? 0 : -1;
-      }
-      for (const id of ["docs", "tests"] as const) {
-        const indicator = root.querySelector<HTMLElement>(`[data-busy="${id}"]`);
-        if (indicator) indicator.hidden = !demo.tabs[id].busy;
-      }
-      panel.setAttribute("role", demo.attached ? "tabpanel" : "region");
-      if (demo.attached) {
-        panel.setAttribute("aria-labelledby", `${prefix}-${demo.active}`);
-        panel.removeAttribute("aria-label");
-      } else {
-        panel.removeAttribute("aria-labelledby");
-        panel.setAttribute("aria-label", "Local terminal");
-      }
-      hint.textContent = demo.attached ? "Alt / Option + 1 or 2 to switch · Alt / Option + D to detach" : (demo.connectedBefore ? "Reconnect to find both tabs where you left them." : "Press Enter to connect.");
-      status.textContent = demo.status;
-      output.scrollTop = contextChanged || wasAtBottom ? output.scrollHeight : previousScroll;
-    };
-    const demo = new TerminalDemo(render);
+  import { mountTerminalDemo } from "../lib/mount-terminal-demo";
 
-    function selectTab(id: TabId): void {
-      demo.selectTab(id);
-    }
-
-    const detach = (): void => {
-      demo.detach();
-      input.focus({ preventScroll: true });
-    };
-
-    input.addEventListener("input", () => {
-      drafts.set(key, input.value);
-      visibleInputs.set(key, input.value);
-      cursors.set(key, histories.get(key)?.length ?? 0);
-    });
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const text = input.value.trim();
-      if (!text || (demo.attached && demo.currentTab.busy)) return;
-      const history = histories.get(key) ?? [];
-      if (history.at(-1) !== text) history.push(text);
-      histories.set(key, history.slice(-20));
-      cursors.set(key, Math.min(history.length, 20));
-      drafts.set(key, "");
-      visibleInputs.set(key, "");
-      input.value = "";
-      demo.submit(text);
-      input.focus({ preventScroll: true });
-    });
-    for (const button of tabButtons) {
-      button.addEventListener("click", () => {
-        selectTab(button.dataset.tab === "docs" ? "docs" : "tests");
-      });
-      button.addEventListener("keydown", (event) => {
-        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-        let id: TabId;
-        if (event.key === "Home") id = "docs";
-        else if (event.key === "End") id = "tests";
-        else if (event.key === "ArrowLeft" || event.key === "ArrowRight") id = demo.active === "docs" ? "tests" : "docs";
-        else return;
-        event.preventDefault();
-        selectTab(id);
-        tabButtons.find((tab) => tab.dataset.tab === id)?.focus();
-      });
-    }
-    root.querySelector("[data-detach]")?.addEventListener("click", detach);
-    stop.addEventListener("click", () => {
-      demo.cancel();
-      input.focus({ preventScroll: true });
-    });
-    root.querySelector("[data-reset]")?.addEventListener("click", () => {
-      drafts.clear();
-      visibleInputs.clear();
-      histories.clear();
-      cursors.clear();
-      key = "local";
-      input.value = "sarj-connect terminal";
-      drafts.set(key, input.value);
-      visibleInputs.set(key, input.value);
-      demo.reset();
-      input.focus({ preventScroll: true });
-    });
-    root.addEventListener("keydown", (event) => {
-      if (event.metaKey || event.isComposing) return;
-      if (event.altKey && !event.ctrlKey && !event.shiftKey && demo.attached) {
-        if (event.code === "Digit1" || event.code === "Digit2") {
-          event.preventDefault();
-          selectTab(event.code === "Digit1" ? "docs" : "tests");
-          input.focus({ preventScroll: true });
-        } else if (event.code === "KeyD") {
-          event.preventDefault();
-          detach();
-        }
-      } else if (event.ctrlKey && !event.altKey && !event.shiftKey && event.code === "KeyC") {
-        if (demo.attached && demo.currentTab.busy) {
-          event.preventDefault();
-          demo.cancel();
-          input.focus({ preventScroll: true });
-        } else if (event.target === input && input.selectionStart === input.selectionEnd && !globalThis.getSelection()?.toString()) {
-          event.preventDefault();
-          input.value = "";
-          drafts.set(key, "");
-          visibleInputs.set(key, "");
-          cursors.set(key, histories.get(key)?.length ?? 0);
-        }
-      } else if (event.target === input && !event.altKey && !event.ctrlKey && !event.shiftKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
-        const history = histories.get(key) ?? [];
-        if (history.length === 0 || input.readOnly) return;
-        event.preventDefault();
-        const cursor = cursors.get(key) ?? history.length;
-        if (cursor === history.length) drafts.set(key, input.value);
-        const next = Math.max(0, Math.min(history.length, cursor + (event.key === "ArrowUp" ? -1 : 1)));
-        cursors.set(key, next);
-        input.value = next === history.length ? (drafts.get(key) ?? "") : (history[next] ?? "");
-        visibleInputs.set(key, input.value);
-      }
-    });
-    render();
-  }
-
-  document.querySelectorAll<HTMLElement>("[data-terminal-demo]").forEach(initialize);
+  for (const root of document.querySelectorAll<HTMLElement>("[data-terminal-demo]")) void mountTerminalDemo(root);
 </script>
 
 <style>
-  .terminal-demo { margin: 1.5rem 0 2rem; overflow: hidden; border: 1px solid #36404e; border-radius: 0.8rem; background: #101419; color: #dce5ee; box-shadow: 0 1rem 3rem #0002; font: 0.86rem/1.65 var(--sl-font-mono, monospace); }
+  @font-face { font-family: LRATerminal; src: url("/projects/lra/fonts/lra-terminal-regular.woff2") format("woff2"); font-weight: 400; font-display: block; }
+  @font-face { font-family: LRATerminal; src: url("/projects/lra/fonts/lra-terminal-bold.woff2") format("woff2"); font-weight: 700; font-display: block; }
+  .terminal-demo { margin: 1.5rem 0 2rem; min-width: 0; border: 1px solid #313244; border-radius: 0.45rem; overflow: hidden; background: #1e1e2e; color: #cdd6f4; }
   .terminal-demo [hidden] { display: none !important; }
-  .terminal-demo button { min-height: 44px; border: 0; border-radius: 0.35rem; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-  .terminal-demo :is(button, input, [tabindex]):focus-visible { outline: 2px solid #a7c4ff; outline-offset: -3px; }
-  .demo-chrome { display: flex; align-items: center; gap: 0.8rem; min-height: 3.2rem; padding: 0 0.75rem; border-bottom: 1px solid #303945; background: #1a2028; font-size: 0.76rem; }
-  .demo-chrome > [data-context] { min-width: 0; overflow-wrap: anywhere; color: #bdc8d6; }
-  .demo-chrome button { margin-left: auto; padding-inline: 0.75rem; color: #bdc8d6; }
-  .demo-chrome button:hover { color: #fff; background: #ffffff0b; }
-  .demo-dots { display: flex; flex-shrink: 0; gap: 0.35rem; }
-  .demo-dots i { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #667180; }
-  .demo-dots i:first-child { background: #c87c76; }
-  .demo-dots i:nth-child(2) { background: #c3ac77; }
-  .demo-dots i:last-child { background: #7ca488; }
-  .demo-tabs { display: flex; align-items: stretch; gap: 0.3rem; padding: 0.35rem 0.6rem; border-bottom: 1px solid #303945; background: #151b22; }
-  .demo-tab-list { display: flex; gap: 0.3rem; min-width: 0; }
-  .demo-tabs button { padding-inline: 0.7rem; color: #aebaca; white-space: nowrap; }
-  .demo-tabs button[aria-selected="true"] { background: #293749; color: #e9f1ff; box-shadow: inset 0 -2px #9ebaff; }
-  .demo-tabs button:hover { background: #263141; }
-  .demo-tabs small, .demo-stop small { margin-left: 0.5rem; color: #a5b0bf; font-size: 0.68rem; }
-  .demo-tabs [data-busy] { color: #b9d9b4; font-size: 0.65rem; }
-  .demo-tabs .demo-detach { margin-left: auto; }
-  .demo-output { height: 18rem; overflow: auto; padding: 1.25rem 1.25rem 0.5rem; overscroll-behavior: contain; scrollbar-color: #4c5b6d transparent; }
-  .demo-output :global(.demo-line), .demo-output p { margin: 0 0 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .demo-welcome { color: #aab8c9; }
-  .demo-output :global(.demo-line-command) { color: #f0f4fa; }
-  .demo-output :global(.demo-line-output) { color: #b3c1d1; }
-  .demo-output :global(.demo-line-success) { color: #b8dcb0; }
-  .demo-working { color: #c6d6f3; }
-  .demo-working span { display: block; color: #95a4b7; font-size: 0.75rem; }
-  .demo-form { display: flex; align-items: center; gap: 0.55rem; margin: 0 0.75rem 0.75rem; padding: 0.3rem 0.4rem 0.3rem 0.65rem; border: 1px solid #4a5b73; border-radius: 0.45rem; background: #171f29; }
-  .demo-prompt { flex-shrink: 0; color: #b8dcb0; font-weight: 700; }
-  .demo-form input { min-width: 0; width: 100%; min-height: 44px; padding: 0; border: 0; border-radius: 0; background: transparent; color: #f0f4fa; font: inherit; box-shadow: none; }
-  .demo-form input::placeholder { color: #92a1b5; }
-  .demo-form input[readonly] { color: #92a1b5; }
-  .demo-form :is(.demo-submit, .demo-stop) { flex-shrink: 0; padding-inline: 0.75rem; background: #d8e5ff; color: #152239; font-size: 0.75rem; font-weight: 700; }
-  .demo-form .demo-stop { background: #374458; color: #e9f1ff; }
-  .demo-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.35rem 1rem; padding: 0.7rem 1rem; border-top: 1px solid #303945; color: #a7b4c5; font: 0.7rem/1.6 var(--sl-font, sans-serif); }
-  .demo-footer > :first-child { color: #c8d3e0; }
+  .demo-instructions { margin: 0; padding: 0.65rem 0.85rem; border-bottom: 1px solid #313244; color: #bac2de; font: 0.76rem/1.5 var(--sl-font, sans-serif); }
+  .demo-viewport { width: 100%; height: 36rem; padding: 10px; overflow: hidden; }
+  .demo-terminal { width: 100%; height: 100%; }
+  .demo-terminal :global(.xterm) { height: 100%; background: #1e1e2e; }
+  .demo-terminal :global(.xterm-viewport) { scrollbar-width: none; background: #1e1e2e !important; }
+  .demo-terminal :global(.xterm-helper-textarea) { font-size: 16px !important; }
+  .demo-terminal :global(.xterm:focus-within) { outline: none; }
+  .demo-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem 1rem; padding: 0.4rem 0.75rem; border-top: 1px solid #313244; color: #a6adc8; font: 0.7rem/1.5 var(--sl-font, sans-serif); }
+  .demo-actions, .demo-accessible-tabs { display: flex; align-items: center; gap: 0.25rem; }
+  .demo-accessible-tabs { min-width: 0; flex-basis: 100%; flex-wrap: wrap; }
+  .terminal-demo :global(button) { min-width: 44px; min-height: 44px; border: 0; border-radius: 0.3rem; padding: 0.3rem 0.6rem; background: transparent; color: #cdd6f4; font: inherit; cursor: pointer; }
+  .terminal-demo :global(button:hover) { background: #313244; }
+  .terminal-demo :global(button:focus-visible) { outline: 2px solid #89b4fa; outline-offset: -2px; }
+  .terminal-demo :global(button:disabled) { opacity: 0.5; cursor: default; }
+  .demo-actions [data-submit] { background: #cdd6f4; color: #181825; font-weight: 700; }
+  .demo-accessible-tabs :global(button) { flex: 0 0 auto; max-width: 100%; overflow-wrap: anywhere; }
+  .demo-accessible-tabs :global(button[aria-selected=true]) { background: #a6e3a1; color: #181825; }
   .demo-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .demo-no-script { padding-inline: 1rem; }
+  @media (min-width: 50rem) {
+    .demo-accessible-tabs:not(:focus-within) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  }
   @media (max-width: 35rem) {
-    .terminal-demo { font-size: 0.78rem; }
-    .demo-output { height: 17rem; padding-inline: 0.85rem; }
-    .demo-tabs { flex-wrap: wrap; gap: 0.2rem; }
-    .demo-tabs button { padding-inline: 0.55rem; }
-    .demo-tabs small, .demo-tabs [data-busy], .demo-stop small { display: none; }
-    .demo-form { gap: 0.4rem; margin-inline: 0.5rem; }
-    .demo-form input { font-size: 16px; }
-    .demo-form :is(.demo-submit, .demo-stop) { padding-inline: 0.6rem; }
-    .demo-dots { display: none; }
+    .demo-viewport { height: 31rem; padding: 6px; }
+    .demo-footer { gap: 0.25rem 0.5rem; }
+    .demo-footer > span { flex-basis: 100%; }
   }
 </style>
