@@ -1,0 +1,28 @@
+---
+import ReferencePage from "../../components/reference-page.astro";
+import { defaultLabel, REFERENCE } from "../../lib/reference";
+---
+
+<ReferencePage title="Settings">
+  <article class="reference-page">
+    <h1>Settings</h1>
+    <dl class="metadata-list">
+      <div><dt>Profile</dt><dd><code>{REFERENCE.settings.profilePath}</code></dd></div>
+      <div><dt>Profile environment variable</dt><dd><code>{REFERENCE.settings.configEnv}</code></dd></div>
+    </dl>
+    <div aria-label="Reference table" class="reference-table-wrap" role="region" tabindex="0">
+      <table class="reference-table">
+        <caption>Settings fields</caption>
+        <thead><tr><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Environment / description</th></tr></thead>
+        <tbody>{REFERENCE.settings.fields.map((field) => (
+          <tr>
+            <th scope="row"><code>{field.name}</code>{field.required && <small>Required</small>}</th>
+            <td><code>{field.type}</code></td>
+            <td><code>{defaultLabel(field.defaultKind, field.default, field.defaultExpression)}</code></td>
+            <td>{field.envvar && <code>{field.envvar}</code>}{field.description && <p class="source-prose">{field.description}</p>}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
+  </article>
+</ReferencePage>

@@ -1,59 +1,61 @@
+# Accept state from the former pass-through modules; original root addresses remain unchanged.
+
 moved {
-  from = google_compute_network.devbox
-  to   = module.host.google_compute_network.devbox
+  from = module.host.google_compute_network.devbox
+  to   = google_compute_network.devbox
 }
 
 moved {
-  from = google_compute_subnetwork.devbox
-  to   = module.host.google_compute_subnetwork.devbox
+  from = module.host.google_compute_subnetwork.devbox
+  to   = google_compute_subnetwork.devbox
 }
 
 moved {
-  from = google_compute_firewall.iap_ssh
-  to   = module.host.google_compute_firewall.iap_ssh
+  from = module.host.google_compute_firewall.iap_ssh
+  to   = google_compute_firewall.iap_ssh
 }
 
 moved {
-  from = google_compute_disk.boot
-  to   = module.host.google_compute_disk.boot
+  from = module.host.google_compute_disk.boot
+  to   = google_compute_disk.boot
 }
 
 moved {
-  from = google_compute_instance.devbox
-  to   = module.host.google_compute_instance.devbox
+  from = module.host.google_compute_instance.devbox
+  to   = google_compute_instance.devbox
 }
 
 moved {
-  from = google_compute_instance_iam_member.agent_vm_login
-  to   = module.access.google_compute_instance_iam_member.agent_vm_login
+  from = module.access.google_compute_instance_iam_member.agent_vm_login
+  to   = google_compute_instance_iam_member.agent_vm_login
 }
 
 moved {
-  from = google_iap_tunnel_instance_iam_member.agent_vm_ssh
-  to   = module.access.google_iap_tunnel_instance_iam_member.agent_vm_ssh
+  from = module.access.google_iap_tunnel_instance_iam_member.agent_vm_ssh
+  to   = google_iap_tunnel_instance_iam_member.agent_vm_ssh
 }
 
 moved {
-  from = google_project_iam_custom_role.agent_vm_discovery
-  to   = module.access.google_project_iam_custom_role.agent_vm_discovery
+  from = module.access.google_project_iam_custom_role.agent_vm_discovery
+  to   = google_project_iam_custom_role.agent_vm_discovery
 }
 
 moved {
-  from = google_project_iam_member.agent_vm_discovery
-  to   = module.access.google_project_iam_member.agent_vm_discovery
+  from = module.access.google_project_iam_member.agent_vm_discovery
+  to   = google_project_iam_member.agent_vm_discovery
 }
 
 moved {
-  from = google_project_iam_audit_config.iap_access
-  to   = module.access.google_project_iam_audit_config.iap_access
+  from = module.access.google_project_iam_audit_config.iap_access
+  to   = google_project_iam_audit_config.iap_access
 }
 
 moved {
-  from = google_compute_resource_policy.weekly_backup
-  to   = module.backups.google_compute_resource_policy.weekly_backup
+  from = module.backups.google_compute_resource_policy.weekly_backup
+  to   = google_compute_resource_policy.weekly_backup
 }
 
 moved {
-  from = google_compute_disk_resource_policy_attachment.weekly_backup
-  to   = module.backups.google_compute_disk_resource_policy_attachment.weekly_backup
+  from = module.backups.google_compute_disk_resource_policy_attachment.weekly_backup
+  to   = google_compute_disk_resource_policy_attachment.weekly_backup
 }

@@ -1,10 +1,10 @@
 # Managed by `code-standards setup`; commit this file.
 bundle = "8.129.11"
+rule_profile = "all"
 schema = 4
 
 [capabilities]
 disable = [
-  "eslint",
   "swiftformat",
   "swiftlint",
   "ktlint",
@@ -27,7 +27,10 @@ durable = [
 ]
 
 [dest]
+kotlin = "."
 python = "."
+swift = "."
+typescript = "apps/docs"
 
 [hooks]
 manager = "pre-commit"
@@ -35,5 +38,5 @@ manager = "pre-commit"
 [ci]
 bootstrap = [
   "mise --no-config --no-env --no-hooks exec aqua:hashicorp/terraform@1.17.0 -- terraform -chdir=terraform init -backend=false -lockfile=readonly -input=false",
-  "mise --no-config --no-env --no-hooks exec aqua:hashicorp/terraform@1.17.0 -- sh -eu -c 'for module in terraform/modules/*; do rm -f \"$module/.terraform.lock.hcl\"; cp terraform/.terraform.lock.hcl \"$module/.terraform.lock.hcl\"; terraform -chdir=\"$module\" init -backend=false -lockfile=readonly -input=false -plugin-dir=\"$PWD/terraform/.terraform/providers\"; done'",
+  "npm --prefix apps/docs run generate",
 ]

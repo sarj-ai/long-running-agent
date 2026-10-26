@@ -18,6 +18,12 @@ scan() {
     exit 1
   fi
 }
-scan dir .
-scan git . --log-opts='--all --full-history'
-echo 'No secrets detected in the tree or history.'
+if (($#)); then
+  for target in "$@"; do
+    scan dir "$target"
+  done
+else
+  scan dir .
+  scan git . --log-opts='--all --full-history'
+fi
+echo 'No secrets detected.'

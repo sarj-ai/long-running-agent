@@ -1,0 +1,40 @@
+---
+import { type Command,defaultLabel } from "../lib/reference";
+
+interface Props {
+  parameters: Command["parameters"];
+}
+
+const { parameters: PARAMETERS } = Astro.props;
+const VISIBLE_PARAMETERS = PARAMETERS.filter((parameter) => !parameter.hidden);
+---
+
+{
+  VISIBLE_PARAMETERS.length > 0 && (
+    <div aria-label="Reference table" class="reference-table-wrap" role="region" tabindex="0">
+      <table class="reference-table">
+        <caption>Parameters</caption>
+        <thead>
+          <tr><th scope="col">Parameter</th><th scope="col">Type / default</th><th scope="col">Help</th></tr>
+        </thead>
+        <tbody>
+          {VISIBLE_PARAMETERS.map((parameter) => (
+            <tr>
+              <th scope="row">
+                <code>{parameter.options.length ? [...parameter.options, ...parameter.secondaryOptions].join(", ") : parameter.name}</code>
+                <small>{parameter.isFlag ? "flag" : parameter.kind}{parameter.required ? " · required" : ""}{parameter.multiple ? " · multiple" : ""}{parameter.nargs === -1 ? " · variadic" : parameter.nargs > 1 ? ` · ${String(parameter.nargs)} values` : ""}</small>
+              </th>
+              <td>
+                <code>{parameter.metavar || parameter.type}</code>
+                {parameter.metavar && parameter.metavar !== parameter.type && <small><code>{parameter.type}</code></small>}
+                <small><code>{defaultLabel(parameter.defaultKind, parameter.default)}</code></small>
+                {parameter.envvar && <small>{Array.isArray(parameter.envvar) ? parameter.envvar.join(", ") : parameter.envvar}</small>}
+              </td>
+              <td class="source-prose">{parameter.help || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}

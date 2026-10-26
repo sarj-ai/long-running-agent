@@ -1,0 +1,23 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "adoptExistingLintConfig": false,
+  "blocking": "error",
+  "buckets": {
+    "compiler-cleanup": "off"
+  },
+  "deadCode": false,
+  "ignore": {
+    "tags": ["design", "test-noise"]
+  },
+  "noScore": true,
+  "rules": {
+    "react-doctor/no-array-index-as-key": "error",
+    "react-hooks-js/todo": "off"
+  },
+  "serverAuthFunctionNames": ["forRequest"],
+  "share": false,
+  "warnings": false,
+  "supplyChain": {
+    "enabled": false
+  }
+}

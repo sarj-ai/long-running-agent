@@ -1,0 +1,61 @@
+name: Documentation
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: '0.13.5'
+          enable-cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.1'
+          cache: npm
+          cache-dependency-path: apps/docs/package-lock.json
+      - uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
+        with:
+          version: 2026.10.19
+      - name: Activate the declared npm version
+        run: npm install --global npm@12.2.1 --ignore-scripts
+      - name: Install Python dependencies
+        run: uv sync --locked
+      - name: Check the source-derived README
+        run: uv run --locked python scripts/generate_docs.py --check
+      - name: Install locked website dependencies
+        run: npm --prefix apps/docs ci --ignore-scripts --no-audit --no-fund
+      - name: Lint Astro and TypeScript
+        run: npm --prefix apps/docs run lint
+      - name: Check source-derived pages
+        run: npm --prefix apps/docs run check
+      - name: Build the static website
+        run: npm --prefix apps/docs run build
+      - name: Scan generated pages for secrets
+        run: bash scripts/scan-secrets.sh apps/docs/dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lra-site
+          path: apps/docs/dist
+          if-no-files-found: error
+          retention-days: 1

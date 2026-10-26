@@ -1,9 +1,11 @@
 resource "google_compute_network" "devbox" {
-  name                                      = var.network.name
+  name                                      = var.network_name
   description                               = "Isolated persistent agent host; SSH via IAP"
   auto_create_subnetworks                   = false
   routing_mode                              = "REGIONAL"
   network_firewall_policy_enforcement_order = "AFTER_CLASSIC_FIREWALL"
+
+  depends_on = [google_project_service.required]
 
   lifecycle {
     prevent_destroy = true
@@ -11,10 +13,10 @@ resource "google_compute_network" "devbox" {
 }
 
 resource "google_compute_subnetwork" "devbox" {
-  name                     = "${var.network.name}-${var.network.region}"
-  region                   = var.network.region
+  name                     = "${var.network_name}-${var.region}"
+  region                   = var.region
   network                  = google_compute_network.devbox.id
-  ip_cidr_range            = var.network.cidr
+  ip_cidr_range            = var.subnet_cidr
   private_ip_google_access = false
   purpose                  = "PRIVATE"
   stack_type               = "IPV4_ONLY"
@@ -25,13 +27,13 @@ resource "google_compute_subnetwork" "devbox" {
 }
 
 resource "google_compute_firewall" "iap_ssh" {
-  name          = "${var.network.name}-allow-iap-ssh"
+  name          = "${var.network_name}-allow-iap-ssh"
   network       = google_compute_network.devbox.id
   direction     = "INGRESS"
   priority      = 1000
   disabled      = false
   source_ranges = ["35.235.240.0/20"]
-  target_tags   = [var.network.name]
+  target_tags   = [var.network_name]
 
   allow {
     protocol = "tcp"
@@ -48,14 +50,16 @@ resource "google_compute_firewall" "iap_ssh" {
 }
 
 resource "google_compute_disk" "boot" {
-  name = var.vm.name
-  zone = var.vm.zone
+  name = var.vm_name
+  zone = var.zone
   type = "pd-balanced"
-  size = var.vm.disk_size_gb
+  size = var.disk_size_gb
 
   # Pin the imported image. OS patches happen in-place; a newer image must not
   # replace a disk containing code, browser sign-ins and agent history.
-  image = var.vm.image
+  image = var.boot_image
+
+  depends_on = [google_project_service.required]
 
   lifecycle {
     prevent_destroy = true
@@ -63,14 +67,14 @@ resource "google_compute_disk" "boot" {
 }
 
 resource "google_compute_instance" "devbox" {
-  name                      = var.vm.name
-  zone                      = var.vm.zone
-  machine_type              = var.vm.machine_type
+  name                      = var.vm_name
+  zone                      = var.zone
+  machine_type              = var.machine_type
   allow_stopping_for_update = false
   deletion_protection       = true
   can_ip_forward            = false
-  tags                      = [var.network.name]
-  labels                    = var.labels
+  tags                      = [var.network_name]
+  labels                    = merge({ purpose = "agent-development" }, var.labels)
 
   boot_disk {
     source      = google_compute_disk.boot.id
@@ -95,7 +99,7 @@ resource "google_compute_instance" "devbox" {
     "startup-script"         = <<-SCRIPT
       #!/bin/sh
       set -eu
-      printf '%s' '${var.bootstrap_base64}' | /usr/bin/base64 --decode | /usr/bin/python3 -I
+      printf '%s' '${filebase64("${path.module}/../packages/long-running-agent/src/long_running_agent/runtime/bootstrap.py")}' | /usr/bin/base64 --decode | /usr/bin/python3 -I
     SCRIPT
   }
 

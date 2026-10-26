@@ -1,0 +1,41 @@
+---
+import ReferencePage from "../../components/reference-page.astro";
+import { defaultLabel, REFERENCE, sourceHref } from "../../lib/reference";
+---
+
+<ReferencePage title="Terraform">
+  <article class="reference-page">
+    <h1>Terraform</h1>
+    <nav aria-label="Terraform modules" class="reference-links">{REFERENCE.terraform.roots.map((root) => <a href={`#${root.name}`}>{root.name}</a>)}</nav>
+    {REFERENCE.terraform.roots.map((root) => (
+      <section id={root.name}>
+        <h2>{root.name}</h2>
+        <a class="source-link" href={sourceHref(root.path)}>{root.path}</a>
+        {root.inputs.length > 0 && (
+          <div aria-label="Reference table" class="reference-table-wrap" role="region" tabindex="0">
+            <table class="reference-table">
+              <caption>Inputs</caption>
+              <thead><tr><th scope="col">Input</th><th scope="col">Type / default</th><th scope="col">Description</th></tr></thead>
+              <tbody>{root.inputs.map((input) => <tr><th scope="row"><code>{input.name}</code><small>{input.required ? "Required" : "Optional"}{input.sensitive ? " · sensitive" : ""}</small></th><td><code>{input.type}</code><small><code>{defaultLabel(input.required ? "unset" : "value", input.default)}</code></small></td><td class="source-prose">{input.description}</td></tr>)}</tbody>
+            </table>
+          </div>
+        )}
+        {root.outputs.length > 0 && (
+          <div aria-label="Reference table" class="reference-table-wrap" role="region" tabindex="0">
+            <table class="reference-table">
+              <caption>Outputs</caption>
+              <thead><tr><th scope="col">Output</th><th scope="col">Description</th></tr></thead>
+              <tbody>{root.outputs.map((output) => <tr><th scope="row"><code>{output.name}</code>{output.sensitive && <small>Sensitive</small>}</th><td class="source-prose">{output.description}</td></tr>)}</tbody>
+            </table>
+          </div>
+        )}
+        {root.resources.length > 0 && (
+          <details>
+            <summary>Resources · {root.resources.length}</summary>
+            <ul class="dependency-list">{root.resources.map((resource) => <li><code>{resource.address}</code></li>)}</ul>
+          </details>
+        )}
+      </section>
+    ))}
+  </article>
+</ReferencePage>

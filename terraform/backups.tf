@@ -23,11 +23,13 @@ resource "google_compute_resource_policy" "weekly_backup" {
 
     snapshot_properties {
       storage_locations = [var.region]
-      chain_name        = var.chain_name
+      chain_name        = var.snapshot_chain_name
       guest_flush       = false
-      labels            = var.labels
+      labels            = merge({ purpose = "agent-backup", cadence = "weekly" }, var.labels)
     }
   }
+
+  depends_on = [google_project_service.required]
 
   lifecycle {
     prevent_destroy = true
@@ -37,8 +39,8 @@ resource "google_compute_resource_policy" "weekly_backup" {
 # Separate attachment keeps the imported disk and VM untouched.
 resource "google_compute_disk_resource_policy_attachment" "weekly_backup" {
   name = google_compute_resource_policy.weekly_backup.name
-  disk = var.boot_disk.name
-  zone = var.boot_disk.zone
+  disk = google_compute_disk.boot.name
+  zone = google_compute_disk.boot.zone
 
   lifecycle {
     prevent_destroy = true

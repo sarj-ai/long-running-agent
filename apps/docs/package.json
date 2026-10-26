@@ -1,0 +1,78 @@
+{
+  "name": "@sarj-ai/long-running-agent-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "homepage": "https://lra.sarj.ai",
+  "packageManager": "npm@12.2.1",
+  "scripts": {
+    "generate": "cd ../.. && uv run --locked python scripts/generate_docs.py",
+    "predev": "npm run generate",
+    "precheck": "npm run generate",
+    "prebuild": "npm run generate",
+    "prelint": "npm run generate",
+    "dev": "astro dev --host 127.0.0.1",
+    "check": "astro check && tsc --noEmit",
+    "lint": "eslint .",
+    "build": "astro build",
+    "preview": "astro preview --host 127.0.0.1",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.42.7",
+    "@sarj/design": "0.5.0",
+    "astro": "7.4.2"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.12",
+    "@astrojs/sitemap": "3.7.4",
+    "@types/node": "26.6.5",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "wrangler": "4.152.0",
+    "eslint-plugin-astro": "3.2.1",
+    "@eslint-community/eslint-plugin-eslint-comments": "4.8.1",
+    "@eslint/compat": "2.1.1",
+    "@eslint/js": "10.0.1",
+    "@sarj/eslint-plugin": "16.29.0",
+    "@shadcn/lint": "0.2.3",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "@vitest/eslint-plugin": "1.6.28",
+    "eslint": "10.13.0",
+    "eslint-node-test": "1.0.1",
+    "eslint-plugin-better-tailwindcss": "4.10.0",
+    "eslint-plugin-jest": "29.17.0",
+    "eslint-plugin-n": "18.5.0",
+    "eslint-plugin-jsdoc": "65.4.2",
+    "eslint-plugin-perfectionist": "5.13.0",
+    "eslint-plugin-playwright": "2.12.1",
+    "eslint-plugin-promise": "7.3.0",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-simple-import-sort": "14.0.0",
+    "eslint-plugin-sonarjs": "4.2.2",
+    "eslint-plugin-testing-library": "7.16.2",
+    "eslint-plugin-unicorn": "79.0.0",
+    "eslint-plugin-zod": "5.2.2",
+    "react-doctor": "0.9.18",
+    "typescript-eslint": "8.72.0",
+    "jiti": "2.7.0",
+    "eslint-plugin-regexp": "3.3.1"
+  },
+  "engines": {
+    "node": "^22.22.2 || >=24.15.0"
+  },
+  "overrides": {
+    "postcss-selector-parser": "7.1.7",
+    "http-cache-semantics": "4.3.0",
+    "sharp": "0.35.5",
+    "miniflare": {
+      "undici": "8.12.3"
+    },
+    "@sarj/design": {
+      "@astrojs/starlight": "$@astrojs/starlight"
+    },
+    "eslint-plugin-react": {
+      "eslint": "10.13.0"
+    }
+  }
+}

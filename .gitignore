@@ -4,6 +4,12 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 dist/
+node_modules/
+.astro/
+.wrangler/
+.dev.vars
+.dev.vars.*
+apps/docs/src/generated/
 *.egg-info/
 .DS_Store
 .env

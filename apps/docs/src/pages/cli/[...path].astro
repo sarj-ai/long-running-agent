@@ -1,0 +1,49 @@
+---
+import type { GetStaticPaths } from "astro";
+
+import Parameters from "../../components/parameters.astro";
+import ReferencePage from "../../components/reference-page.astro";
+import { COMMAND_ENTRIES, type CommandEntry, commandHref } from "../../lib/reference";
+
+export const getStaticPaths = (() =>
+  COMMAND_ENTRIES.map((entry) => ({
+    params: { path: entry.command.path.join("/") },
+    props: { ...entry },
+  }))) satisfies GetStaticPaths;
+
+type Props = CommandEntry;
+
+const { entrypoint: ENTRYPOINT, command: COMMAND } = Astro.props;
+const TITLE = COMMAND.path.join(" ");
+const PARENTS = COMMAND.path.slice(0, -1);
+const CHILDREN = COMMAND.commands.filter((child) => !child.hidden);
+---
+
+<ReferencePage description={COMMAND.help || undefined} title={TITLE}>
+  <article class="reference-page">
+    <nav aria-label="Breadcrumb" class="breadcrumbs">
+      <ol>
+        <li><a href="/cli/">CLI</a></li>
+        {PARENTS.map((name, index) => <li><a href={`/cli/${PARENTS.slice(0, index + 1).map(encodeURIComponent).join("/")}/`}>{name}</a></li>)}
+        <li aria-current="page">{COMMAND.name}</li>
+      </ol>
+    </nav>
+    <h1><code>{TITLE}</code></h1>
+    {COMMAND.help && <p class="source-prose command-help">{COMMAND.help}</p>}
+    {COMMAND.deprecated && <p class="badge">{COMMAND.deprecated === true ? "Deprecated" : COMMAND.deprecated}</p>}
+    {COMMAND.path.length === 1 && ENTRYPOINT.defaultCommand && <p>Default: <code>{ENTRYPOINT.defaultCommand}</code></p>}
+    {COMMAND.path.length === 1 && ENTRYPOINT.aliasOf && <p>Alias: <code>{ENTRYPOINT.aliasOf}</code></p>}
+    <Parameters parameters={COMMAND.parameters} />
+    {CHILDREN.length > 0 && (
+      <section>
+        <h2>Commands</h2>
+        <div aria-label="Reference table" class="reference-table-wrap" role="region" tabindex="0">
+          <table class="reference-table">
+            <thead><tr><th scope="col">Command</th><th scope="col">Help</th></tr></thead>
+            <tbody>{CHILDREN.map((child) => <tr><th scope="row"><a href={commandHref(child)}><code>{child.name}</code></a></th><td class="source-prose">{child.help}</td></tr>)}</tbody>
+          </table>
+        </div>
+      </section>
+    )}
+  </article>
+</ReferencePage>

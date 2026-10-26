@@ -1,0 +1,29 @@
+---
+import SharedReferencePage from "@sarj/design/ReferencePage.astro";
+
+import { REFERENCE, SIDEBAR } from "../lib/reference";
+
+interface Props {
+  description?: string;
+  hasSidebar?: boolean;
+  indexable?: boolean;
+  title: string;
+}
+
+const {
+  title: TITLE,
+  description: DESCRIPTION = REFERENCE.package.description,
+  hasSidebar: HAS_SIDEBAR = true,
+  indexable: INDEXABLE = true,
+} = Astro.props;
+---
+
+<SharedReferencePage
+  description={DESCRIPTION}
+  hasSidebar={HAS_SIDEBAR}
+  indexable={INDEXABLE}
+  sidebar={SIDEBAR}
+  title={TITLE}
+>
+  <slot />
+</SharedReferencePage>
