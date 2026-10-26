@@ -1,0 +1,64 @@
+# Managed by code-standards; regenerate with `code-standards show ci --output .github/workflows/standards.yml`.
+name: Standards
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: standards-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: '0.13.5'
+          enable-cache: true
+          cache-dependency-glob: |
+            .sarj-standards.toml
+            **/uv.lock
+      - name: Install Python dependencies
+        run: uv sync --locked --all-packages
+      - name: Install the pinned native tool bootstrap
+        env:
+          UV_PYTHON_DOWNLOADS_JSON_URL: https://raw.githubusercontent.com/astral-sh/uv/4ecd0eff2a81e3ffdcd7cfee10d08936e4747c17/crates/uv-python-managed/download-metadata.json
+        run: uv run --no-config --no-project --python 3.15.0 --with code-standards==8.129.11 python -m sarj_standards.libs.adoption.native_bootstrap
+      - name: Install and attest applicable native tools
+        run: uvx --no-config --isolated --python 3.14 --from sarj-standards-bootstrap code-standards setup --tools-only
+      - name: Prepare pinned zizmor
+        run: uvx --no-config --isolated --python 3.12 --from zizmor==1.31.1 zizmor --version
+      - name: Prepare pinned checkov
+        run: uvx --no-config --isolated --python 3.12 --from checkov==3.3.30 checkov --version
+      - name: Bootstrap analysis inputs
+        run: |
+          mise --no-config --no-env --no-hooks exec aqua:hashicorp/terraform@1.17.0 -- terraform -chdir=terraform init -backend=false -lockfile=readonly -input=false
+      - name: Bootstrap analysis inputs (2)
+        run: |
+          mise --no-config --no-env --no-hooks exec aqua:hashicorp/terraform@1.17.0 -- sh -eu -c 'for module in terraform/modules/*; do rm -f "$module/.terraform.lock.hcl"; cp terraform/.terraform.lock.hcl "$module/.terraform.lock.hcl"; terraform -chdir="$module" init -backend=false -lockfile=readonly -input=false -plugin-dir="$PWD/terraform/.terraform/providers"; done'
+      - name: Run standards with an exact comparison base
+        if: github.event_name != 'push' || (github.event.before != '0000000000000000000000000000000000000000' && !github.event.forced)
+        env:
+          SARJ_STANDARDS_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: uvx --no-config --isolated --python 3.14 --from sarj-standards-bootstrap code-standards check --trust-repository-code --format github
+      - name: Run all standards for new history
+        if: github.event_name == 'push' && (github.event.before == '0000000000000000000000000000000000000000' || github.event.forced)
+        run: |
+          unset SARJ_STANDARDS_BASE GITHUB_EVENT_NAME GITHUB_EVENT_PATH
+          uvx --no-config --isolated --python 3.14 --from sarj-standards-bootstrap code-standards check --trust-repository-code --format github

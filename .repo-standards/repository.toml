@@ -1,0 +1,8 @@
+enabled_rules = ["repository/artifacts/bespoke-iac-verifiers", "repository/artifacts/makefile-growth", "repository/artifacts/terraform-examples", "repository/artifacts/terraform-test-files", "repository/documentation/placement"]
+repository_id = "long-running-agent"
+
+[[components]]
+id = "long-running-agent"
+kind = "tool"
+path = "packages/long-running-agent"
+owner = "sarj-ai"

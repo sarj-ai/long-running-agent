@@ -1,0 +1,7 @@
+# Direct ShellCheck defaults preserve existing native gates. Standards enables
+# advisory checks explicitly with --norc and controls their warning severity.
+external-sources=false
+extended-analysis=true
+enable=check-extra-masked-returns
+severity=info
+source-path=SCRIPTDIR

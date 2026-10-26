@@ -1,0 +1,20 @@
+repos:
+  - repo: local
+    hooks:
+      - id: sarj-standards-check
+        name: sarj standards -- staged checks
+        entry: uvx --no-config --isolated --python 3.14 --from sarj-standards-bootstrap code-standards check --staged --trust-repository-code
+        language: system
+        always_run: true
+        pass_filenames: false
+        require_serial: true
+        verbose: true
+        stages: [pre-commit]
+      - id: repo-standards-commit-message
+        name: repo standards -- managed commit message
+        entry: uvx --no-config --isolated --python 3.14 --from sarj-standards-bootstrap code-standards commit-message
+        language: system
+        always_run: true
+        pass_filenames: true
+        require_serial: true
+        stages: [commit-msg]
