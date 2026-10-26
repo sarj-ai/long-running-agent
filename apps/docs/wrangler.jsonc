@@ -9,5 +9,8 @@
     "not_found_handling": "404-page",
     "html_handling": "force-trailing-slash"
   },
-  "routes": [{ "pattern": "lra.sarj.ai", "custom_domain": true }]
+  "routes": [
+    { "pattern": "engineering.sarj.ai", "custom_domain": true },
+    { "pattern": "lra.sarj.ai", "custom_domain": true }
+  ]
 }

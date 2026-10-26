@@ -3,6 +3,7 @@ import type { GetStaticPaths } from "astro";
 
 import Parameters from "../../components/parameters.astro";
 import ReferencePage from "../../components/reference-page.astro";
+import { siteHref } from "../../lib/paths";
 import { COMMAND_ENTRIES, type CommandEntry, commandHref } from "../../lib/reference";
 
 export const getStaticPaths = (() =>
@@ -23,8 +24,8 @@ const CHILDREN = COMMAND.commands.filter((child) => !child.hidden);
   <article class="reference-page">
     <nav aria-label="Breadcrumb" class="breadcrumbs">
       <ol>
-        <li><a href="/cli/">CLI</a></li>
-        {PARENTS.map((name, index) => <li><a href={`/cli/${PARENTS.slice(0, index + 1).map(encodeURIComponent).join("/")}/`}>{name}</a></li>)}
+        <li><a href={siteHref("/cli/")}>CLI</a></li>
+        {PARENTS.map((name, index) => <li><a href={siteHref(`/cli/${PARENTS.slice(0, index + 1).map(encodeURIComponent).join("/")}/`)}>{name}</a></li>)}
         <li aria-current="page">{COMMAND.name}</li>
       </ol>
     </nav>

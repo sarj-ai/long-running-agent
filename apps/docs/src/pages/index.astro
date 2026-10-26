@@ -2,6 +2,7 @@
 import { Code } from "@astrojs/starlight/components";
 
 import ReferencePage from "../components/reference-page.astro";
+import { siteHref } from "../lib/paths";
 import { REFERENCE } from "../lib/reference";
 ---
 
@@ -21,7 +22,7 @@ import { REFERENCE } from "../lib/reference";
     <section>
       <h2>Reference</h2>
       <nav aria-label="Reference" class="reference-links">
-        <a href="/cli/">CLI</a><a href="/api/">Python API</a><a href="/settings/">Settings</a><a href="/terraform/">Terraform</a>
+        <a href={siteHref("/cli/")}>CLI</a><a href={siteHref("/api/")}>Python API</a><a href={siteHref("/settings/")}>Settings</a><a href={siteHref("/terraform/")}>Terraform</a>
       </nav>
     </section>
     <section>
@@ -31,7 +32,7 @@ import { REFERENCE } from "../lib/reference";
     <section class="sarj-related-standards">
       <a href={REFERENCE.package.repository}>Source</a>
       <span aria-hidden="true"> · </span>
-      <a href="/reference.json">Generated reference JSON</a>
+      <a href={siteHref("/reference.json")}>Generated reference JSON</a>
     </section>
   </article>
 </ReferencePage>

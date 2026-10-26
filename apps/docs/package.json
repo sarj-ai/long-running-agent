@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "homepage": "https://lra.sarj.ai",
+  "homepage": "https://engineering.sarj.ai/projects/lra/",
   "packageManager": "npm@12.2.1",
   "scripts": {
     "generate": "cd ../.. && uv run --locked python scripts/generate_docs.py",
@@ -16,7 +16,9 @@
     "lint": "eslint .",
     "build": "astro build",
     "preview": "astro preview --host 127.0.0.1",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy --strict",
+    "verify:artifact": "node scripts/verify-deployment.ts artifact",
+    "verify:deployment": "node scripts/verify-deployment.ts live"
   },
   "dependencies": {
     "@astrojs/starlight": "0.42.7",

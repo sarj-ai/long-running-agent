@@ -1,6 +1,7 @@
 import type { StarlightUserConfig } from "@astrojs/starlight/types";
 
 import generated from "../generated/reference.json";
+import { siteHref } from "./paths";
 
 interface Parameter {
   default: unknown;
@@ -112,10 +113,14 @@ export const COMMAND_ENTRIES: CommandEntry[] = REFERENCE.entrypoints
   .filter((entrypoint) => !entrypoint.aliasOf)
   .flatMap((entrypoint) => collect(entrypoint, entrypoint.command));
 
-export function commandHref(command: Command): string {
+function commandPath(command: Command): string {
   const [entrypoint, ...rest] = command.path;
   const canonical = REFERENCE.entrypoints.find((item) => item.name === entrypoint)?.aliasOf;
   return `/cli/${[canonical ?? entrypoint, ...rest].map(encodeURIComponent).join("/")}/`;
+}
+
+export function commandHref(command: Command): string {
+  return siteHref(commandPath(command));
 }
 
 export function defaultLabel(
@@ -142,7 +147,7 @@ export const SIDEBAR: Sidebar = [
     collapsed: true,
     items: [entrypoint.command, ...entrypoint.command.commands].filter((command) => !command.hidden).map((command) => ({
       label: command.path.join(" "),
-      link: commandHref(command),
+      link: commandPath(command),
     })),
   })),
   { label: "Python API", link: "/api/" },
