@@ -15,7 +15,7 @@ from long_running_agent.client.terminal import RESTORE_MODES
 PROGRAM = r"""
 import fcntl,os,subprocess,sys,termios,tty
 fcntl.ioctl(0,termios.TIOCSCTTY,0)
-from long_running_agent import Client
+from long_running_agent.client.controller import Client
 from long_running_agent.config import Settings
 class Offline(Client):
     def ensure_connection(self):pass
@@ -67,7 +67,7 @@ def run_offline_client() -> PtyResult:
 def test_lost_connection_restores_owned_tty_before_friendly_message_and_vm_summary() -> None:
     result = run_offline_client()
     assert result.returncode == 255
-    message = b"SSH connection closed. Run vm ssh to reconnect."
+    message = b"SSH connection closed. Run vm to reconnect."
     assert message in result.output
     assert result.output.index(RESTORE_MODES) < result.output.index(message) < result.output.index(b"VM: agent-vm")
     assert b"Project: example-project" in result.output

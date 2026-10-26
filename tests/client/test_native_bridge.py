@@ -11,9 +11,9 @@ from subprocess import CompletedProcess
 from typing import TYPE_CHECKING, override
 import zlib
 
-from long_running_agent import Client
 from long_running_agent.client import transfer
 from long_running_agent.client.browser import await_forward, start_route
+from long_running_agent.client.controller import Client
 from long_running_agent.client.host import HostBridge
 from long_running_agent.config import Settings
 from long_running_agent.host_connection import HostReply

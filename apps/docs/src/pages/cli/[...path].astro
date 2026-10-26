@@ -1,4 +1,5 @@
 ---
+import { Code } from "@astrojs/starlight/components";
 import type { GetStaticPaths } from "astro";
 
 import Parameters from "../../components/parameters.astro";
@@ -31,7 +32,7 @@ const CHILDREN = COMMAND.commands.filter((child) => !child.hidden);
     </nav>
     <h1><code>{TITLE}</code></h1>
     {COMMAND.help && <p class="source-prose command-help">{COMMAND.help}</p>}
-    {COMMAND.deprecated && <p class="badge">{COMMAND.deprecated === true ? "Deprecated" : COMMAND.deprecated}</p>}
+    {CHILDREN.length === 0 && <Code code={TITLE} lang="bash" />}
     {COMMAND.path.length === 1 && ENTRYPOINT.defaultCommand && <p>Default: <code>{ENTRYPOINT.defaultCommand}</code></p>}
     {COMMAND.path.length === 1 && ENTRYPOINT.aliasOf && <p>Alias: <code>{ENTRYPOINT.aliasOf}</code></p>}
     <Parameters parameters={COMMAND.parameters} />

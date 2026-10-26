@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.14.*"
 
 [manifest]
@@ -64,7 +64,7 @@ wheels = [
 
 [[package]]
 name = "long-running-agent"
-version = "0.6.21"
+version = "0.7.0"
 source = { editable = "packages/long-running-agent" }
 dependencies = [
     { name = "numpy" },

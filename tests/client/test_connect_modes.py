@@ -5,10 +5,10 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
-from long_running_agent import Client
-from long_running_agent.cli import connect_app, vm_arguments
+from long_running_agent.cli import app, connect_app, vm_arguments
+from long_running_agent.client.controller import Client
 from long_running_agent.config import Settings
-from pydantic import RootModel
+from pydantic import BaseModel, RootModel
 import pytest
 from rich.text import Text
 from typer.testing import CliRunner
@@ -20,6 +20,15 @@ if TYPE_CHECKING:
 
 class SshCalls(RootModel[list[list[str]]]):
     pass
+
+
+class CommandArguments(RootModel[list[str]]):
+    pass
+
+
+class InfoResponse(BaseModel):
+    state: str
+    runtime: dict[str, int] | None = None
 
 
 @pytest.mark.parametrize("session", [None, "project-work"], ids=["default-session", "selected-session"])
@@ -113,33 +122,40 @@ def test_connect_help_lists_connection_modes_and_existing_vm_aliases_stay_availa
     assert runner.invoke(connect_app, ["missing-mode"]).exit_code == 2
 
 
-@pytest.mark.parametrize("action", ["status", "switch"])
-def test_codex_cli_routes_to_vm_runtime_and_preserves_remote_failure(tmp_path: Path, action: str) -> None:
-    record = tmp_path / "calls.jsonl"
+@pytest.mark.parametrize("retired", ["send", "get", "codex", "ssh", "wake", "sleep", "stop", "status", "health"])
+def test_unused_commands_are_rejected_before_any_connection(tmp_path: Path, retired: str) -> None:
+    runner = CliRunner()
+    environment = {"PATH": str(tmp_path), "HOME": str(tmp_path)}
+    assert runner.invoke(connect_app, [retired], env=environment).exit_code == 2
+    assert runner.invoke(app, ["vm", retired], env=environment).exit_code == 2
+
+
+@pytest.mark.parametrize("state", ["RUNNING", "SUSPENDED", "TERMINATED"])
+def test_info_reports_state_without_waking_or_reconfiguring_the_vm(tmp_path: Path, state: str) -> None:
+    gcloud = tmp_path / "gcloud"
+    record = tmp_path / "cloud.json"
+    gcloud.write_text(
+        f"#!{sys.executable}\nimport json,pathlib,sys\n"
+        f"pathlib.Path({str(record)!r}).write_text(json.dumps(sys.argv[1:]))\n"
+        f"print({state!r})\n"
+    )
+    gcloud.chmod(0o700)
     ssh = tmp_path / "ssh"
+    ssh_record = tmp_path / "ssh.json"
     ssh.write_text(
         f"#!{sys.executable}\nimport json,pathlib,sys\n"
-        f"with pathlib.Path({str(record)!r}).open('a') as stream:\n"
-        "    stream.write(json.dumps(sys.argv[1:])+'\\n')\n"
-        "sys.exit(19 if 'runtime codex' in sys.argv[-1] else 0)\n",
-        encoding="utf-8",
+        f"pathlib.Path({str(ssh_record)!r}).write_text(json.dumps(sys.argv[1:]))\n"
+        "print('{\"vcpus\":8}')\n"
     )
-    ssh.chmod(0o755)
-    result = CliRunner().invoke(
-        connect_app, ["--account", "developer@example.com", "codex", action], env={"PATH": str(tmp_path)}
-    )
-    assert result.exit_code == 19
-    calls = SshCalls.model_validate_json("[" + ",".join(record.read_text().splitlines()) + "]").root
-    assert len(calls) == 3
-    assert calls[-1] == [
-        "-tt" if action == "switch" else "-T",
-        "sarj-codex",
-        f'exec "$HOME/.local/bin/lra" runtime codex {action}',
-    ]
-
-
-def test_codex_cli_rejects_account_and_shell_arguments_before_connecting(tmp_path: Path) -> None:
-    runner = CliRunner()
-    for arguments in (["switch", "--account", "other@example.com"], ["switch", "; touch bad"], ["missing"]):
-        result = runner.invoke(connect_app, ["codex", *arguments], env={"PATH": str(tmp_path)})
-        assert result.exit_code == 2
+    ssh.chmod(0o700)
+    result = CliRunner().invoke(connect_app, ["info", "--json"], env={"PATH": str(tmp_path), "HOME": str(tmp_path)})
+    assert result.exit_code == 0, result.output
+    payload = InfoResponse.model_validate_json(result.stdout)
+    assert payload.state == state
+    cloud_arguments = CommandArguments.model_validate_json(record.read_text()).root
+    assert "describe" in cloud_arguments
+    assert {"start", "resume", "stop", "suspend", "ssh"}.isdisjoint(cloud_arguments)
+    assert ssh_record.exists() == (state == "RUNNING")
+    if state == "RUNNING":
+        assert payload.runtime == {"vcpus": 8}
+        assert CommandArguments.model_validate_json(ssh_record.read_text()).root[-1].endswith("runtime host info")

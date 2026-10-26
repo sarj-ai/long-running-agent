@@ -2,7 +2,7 @@
 
 # long-running-agent
 
-Persistent terminals and browser on a private VM through IAP and OS Login.
+Open your terminal or browser, or check your VM.
 
 [Documentation](https://engineering.sarj.ai/projects/lra/) · [Source](https://github.com/sarj-ai/long-running-agent)
 
@@ -12,8 +12,8 @@ uv tool install --editable ./packages/long-running-agent
 
 | Command | Help |
 | --- | --- |
-| `lra infra --help` | Operate the protected Terraform deployment with your own Google identity. |
-| `lra runtime --help` | Persistent terminal setup, browser isolation, and Linux host administration. |
-| `lra vm --help` | Connect to your persistent VM terminal and browser. |
+| `sarj-connect terminal` | Open your persistent terminal. Reconnect to return to the same windows. |
+| `sarj-connect browser` | Open your VM browser with its saved tabs and sign-ins. |
+| `sarj-connect info` | Show VM identity, state, and capacity without waking it. |
 
-Version 0.6.21 · Python >=3.14,<3.15 · MIT
+Version 0.7.0 · Python >=3.14,<3.15 · MIT

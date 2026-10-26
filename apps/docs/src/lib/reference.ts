@@ -40,13 +40,6 @@ interface Entrypoint {
 }
 
 interface Projection {
-  api: {
-    name: string;
-    source: string;
-    signature: string;
-    doc: string;
-    methods: { name: string; signature: string; doc: string }[];
-  }[];
   entrypoints: Entrypoint[];
   package: {
     name: string;
@@ -113,14 +106,18 @@ export const COMMAND_ENTRIES: CommandEntry[] = REFERENCE.entrypoints
   .filter((entrypoint) => !entrypoint.aliasOf)
   .flatMap((entrypoint) => collect(entrypoint, entrypoint.command));
 
+export const CONNECTION_COMMANDS = REFERENCE.entrypoints
+  .filter((entrypoint) => entrypoint.name === "sarj-connect")
+  .flatMap((entrypoint) => entrypoint.command.commands);
+
+export function commandHref(command: Command): string {
+  return siteHref(commandPath(command));
+}
+
 function commandPath(command: Command): string {
   const [entrypoint, ...rest] = command.path;
   const canonical = REFERENCE.entrypoints.find((item) => item.name === entrypoint)?.aliasOf;
   return `/cli/${[canonical ?? entrypoint, ...rest].map(encodeURIComponent).join("/")}/`;
-}
-
-export function commandHref(command: Command): string {
-  return siteHref(commandPath(command));
 }
 
 export function defaultLabel(
@@ -140,17 +137,8 @@ export function sourceHref(path: string): string {
 export type Sidebar = NonNullable<StarlightUserConfig["sidebar"]>;
 
 export const SIDEBAR: Sidebar = [
-  { label: "About", link: "/" },
-  { label: "CLI", link: "/cli/" },
-  ...REFERENCE.entrypoints.filter((entrypoint) => !entrypoint.aliasOf && !entrypoint.command.hidden).map((entrypoint) => ({
-    label: entrypoint.name,
-    collapsed: true,
-    items: [entrypoint.command, ...entrypoint.command.commands].filter((command) => !command.hidden).map((command) => ({
-      label: command.path.join(" "),
-      link: commandPath(command),
-    })),
-  })),
-  { label: "Python API", link: "/api/" },
+  { label: "Start", link: "/" },
+  { label: "Commands", link: "/cli/" },
+  { label: "Setup", link: "/setup/" },
   { label: "Settings", link: "/settings/" },
-  { label: "Terraform", link: "/terraform/" },
 ];

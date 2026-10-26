@@ -1,5 +1,5 @@
 ---
-import { type Command,defaultLabel } from "../lib/reference";
+import { type Command, defaultLabel } from "../lib/reference";
 
 interface Props {
   parameters: Command["parameters"];
@@ -15,22 +15,21 @@ const VISIBLE_PARAMETERS = PARAMETERS.filter((parameter) => !parameter.hidden);
       <table class="reference-table">
         <caption>Parameters</caption>
         <thead>
-          <tr><th scope="col">Parameter</th><th scope="col">Type / default</th><th scope="col">Help</th></tr>
+          <tr><th scope="col">Parameter</th><th scope="col">Description</th></tr>
         </thead>
         <tbody>
           {VISIBLE_PARAMETERS.map((parameter) => (
             <tr>
               <th scope="row">
                 <code>{parameter.options.length ? [...parameter.options, ...parameter.secondaryOptions].join(", ") : parameter.name}</code>
-                <small>{parameter.isFlag ? "flag" : parameter.kind}{parameter.required ? " · required" : ""}{parameter.multiple ? " · multiple" : ""}{parameter.nargs === -1 ? " · variadic" : parameter.nargs > 1 ? ` · ${String(parameter.nargs)} values` : ""}</small>
+                {parameter.required && <small>Required</small>}
               </th>
               <td>
-                <code>{parameter.metavar || parameter.type}</code>
-                {parameter.metavar && parameter.metavar !== parameter.type && <small><code>{parameter.type}</code></small>}
-                <small><code>{defaultLabel(parameter.defaultKind, parameter.default)}</code></small>
-                {parameter.envvar && <small>{Array.isArray(parameter.envvar) ? parameter.envvar.join(", ") : parameter.envvar}</small>}
+                <span class="source-prose">{parameter.help || parameter.name}</span>
+                {parameter.defaultKind === "value" && parameter.default !== null && parameter.default !== false && (
+                  <small>Default: <code>{defaultLabel(parameter.defaultKind, parameter.default)}</code></small>
+                )}
               </td>
-              <td class="source-prose">{parameter.help || "—"}</td>
             </tr>
           ))}
         </tbody>

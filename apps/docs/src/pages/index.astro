@@ -3,36 +3,16 @@ import { Code } from "@astrojs/starlight/components";
 
 import ReferencePage from "../components/reference-page.astro";
 import { siteHref } from "../lib/paths";
-import { REFERENCE } from "../lib/reference";
+import { CONNECTION_COMMANDS, REFERENCE } from "../lib/reference";
 ---
 
 <ReferencePage title={REFERENCE.package.name}>
-  <article class="sarj-about-page">
+  <article class="reference-page">
     <h1>{REFERENCE.package.name}</h1>
-    <p>{REFERENCE.package.description}</p>
-    <dl class="metadata-list">
-      <div><dt>Version</dt><dd><code>{REFERENCE.package.version}</code></dd></div>
-      <div><dt>Python</dt><dd><code>{REFERENCE.package.requiresPython}</code></dd></div>
-      <div><dt>License</dt><dd>{REFERENCE.package.license}</dd></div>
-    </dl>
-    <section>
-      <h2>Install</h2>
-      <Code code={REFERENCE.package.install.join("\n")} lang="bash" />
-    </section>
-    <section>
-      <h2>Reference</h2>
-      <nav aria-label="Reference" class="reference-links">
-        <a href={siteHref("/cli/")}>CLI</a><a href={siteHref("/api/")}>Python API</a><a href={siteHref("/settings/")}>Settings</a><a href={siteHref("/terraform/")}>Terraform</a>
-      </nav>
-    </section>
-    <section>
-      <h2>Dependencies</h2>
-      <ul class="dependency-list">{REFERENCE.package.dependencies.map((dependency) => <li><code>{dependency}</code></li>)}</ul>
-    </section>
-    <section class="sarj-related-standards">
-      <a href={REFERENCE.package.repository}>Source</a>
-      <span aria-hidden="true"> · </span>
-      <a href={siteHref("/reference.json")}>Generated reference JSON</a>
-    </section>
+    <p class="command-help">{REFERENCE.package.description}</p>
+    <Code code={CONNECTION_COMMANDS.map((command) => command.path.join(" ")).join("\n")} lang="bash" />
+    <p>Run the same command to reconnect. Your terminal windows, browser tabs, and sign-ins stay on the VM.</p>
+    <p>First time? <a href={siteHref("/setup/")}>Set up your connection</a>.</p>
+    <p class="release-note">Version {REFERENCE.package.version} · Python {REFERENCE.package.requiresPython} · {REFERENCE.package.license}</p>
   </article>
 </ReferencePage>

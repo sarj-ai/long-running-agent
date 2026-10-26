@@ -37,11 +37,6 @@ class Entrypoint(BaseModel):
     command: Command
 
 
-class ApiSymbol(BaseModel):
-    name: str
-    source: str
-
-
 class Project(BaseModel):
     scripts: dict[str, str]
 
@@ -66,7 +61,6 @@ class Terraform(BaseModel):
 class Reference(BaseModel):
     entrypoints: list[Entrypoint]
     settings: dict[str, JsonValue]
-    api: list[ApiSymbol]
     terraform: Terraform
 
 
@@ -86,38 +80,46 @@ def generate(destination: Path, *, check: bool = False) -> int:
     ).returncode
 
 
-def test_reference_covers_installed_entrypoints_nested_groups_and_hidden_transport(tmp_path: Path) -> None:
+def test_reference_only_publishes_daily_commands_and_keeps_existing_aliases(tmp_path: Path) -> None:
     assert generate(tmp_path) == 0
     reference = Reference.model_validate_json((tmp_path / REFERENCE).read_bytes())
     with (ROOT / "packages/long-running-agent/pyproject.toml").open("rb") as stream:
         project = Manifest.model_validate(tomllib.load(stream)).project
-    assert {entry.name for entry in reference.entrypoints} == set(project.scripts)
+    assert {entry.name for entry in reference.entrypoints} == set(project.scripts) - {"sarj-host"}
     entries = {entry.name: entry for entry in reference.entrypoints}
     assert entries["sarj-vm"].alias_of == "vm"
     assert entries["vm"].default_command == "terminal"
     assert entries["vm"].command.path == ["vm"]
     paths = {tuple(command.path): command for entry in entries.values() for command in commands(entry.command)}
-    assert ("lra", "runtime", "cleanup", "daemon", "run") in paths
-    assert ("lra", "infra", "tf") in paths
-    assert ("sarj-host", "open-site") in paths
-    assert "--session" in {
-        flag for parameter in paths["lra", "runtime", "host", "attach"].parameters for flag in parameter.options
-    }
-    assert not any("ui" in path or "t3" in path for path in paths)
-    assert {symbol.name for symbol in reference.api} == {"Client", "Settings"}
-    for symbol in reference.api:
-        source = ROOT / symbol.source
-        assert not Path(symbol.source).is_absolute()
-        assert source.resolve().is_relative_to(ROOT)
-        assert source.is_file()
-        assert source.suffix == ".py"
+    for name in ("vm", "sarj-vm", "sarj-connect"):
+        assert {command.path[-1] for command in entries[name].command.commands} == {"terminal", "browser", "info"}
+    assert {command.path[-1] for command in paths["lra", "vm"].commands} == {"terminal", "browser", "info"}
+    assert '"api":' not in (tmp_path / REFERENCE).read_text(encoding="utf-8")
     assert reference.settings["configEnv"] == "LRA_CONFIG"
     inputs = reference.terraform.roots[0].inputs
     assert any(field.name == "project_id" for field in inputs)
     assert all(not field.name.startswith('"') and not field.description.startswith('"') for field in inputs)
     readme = (tmp_path / "README.md").read_text(encoding="utf-8")
-    assert "lra runtime --help" in readme
+    assert "sarj-connect terminal" in readme
+    assert "sarj-connect browser" in readme
+    assert "sarj-connect info" in readme
+    assert "runtime" not in readme
     assert len(readme.splitlines()) <= 25
+
+
+def test_reference_omits_internal_operations_and_transport_flags(tmp_path: Path) -> None:
+    assert generate(tmp_path) == 0
+    reference = Reference.model_validate_json((tmp_path / REFERENCE).read_bytes())
+    published = [command for entry in reference.entrypoints for command in commands(entry.command)]
+    assert not any(
+        part in {"runtime", "infra", "tunnel", "codex", "send", "get"} for command in published for part in command.path
+    )
+    assert not any(
+        flag in {"--no-host", "--help", "--install-completion", "--show-completion"}
+        for command in published
+        for parameter in command.parameters
+        for flag in parameter.options
+    )
 
 
 def test_generation_never_invokes_commands_profiles_or_home_factories(tmp_path: Path) -> None:

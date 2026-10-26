@@ -14,6 +14,13 @@ export default [
   ...strict,
   ...astro.configs["flat/recommended"],
   {
+    files: ["astro.config.ts", "scripts/verify-deployment.ts"],
+    rules: {
+      // These entrypoints refer to generated output directories, which are absent before a build.
+      "unicorn/no-missing-local-resource": "off",
+    },
+  },
+  {
     files: ["**/*.astro"],
     languageOptions: {
       parserOptions: {

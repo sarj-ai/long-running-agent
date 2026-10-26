@@ -19,7 +19,7 @@ from typer.main import get_command
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
 
 
 type Document = dict[str, JsonValue]
@@ -48,13 +48,6 @@ class DefaultValue:
 class EntrypointAdapter:
     command: TyperCommand | TyperGroup
     default_command: str | None = None
-
-
-@dataclass(frozen=True)
-class ExportedClass:
-    name: str
-    module: str
-    symbol: ast.ClassDef
 
 
 class DefaultParameter(Protocol):
@@ -183,7 +176,9 @@ def command_reference(command: TyperCommand | TyperGroup, path: list[str]) -> Do
     children: list[JsonValue] = []
     if isinstance(command, TyperGroup):
         children = [
-            command_reference(command_object(child), [*path, name]) for name, child in sorted(command.commands.items())
+            command_reference(command_object(child), [*path, name])
+            for name, child in command.commands.items()
+            if not child.hidden
         ]
     return {
         "name": path[-1],
@@ -191,7 +186,11 @@ def command_reference(command: TyperCommand | TyperGroup, path: list[str]) -> Do
         "help": command.help or "",
         "hidden": command.hidden,
         "deprecated": command.deprecated,
-        "parameters": [parameter_reference(parameter, context) for parameter in command.get_params(context)],
+        "parameters": [
+            parameter_reference(parameter, context)
+            for parameter in command.get_params(context)
+            if isinstance(parameter, TyperArgument | TyperOption) and not parameter.hidden and parameter.name != "help"
+        ],
         "commands": children,
     }
 
@@ -234,22 +233,6 @@ def adapter(target: str) -> EntrypointAdapter:
     if len(invocation.args) > INVOKE_ARGUMENT_OFFSET:
         return adapted_command(source, invocation.args[INVOKE_ARGUMENT_OFFSET], command)
     return EntrypointAdapter(command)
-
-
-def signature(node: ast.FunctionDef, name: str | None = None) -> str:
-    arguments = ast.arguments(
-        posonlyargs=node.args.posonlyargs.copy(),
-        args=node.args.args.copy(),
-        vararg=node.args.vararg,
-        kwonlyargs=node.args.kwonlyargs,
-        kw_defaults=node.args.kw_defaults,
-        kwarg=node.args.kwarg,
-        defaults=node.args.defaults,
-    )
-    if arguments.args and arguments.args[0].arg in {"self", "cls"}:
-        arguments.args.pop(0)
-    suffix = f" -> {ast.unparse(node.returns)}" if node.returns is not None and name is None else ""
-    return f"{name or node.name}({ast.unparse(arguments)}){suffix}"
 
 
 def environment_prefix(loader: ast.FunctionDef) -> str:
@@ -327,54 +310,6 @@ def settings_reference() -> Document:
     }
 
 
-def exported_classes() -> Iterator[ExportedClass]:
-    exports = ast.parse((SOURCE / "__init__.py").read_text(encoding="utf-8"))
-    for node in exports.body:
-        if not isinstance(node, ast.ImportFrom) or node.module is None:
-            continue
-        for imported in node.names:
-            name = imported.asname or imported.name
-            if name.startswith("_"):
-                continue
-            source = tree(node.module)
-            symbol = next(item for item in source.body if isinstance(item, ast.ClassDef) and item.name == imported.name)
-            yield ExportedClass(name, node.module, symbol)
-
-
-def model_signature(name: str, settings: Document) -> str:
-    parameters: list[str] = []
-    for item in array(settings["fields"]):
-        field = dictionary(item)
-        default = "<factory>" if field["defaultKind"] == "factory" else text(field["defaultExpression"])
-        parameters.append(text(field["name"]) + ": " + text(field["type"]) + " = " + default)
-    return f"{name}(*, " + ", ".join(parameters) + ")"
-
-
-def class_reference(exported: ExportedClass, settings: Document) -> Document:
-    symbol = exported.symbol
-    methods = [item for item in symbol.body if isinstance(item, ast.FunctionDef) and not item.name.startswith("_")]
-    constructor = next(
-        (item for item in symbol.body if isinstance(item, ast.FunctionDef) and item.name == "__init__"), None
-    )
-    declaration = (
-        signature(constructor, exported.name) if constructor is not None else model_signature(exported.name, settings)
-    )
-    return {
-        "name": exported.name,
-        "source": module_path(exported.module).relative_to(ROOT).as_posix(),
-        "signature": declaration,
-        "doc": ast.get_docstring(symbol) or "",
-        "methods": [
-            {"name": method.name, "signature": signature(method), "doc": ast.get_docstring(method) or ""}
-            for method in methods
-        ],
-    }
-
-
-def api_reference(settings: Document) -> list[JsonValue]:
-    return [class_reference(exported, settings) for exported in exported_classes()]
-
-
 def hcl_document(document: HclDocument) -> Document:
     return DocumentModel.model_validate(
         document.serialize(
@@ -441,6 +376,8 @@ def reference(root: Path = ROOT) -> Document:
     for name, value in scripts.items():
         target = text(value)
         route = adapter(target)
+        if route.command.hidden:
+            continue
         entrypoints.append(
             {
                 "name": name,
@@ -453,7 +390,7 @@ def reference(root: Path = ROOT) -> Document:
         canonical.setdefault(target, name)
     settings = settings_reference()
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "package": {
             "name": project["name"],
             "version": project["version"],
@@ -468,14 +405,15 @@ def reference(root: Path = ROOT) -> Document:
         },
         "entrypoints": entrypoints,
         "settings": settings,
-        "api": api_reference(settings),
         "terraform": terraform_reference(root),
     }
 
 
 def readme(document: Document) -> str:
     package = dictionary(document["package"])
-    primary = dictionary(array(document["entrypoints"])[0])
+    primary = next(
+        dictionary(entry) for entry in array(document["entrypoints"]) if dictionary(entry)["name"] == "sarj-connect"
+    )
     command = dictionary(primary["command"])
     groups = [dictionary(group) for group in array(command["commands"])]
     lines = [
@@ -496,7 +434,7 @@ def readme(document: Document) -> str:
         *[
             "| `"
             + " ".join(text(part) for part in array(group["path"]))
-            + " --help` | "
+            + "` | "
             + text(group["help"]).replace("|", "\\|").replace("\n", " ")
             + " |"
             for group in groups

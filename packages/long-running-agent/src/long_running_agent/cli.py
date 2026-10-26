@@ -15,13 +15,14 @@ from long_running_agent.runtime.app import app as runtime_app
 
 console = Console(stderr=True)
 app = typer.Typer(
-    help="Persistent terminals and browser on a private VM through IAP and OS Login.",
+    help="Persistent terminals and browser on your private VM.",
+    add_completion=False,
     no_args_is_help=True,
     pretty_exceptions_enable=False,
 )
 app.add_typer(client.app, name="vm")
-app.add_typer(runtime_app, name="runtime")
-app.add_typer(infra.app, name="infra")
+app.add_typer(runtime_app, name="runtime", hidden=True)
+app.add_typer(infra.app, name="infra", hidden=True)
 
 
 @app.callback()
@@ -30,9 +31,9 @@ def configure(
     *,
     config: Annotated[Path | None, typer.Option("--config", help="Personal TOML connection profile.")] = None,
     account: Annotated[str | None, typer.Option("--account", help="Your Google account email.")] = None,
-    project: Annotated[str | None, typer.Option("--project")] = None,
-    instance: Annotated[str | None, typer.Option("--instance")] = None,
-    zone: Annotated[str | None, typer.Option("--zone")] = None,
+    project: Annotated[str | None, typer.Option("--project", help="Google Cloud project.")] = None,
+    instance: Annotated[str | None, typer.Option("--instance", help="VM name.")] = None,
+    zone: Annotated[str | None, typer.Option("--zone", help="VM zone.")] = None,
 ) -> None:
     ctx.obj = load_settings(
         config, overrides={"account": account, "project": project, "instance": instance, "zone": zone}
@@ -40,15 +41,15 @@ def configure(
 
 
 connect_app = typer.Typer(
-    help="Connect to your persistent VM terminal and browser.", no_args_is_help=True, pretty_exceptions_enable=False
+    help="Open your terminal or browser, or check your VM.",
+    add_completion=False,
+    no_args_is_help=True,
+    pretty_exceptions_enable=False,
 )
 connect_app.callback()(configure)
 connect_app.command("terminal")(client.terminal)
 connect_app.command("browser")(client.browser)
-connect_app.command("send")(client.send)
-connect_app.command("get")(client.get_file)
 connect_app.command("info")(client.info)
-connect_app.add_typer(client.codex_app, name="codex")
 
 
 def invoke(application: typer.Typer, name: str, arguments: list[str] | None = None) -> None:
