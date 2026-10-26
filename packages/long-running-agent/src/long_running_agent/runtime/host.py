@@ -37,7 +37,10 @@ if TYPE_CHECKING:
 
 
 app = typer.Typer(
-    help="Use the Mac connected to your VM terminal.", no_args_is_help=True, pretty_exceptions_enable=False
+    help="Use the Mac connected to your VM terminal.",
+    hidden=True,
+    no_args_is_help=True,
+    pretty_exceptions_enable=False,
 )
 CONNECTION_PATTERN = r"[a-f0-9]{32}"
 MAX_CONNECTIONS = 32

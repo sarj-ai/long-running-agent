@@ -1,7 +1,7 @@
 [project]
 name = "long-running-agent"
-version = "0.6.21"
-description = "Persistent VM terminals and browser through private IAP and OS Login access."
+version = "0.7.0"
+description = "Persistent terminals and browser on your private VM."
 requires-python = ">=3.14,<3.15"
 license = "MIT"
 license-files = ["LICENSE"]

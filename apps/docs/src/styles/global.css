@@ -13,7 +13,7 @@ starlight-menu-button button {
   color: var(--sl-color-white);
 }
 
-.reference-page { min-width: 0; padding-block: 1.25rem 3rem; }
+.reference-page { min-width: 0; max-width: 60rem; padding-block: 1.25rem 3rem; }
 .reference-page > h1 { margin-block: 0 1.25rem; }
 .reference-page > section { margin-top: 3rem; }
 .reference-page h1 code { padding: 0; background: none; font: inherit; }
@@ -29,11 +29,11 @@ starlight-menu-button button {
 }
 
 .reference-table-wrap:focus-visible { outline: 2px solid var(--sl-color-accent); outline-offset: 3px; }
-.reference-table { display: table; width: 100%; min-width: 34rem; margin: 0; border-collapse: collapse; }
+.reference-table { display: table; width: 100%; margin: 0; border-collapse: collapse; }
 .reference-table caption { padding: 0.8rem 0.9rem; text-align: left; font-weight: 700; }
 .reference-table th, .reference-table td { padding: 0.85rem 0.9rem; border-bottom: 1px solid var(--sarj-color-rule); text-align: left; vertical-align: top; }
 .reference-table thead th { color: var(--sl-color-gray-3); font: 700 0.65rem var(--sl-font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
-.reference-table tbody th { min-width: 10rem; font-weight: 500; }
+.reference-table tbody th { width: 38%; font-weight: 500; }
 .reference-table tbody th a { display: inline-flex; min-height: 36px; align-items: center; color: var(--sl-color-white); text-decoration: none; }
 .reference-table tbody th a:hover { color: var(--sl-color-accent); }
 .reference-table tbody tr:last-child :is(th, td) { border-bottom: 0; }
@@ -50,9 +50,13 @@ starlight-menu-button button {
 .dependency-list { padding-inline-start: 1.3rem; }
 .dependency-list li { margin-block: 0.45rem; overflow-wrap: anywhere; }
 .source-link { display: inline-block; min-height: 36px; color: var(--sl-color-gray-3); font: 0.75rem var(--sl-font-mono); overflow-wrap: anywhere; }
-.api-symbol { padding-top: 1rem; border-top: 1px solid var(--sarj-color-rule); }
-.api-symbol > section { margin-block: 2rem; }
-.badge { display: inline-block; padding: 0.2rem 0.45rem; border: 1px solid var(--sarj-color-rule); font: 0.7rem var(--sl-font-mono); }
+.command-list { display: grid; gap: 0; margin-block: 1.5rem; border-top: 1px solid var(--sarj-color-rule); }
+.command-list a { display: grid; gap: 0.35rem; padding-block: 1rem; border-bottom: 1px solid var(--sarj-color-rule); text-decoration: none; }
+.command-list a:focus-visible { outline: 2px solid var(--sl-color-accent); outline-offset: 4px; }
+.command-list strong { color: var(--sl-color-white); }
+.command-list a:hover strong { color: var(--sl-color-accent); }
+.command-list span { color: var(--sl-color-gray-2); }
+.release-note { margin-top: 2rem; color: var(--sl-color-gray-3); font-size: 0.8rem; }
 
 @media (max-width: 35rem) {
   .metadata-list > div { grid-template-columns: 1fr; gap: 0.25rem; }

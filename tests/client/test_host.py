@@ -10,8 +10,8 @@ from threading import Event
 import time
 from typing import TYPE_CHECKING, override
 
-from long_running_agent import Client
 from long_running_agent.client.browser import BrowserRoute
+from long_running_agent.client.controller import Client
 from long_running_agent.client.host import HostBridge
 from long_running_agent.config import Settings
 from long_running_agent.host_connection import HostRegistration, HostReply, HostRequest, exchange, read_message

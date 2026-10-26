@@ -9,8 +9,8 @@ if TYPE_CHECKING:
 
 import subprocess
 
-from long_running_agent import Client
 from long_running_agent.client.cloud import Cloud, PowerAction, sanitized_environment
+from long_running_agent.client.controller import Client
 from long_running_agent.config import Settings
 from long_running_agent.process import CommandError
 import pytest
@@ -71,7 +71,7 @@ def test_only_transient_inventory_reads_retry_and_sanitize_identity() -> None:
     assert clock.now == 1
 
 
-@pytest.mark.parametrize("operation", ["start", "resume", "stop", "suspend"])
+@pytest.mark.parametrize("operation", ["start", "resume"])
 def test_power_mutations_never_retry_even_on_transient_error(operation: PowerAction) -> None:
     runner = ScriptedRunner([(1, "", "SSL unexpected EOF")])
     cloud = Cloud(Settings(), runner=runner)
@@ -119,23 +119,6 @@ def test_wake_requests_start_once_while_async_operation_reports_old_state() -> N
     controller.wake()
     assert len([command for command in runner.commands if "start" in command]) == 1
     assert clock.now == 6
-
-
-def test_stop_guard_failure_leaves_machine_running() -> None:
-    runner = ScriptedRunner([(0, "RUNNING", ""), (1, "unsafe", "")])
-    controller = Client(Settings(), runner=runner)
-    with pytest.raises(CommandError, match="ssh exited"):
-        controller.stop()
-    assert len(runner.commands) == 2
-    assert "runtime worktrees check" in runner.commands[1][-1]
-    assert not any("stop" in command for command in runner.commands)
-
-
-def test_suspended_stop_does_not_wake_to_inspect() -> None:
-    runner = ScriptedRunner([(0, "SUSPENDED", "")])
-    with pytest.raises(RuntimeError, match="wake it before"):
-        Client(Settings(), runner=runner).stop()
-    assert len(runner.commands) == 1
 
 
 def test_stale_master_stops_listener_without_killing_existing_channels() -> None:
@@ -198,25 +181,6 @@ def test_interrupted_shell_still_prints_its_vm_and_project(
     assert "VM: agent-vm" in output
     assert "Project: example-project" in output
     assert "Reconnect: vm" in output
-
-
-@pytest.mark.parametrize("state", ["SUSPENDED", "TERMINATED", "STOPPING"])
-def test_health_never_wakes_a_nonrunning_vm(state: str, capsys: pytest.CaptureFixture[str]) -> None:
-    runner = ScriptedRunner([(0, state, "")])
-    Client(Settings(), runner=runner).health()
-    assert len(runner.commands) == 1
-    timeout = runner.options[0]["timeout"]
-    assert isinstance(timeout, float)
-    assert timeout <= 15
-    assert "health did not wake it" in capsys.readouterr().err
-
-
-def test_health_uses_one_bounded_read_only_remote_command() -> None:
-    runner = ScriptedRunner([(0, "RUNNING", ""), (0, "", "")])
-    Client(Settings(), runner=runner).health()
-    assert len(runner.commands) == 2
-    assert runner.commands[-1][-1].endswith("runtime health")
-    assert runner.options[-1]["timeout"] == 15
 
 
 def test_setup_only_configures_the_native_runtime() -> None:

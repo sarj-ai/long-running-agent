@@ -9,8 +9,8 @@ import sys
 from threading import Event
 from typing import TYPE_CHECKING, override
 
-from long_running_agent import Client
 from long_running_agent.client.browser import HELPER, await_forward, connect, viewer_ready
+from long_running_agent.client.controller import Client
 from long_running_agent.config import Settings
 from long_running_agent.process import DEVNULL, PIPE, ChildProcess, CommandError, spawn
 import pytest

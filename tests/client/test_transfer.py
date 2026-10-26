@@ -9,8 +9,8 @@ import sys
 import time
 from typing import override
 
-from long_running_agent import Client
 from long_running_agent.client import transfer
+from long_running_agent.client.controller import Client
 from long_running_agent.config import Settings
 from long_running_agent.process import DEVNULL, spawn
 import pytest

@@ -1,14 +1,37 @@
 import { hash } from "node:crypto";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import type { AstroIntegration } from "astro";
 
+import { SITE_BASE_PATH, SITE_HOMEPAGE, siteHref } from "../lib/paths";
+
 const POLICY_PATTERN = /<meta http-equiv="content-security-policy" content="([^"]+)">/u;
 
-export default function cloudflareArtifacts(): AstroIntegration {
+async function writeLegacyRedirects(projectDirectory: URL, assetRoot: URL): Promise<void> {
+  if (SITE_BASE_PATH === "/") return;
+  const entries = await readdir(projectDirectory, { withFileTypes: true });
+  const redirects = new Set([`/ ${SITE_HOMEPAGE} 302`]);
+  for (const entry of entries) {
+    if (entry.name === "_headers" || entry.name === "_redirects" || SITE_BASE_PATH.startsWith(`/${entry.name}/`)) continue;
+    const legacy = `/${entry.name}`;
+    if (entry.isDirectory()) {
+      const destination = new URL(`${entry.name}/`, SITE_HOMEPAGE).href;
+      redirects.add(`${legacy} ${destination} 301`);
+      redirects.add(`${legacy}/ ${destination} 301`);
+      redirects.add(`${legacy}/* ${destination}:splat 301`);
+    } else if (entry.isFile()) {
+      const destination = new URL(entry.name === "index.html" ? "" : entry.name, SITE_HOMEPAGE).href;
+      redirects.add(`${legacy} ${destination} ${entry.name === "index.html" ? "302" : "301"}`);
+    }
+  }
+  await writeFile(new URL("_redirects", assetRoot), `${[...redirects].toSorted().join("\n")}\n`, "utf8");
+}
+
+export default function cloudflareArtifacts(assetRoot: URL): AstroIntegration {
   return {
     name: "sarj-cloudflare-static-artifacts",
     hooks: {
+      "astro:build:start": () => rm(assetRoot, { recursive: true, force: true }),
       "astro:build:done": async ({ dir }) => {
         const files = await readdir(dir, { recursive: true });
         const paths = files
@@ -41,7 +64,11 @@ export default function cloudflareArtifacts(): AstroIntegration {
         const headersUrl = new URL("_headers", dir);
         const headers = await readFile(headersUrl, "utf8");
         if (!headers.startsWith("/*\n")) throw new Error("Cloudflare headers must begin with the global route");
-        await writeFile(headersUrl, headers.replace("/*\n", () => `/*\n${header}\n`), "utf8");
+        const scoped = headers.replace("/*\n", () => `/*\n${header}\n`).split("\n")
+          .map((line) => line.startsWith("/") ? siteHref(line) : line).join("\n");
+        await writeFile(new URL("_headers", assetRoot), scoped, "utf8");
+        await writeLegacyRedirects(dir, assetRoot);
+        if (dir.href !== assetRoot.href) await rm(headersUrl);
       },
     },
   };

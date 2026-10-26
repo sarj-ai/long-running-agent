@@ -2,12 +2,16 @@ import sitemap from "@astrojs/sitemap";
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 
-import metadata from "./package.json";
 import cloudflareArtifacts from "./src/integrations/cloudflare-artifacts";
+import { SITE_BASE_PATH, SITE_ORIGIN } from "./src/lib/paths";
 import { REFERENCE, SIDEBAR } from "./src/lib/reference";
 
+const ASSET_ROOT = new URL("dist/", import.meta.url);
+
 export default defineConfig({
-  site: metadata.homepage,
+  site: SITE_ORIGIN,
+  base: SITE_BASE_PATH,
+  outDir: `dist${SITE_BASE_PATH}`,
   output: "static",
   trailingSlash: "always",
   compressHTML: true,
@@ -49,6 +53,6 @@ export default defineConfig({
       credits: false,
       components: { PageTitle: "@sarj/design/PageAnchor.astro" },
     }),
-    cloudflareArtifacts(),
+    cloudflareArtifacts(ASSET_ROOT),
   ],
 });

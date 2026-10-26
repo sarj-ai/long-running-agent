@@ -5,7 +5,7 @@ import platform
 import re
 import shlex
 import time
-from typing import TYPE_CHECKING, Final, Literal
+from typing import TYPE_CHECKING, Final
 
 from rich.console import Console
 
@@ -97,27 +97,6 @@ class Client:
                 raise
         return False
 
-    def sleep(self) -> None:
-        state = self.cloud.state()
-        if state == "SUSPENDED":
-            return
-        if state != "RUNNING":
-            message = f"VM is {state}; no suspend attempted"
-            raise RuntimeError(message)
-        self.cloud.change_power("suspend")
-
-    def stop(self) -> None:
-        state = self.cloud.state()
-        if state == "TERMINATED":
-            return
-        if state != "RUNNING":
-            message = f"VM is {state}; wake it before checking temporary worktrees"
-            raise RuntimeError(message)
-        # Never move live source files implicitly. Unsafe inventories leave the
-        # machine running and require a deliberate maintenance preservation.
-        self.remote("runtime worktrees check", timeout=90)
-        self.cloud.change_power("stop")
-
     def ensure_connection(self) -> None:
         alias = self.settings.ssh_alias
         master = self.ssh(["-O", "check", alias], timeout=4, capture_output=True, check=False)
@@ -179,13 +158,6 @@ class Client:
             check=check,
         )
 
-    def health(self) -> None:
-        state = self.cloud.state(timeout=15)
-        if state != "RUNNING":
-            Console(stderr=True).print(f"VM is {state}; health did not wake it. Run vm to resume.", markup=False)
-            return
-        self.remote("runtime health", timeout=15)
-
     def summary(self, reconnect: Sequence[str] = ("vm",)) -> str:
         settings = self.settings
         return (
@@ -200,7 +172,7 @@ class Client:
         finally:
             Console(stderr=True).print(self.summary(("sarj-connect", "browser")), markup=False)
 
-    def shell(self, command: Sequence[str], *, tty: bool = False, reconnect: Sequence[str] = ("vm", "ssh")) -> int:
+    def shell(self, command: Sequence[str], *, tty: bool = False, reconnect: Sequence[str] = ("vm",)) -> int:
         try:
             self.ensure_connection()
             with TerminalState():
@@ -241,11 +213,6 @@ class Client:
         ]
         reconnect = ["sarj-connect", "terminal", session]
         return self.shell(command, tty=True, reconnect=reconnect)
-
-    def codex(self, action: Literal["status", "switch"]) -> int:
-        self.ensure_connection()
-        with TerminalState():
-            return self.remote(shlex.join(["runtime", "codex", action]), tty=action == "switch", check=False).returncode
 
     def configure_ssh(self) -> Path:
         key = self.settings.ssh_key

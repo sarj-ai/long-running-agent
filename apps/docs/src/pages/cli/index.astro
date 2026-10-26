@@ -1,28 +1,20 @@
 ---
 import ReferencePage from "../../components/reference-page.astro";
-import { commandHref, REFERENCE } from "../../lib/reference";
+import { commandHref, CONNECTION_COMMANDS } from "../../lib/reference";
 ---
 
-<ReferencePage title="CLI reference">
+<ReferencePage title="Commands">
   <article class="reference-page">
-    <h1>CLI reference</h1>
-    <div aria-label="Reference table" class="reference-table-wrap" role="region" tabindex="0">
-      <table class="reference-table">
-        <caption>Entrypoints</caption>
-        <thead><tr><th scope="col">Command</th><th scope="col">Help</th><th scope="col">Default / alias</th></tr></thead>
-        <tbody>
-          {REFERENCE.entrypoints.filter((entrypoint) => !entrypoint.command.hidden).map((entrypoint) => (
-            <tr>
-              <th scope="row"><a href={commandHref(entrypoint.command)}><code>{entrypoint.name}</code></a></th>
-              <td class="source-prose">{entrypoint.command.help}</td>
-              <td>
-                {entrypoint.defaultCommand && <code>{entrypoint.defaultCommand}</code>}
-                {entrypoint.aliasOf && <small>Alias: <code>{entrypoint.aliasOf}</code></small>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <h1>Commands</h1>
+    <nav aria-label="Commands" class="command-list">
+      {CONNECTION_COMMANDS.map((command) => (
+        <a href={commandHref(command)}>
+          <strong><code>{command.path.join(" ")}</code></strong>
+          <span>{command.help}</span>
+        </a>
+      ))}
+    </nav>
+    <p><code>vm</code> opens your terminal. <code>vm browser</code> and <code>vm info</code> work too.</p>
+    <p><code>sarj-vm</code> remains an alias for <code>vm</code>.</p>
   </article>
 </ReferencePage>

@@ -1,0 +1,24 @@
+---
+import { Code } from "@astrojs/starlight/components";
+
+import ReferencePage from "../../components/reference-page.astro";
+import { siteHref } from "../../lib/paths";
+import { REFERENCE } from "../../lib/reference";
+---
+
+<ReferencePage title="Setup">
+  <article class="reference-page">
+    <h1>Setup</h1>
+    <p>You need access to an existing LRA VM, <a href="https://docs.astral.sh/uv/">uv</a>, and the <a href="https://cloud.google.com/sdk/docs/install">Google Cloud CLI</a>.</p>
+    <h2>Install</h2>
+    <Code code={`git clone https://github.com/sarj-ai/long-running-agent.git\ncd long-running-agent\n${REFERENCE.package.install.join("\n")}`} lang="bash" />
+    <h2>Connect your account</h2>
+    <p>Save your own account and VM coordinates in <code>{REFERENCE.settings.profilePath}</code>. Your administrator can provide the VM details.</p>
+    <Code code={'account = "you@example.com"\nproject = "your-project"\ninstance = "your-vm"\nzone = "us-central1-a"'} lang="toml" />
+    <Code code={"gcloud auth login you@example.com\nlra vm setup\nsarj-connect terminal"} lang="bash" />
+    <p>Setup configures SSH and your VM user’s terminal runtime. <a href={siteHref("/cli/")}>See the three daily commands</a>.</p>
+    <h2>Reconnect</h2>
+    <p>Close or detach the terminal to leave work running. Run <code>sarj-connect terminal</code> to return.</p>
+    <p>If Google asks you to sign in again, run <code>gcloud auth login you@example.com --force</code>, then reconnect.</p>
+  </article>
+</ReferencePage>

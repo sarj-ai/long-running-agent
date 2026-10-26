@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from long_running_agent.config import Settings
 
-type PowerAction = Literal["start", "resume", "suspend", "stop"]
+type PowerAction = Literal["start", "resume"]
 
 
 TIMEOUT_STATUS = 124
@@ -171,7 +171,7 @@ class Cloud:
         return result.stdout.strip()
 
     def change_power(self, action: PowerAction, *, asynchronous: bool = False, timeout: float = 300) -> None:
-        if action not in {"start", "resume", "suspend", "stop"}:
+        if action not in {"start", "resume"}:
             message = "Unsupported power operation"
             raise ValueError(message)
         arguments = ["compute", "instances", action, self.settings.instance, "--zone=" + self.settings.zone, "--quiet"]
