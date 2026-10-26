@@ -14,7 +14,7 @@
     "dev": "astro dev --host 127.0.0.1",
     "check": "astro check && tsc --noEmit",
     "lint": "eslint .",
-    "test": "node --test src/lib/terminal-demo.test.ts scripts/worker.test.ts",
+    "test": "node --test src/lib/*.test.ts scripts/worker.test.ts",
     "build": "astro build",
     "preview": "astro preview --host 127.0.0.1",
     "deploy": "wrangler deploy --strict",
@@ -24,6 +24,8 @@
   "dependencies": {
     "@astrojs/starlight": "0.42.7",
     "@sarj/design": "0.5.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
     "astro": "7.4.2"
   },
   "devDependencies": {
