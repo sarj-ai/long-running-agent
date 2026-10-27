@@ -1,30 +1,14 @@
 <section aria-busy="true" aria-label="Interactive terminal demo" class="terminal-demo not-content" data-terminal-demo>
   <div class="demo-help">
     <div data-instructions>
-      <p class="demo-instructions">Click the terminal, then use these keys. Alt is Option (⌥) on Mac. You can also use the buttons and tabs.</p>
+      <p class="demo-instructions">Click the terminal to use shortcuts.</p>
       <dl class="demo-shortcuts">
-      <div><dt><kbd>Enter</kbd></dt><dd>Connect, run, send, or reconnect</dd></div>
-      <div><dt><kbd>Alt</kbd> + <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd></dt><dd>Switch tabs</dd></div>
-      <div><dt><kbd>Alt</kbd> + <kbd>D</kbd></dt><dd>Detach; work keeps running</dd></div>
-      <div><dt><kbd>Esc</kbd></dt><dd>Stop the current task</dd></div>
+        <div><dt><kbd>Option</kbd> + <kbd>←</kbd> / <kbd>→</kbd></dt><dd>Switch panes / tabs</dd></div>
+        <div><dt><kbd>Option</kbd> + <kbd>N</kbd></dt><dd>New tab</dd></div>
+        <div><dt><kbd>Option</kbd> + <kbd>R</kbd></dt><dd>Rename tab</dd></div>
+        <div><dt><kbd>Option</kbd> + <kbd>D</kbd></dt><dd>Detach</dd></div>
       </dl>
     </div>
-    <details class="demo-more-shortcuts">
-      <summary>More shortcuts</summary>
-      <dl class="demo-shortcuts">
-        <div><dt><kbd>Alt</kbd> + <kbd>1</kbd>–<kbd>9</kbd></dt><dd>Select a tab</dd></div>
-        <div><dt><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd></dt><dd>Move between panes or tabs</dd></div>
-        <div><dt><kbd>Alt</kbd> + <kbd>↑</kbd> / <kbd>↓</kbd></dt><dd>Move between stacked panes</dd></div>
-        <div><dt><kbd>Alt</kbd> + <kbd>N</kbd> / <kbd>W</kbd></dt><dd>New / close tab</dd></div>
-        <div><dt><kbd>Alt</kbd> + <kbd>V</kbd> / <kbd>S</kbd></dt><dd>Split right / below</dd></div>
-        <div><dt><kbd>Alt</kbd> + <kbd>Z</kbd> / <kbd>X</kbd></dt><dd>Fullscreen / close pane</dd></div>
-        <div><dt><kbd>Alt</kbd> + <kbd>R</kbd></dt><dd>Rename tab</dd></div>
-        <div><dt><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd></dt><dd>Rename pane</dd></div>
-        <div><dt><kbd>Enter</kbd> / <kbd>Esc</kbd></dt><dd>Save / cancel a rename</dd></div>
-        <div><dt><kbd>Ctrl</kbd> + <kbd>G</kbd></dt><dd>Unlock / lock Zellij modes</dd></div>
-      </dl>
-      <p>Alt shortcuts work in the default locked mode and normal mode. Esc stops work, cancels a rename, or returns to the default mode. Tab moves focus out of the terminal.</p>
-    </details>
   </div>
   <div class="demo-viewport"><div class="demo-terminal" data-terminal></div></div>
   <footer class="demo-footer">
@@ -61,10 +45,6 @@
   .demo-shortcuts dt { color: #cdd6f4; white-space: nowrap; }
   .demo-shortcuts dd { margin: 0; }
   .demo-shortcuts kbd { border: 1px solid #585b70; border-radius: 0.2rem; padding: 0.05rem 0.25rem; background: #313244; color: #cdd6f4; font: 0.95em/1.5 var(--sl-font-mono, monospace); }
-  .demo-more-shortcuts { margin-top: 0.3rem; }
-  .demo-more-shortcuts summary { min-height: 44px; width: fit-content; padding: 0.65rem 0; color: #cdd6f4; cursor: pointer; }
-  .demo-more-shortcuts summary:focus-visible { outline: 2px solid #89b4fa; outline-offset: 2px; border-radius: 0.2rem; }
-  .demo-more-shortcuts > p { margin: 0.6rem 0 0; }
   .demo-viewport { width: 100%; height: clamp(16rem, 45svh, 28rem); padding: 10px; overflow: hidden; }
   .terminal-demo:not([data-attached=true]) .demo-viewport { height: 15rem; }
   .demo-terminal { width: 100%; height: 100%; }

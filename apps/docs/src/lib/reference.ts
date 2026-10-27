@@ -130,5 +130,4 @@ export const SIDEBAR: Sidebar = [
   { label: "Start", link: "/" },
   { label: "Commands", link: "/cli/" },
   { label: "Setup", link: "/setup/" },
-  { label: "Settings", link: "/settings/" },
 ];
