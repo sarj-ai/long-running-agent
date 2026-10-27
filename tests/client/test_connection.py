@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import errno
 import os
 from pathlib import Path
@@ -11,9 +12,15 @@ import subprocess
 import sys
 import tempfile
 import time
+from typing import TYPE_CHECKING
 
+from long_running_agent.client import connection
 from long_running_agent.client.connection import launch_master
 import pytest
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
 
 
 WORKER = r"""
@@ -113,3 +120,95 @@ def test_stalled_master_launcher_is_bounded_and_reaped(tmp_path: Path) -> None:
     assert launch_master([sys.executable, "-c", program, str(record)], timeout=0.5) == 124
     with pytest.raises(ProcessLookupError):
         os.kill(int(record.read_text()), 0)
+
+
+@dataclass(frozen=True)
+class MasterProcesses:
+    master: subprocess.Popen[bytes]
+    proxy: subprocess.Popen[bytes]
+
+
+@pytest.fixture
+def master_processes(monkeypatch: pytest.MonkeyPatch) -> Iterator[MasterProcesses]:
+    # Siblings in one private group let this test reap both processes itself.
+    # Session isolation is exercised by the real launcher/TTY test above.
+    processes: list[subprocess.Popen[bytes]] = []
+    try:
+        program = [sys.executable, "-c", "import signal; signal.pause()"]
+        master = subprocess.Popen(program, process_group=0)
+        processes.append(master)
+        proxy = subprocess.Popen(program, process_group=master.pid)
+        processes.append(proxy)
+
+        def start_master(
+            arguments: Sequence[str], *, stdin: int, stdout: int, stderr: int, start_new_session: bool
+        ) -> subprocess.Popen[bytes]:
+            assert arguments == ["master"]
+            assert (stdin, stdout, stderr) == (subprocess.DEVNULL,) * 3
+            assert start_new_session
+            return master
+
+        with monkeypatch.context() as patch:
+            patch.setattr(connection, "spawn", start_master)  # sarj-noqa: SARJ445 -- Intercept spawning so both real group members remain directly reapable; adding an application test hook would change the launcher API.
+            yield MasterProcesses(master, proxy)
+    finally:
+        for process in reversed(processes):
+            if process.poll() is None:
+                process.kill()
+            process.wait(timeout=5)
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [subprocess.TimeoutExpired("master", 1), KeyboardInterrupt(), SystemExit(7)],
+    ids=["timeout", "interrupt", "exit"],
+)
+def test_failed_master_stops_its_proxy_group_and_reaps_the_launcher(
+    monkeypatch: pytest.MonkeyPatch,
+    master_processes: MasterProcesses,
+    failure: BaseException,
+) -> None:
+    master, proxy = master_processes.master, master_processes.proxy
+    original_wait = master.wait
+
+    def fail_initial_wait(timeout: float | None = None) -> int:
+        if timeout is not None:
+            raise failure
+        return original_wait(timeout=5)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(master, "wait", fail_initial_wait)  # sarj-noqa: SARJ445 -- Raise at Popen.wait to exercise cancellation without sending a signal to the pytest worker; group termination and reaping stay real.
+        if isinstance(failure, subprocess.TimeoutExpired):
+            assert launch_master(["master"]) == 124
+        else:
+            with pytest.raises(type(failure)) as raised:
+                launch_master(["master"])
+            assert raised.value is failure
+        assert master.returncode == -signal.SIGKILL
+        assert proxy.wait(timeout=5) == -signal.SIGKILL
+
+
+def test_interruption_after_launcher_reaped_does_not_signal_its_old_group(
+    monkeypatch: pytest.MonkeyPatch,
+    master_processes: MasterProcesses,
+) -> None:
+    master, proxy = master_processes.master, master_processes.proxy
+    original_wait = master.wait
+
+    def interrupted_wait(timeout: float | None = None) -> int:
+        if timeout is not None:
+            master.kill()
+            original_wait(timeout=5)
+            raise KeyboardInterrupt
+        return original_wait(timeout=5)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(master, "wait", interrupted_wait)  # sarj-noqa: SARJ445 -- Reproduce Popen.wait reaping before it propagates KeyboardInterrupt; injecting a different wait implementation would miss this boundary.
+        with pytest.raises(KeyboardInterrupt):
+            launch_master(["master"])
+        assert proxy.poll() is None
+
+
+@pytest.mark.parametrize("status", [0, 23])
+def test_master_returns_completed_launcher_status(status: int) -> None:
+    assert launch_master([sys.executable, "-c", f"raise SystemExit({status})"]) == status
