@@ -56,7 +56,6 @@ starlight-menu-button button {
 .command-list strong { color: var(--sl-color-white); }
 .command-list a:hover strong { color: var(--sl-color-accent); }
 .command-list span { color: var(--sl-color-gray-2); }
-.release-note { margin-top: 2rem; color: var(--sl-color-gray-3); font-size: 0.8rem; }
 
 
 @media (max-width: 35rem) {
