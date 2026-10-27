@@ -13,10 +13,10 @@
   <div class="demo-viewport"><div class="demo-terminal" data-terminal></div></div>
   <footer class="demo-footer">
     <span>Interactive demo · sample data · runs locally</span>
-    <div aria-label="Sample terminal tabs" class="demo-accessible-tabs" data-accessible-tabs hidden role="tablist"></div>
+    <div aria-label="Sample terminal tabs" class="demo-accessible-tabs" data-accessible-tabs inert role="tablist"></div>
     <div class="demo-actions">
       <button data-submit disabled type="button">Connect ↵</button>
-      <button data-detach disabled hidden type="button">Detach</button>
+      <button data-detach disabled inert type="button">Detach</button>
       <button data-reset disabled type="button">Reset</button>
     </div>
   </footer>
@@ -46,25 +46,27 @@
   .demo-shortcuts dd { margin: 0; }
   .demo-shortcuts kbd { border: 1px solid #585b70; border-radius: 0.2rem; padding: 0.05rem 0.25rem; background: #313244; color: #cdd6f4; font: 0.95em/1.5 var(--sl-font-mono, monospace); }
   .demo-viewport { width: 100%; height: clamp(16rem, 45svh, 28rem); padding: 10px; overflow: hidden; }
-  .terminal-demo:not([data-attached=true]) .demo-viewport { height: 15rem; }
+  .terminal-demo:not([data-attached=true]) :is(.demo-accessible-tabs, [data-detach]) { visibility: hidden; }
   .demo-terminal { width: 100%; height: 100%; }
   .demo-terminal :global(.xterm) { height: 100%; background: #1e1e2e; }
   .demo-terminal :global(.xterm-viewport) { scrollbar-width: none; background: #1e1e2e !important; }
   .demo-terminal :global(.xterm-helper-textarea) { font-size: 16px !important; }
   .demo-terminal :global(.xterm:focus-within) { outline: none; }
-  .demo-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem 1rem; padding: 0.4rem 0.75rem; border-top: 1px solid #313244; color: #a6adc8; font: 0.7rem/1.5 var(--sl-font, sans-serif); }
+  .demo-footer { position: relative; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem 1rem; padding: 0.4rem 0.75rem; border-top: 1px solid #313244; color: #a6adc8; font: 0.7rem/1.5 var(--sl-font, sans-serif); }
   .demo-actions, .demo-accessible-tabs { display: flex; align-items: center; gap: 0.25rem; }
-  .demo-accessible-tabs { min-width: 0; flex-basis: 100%; flex-wrap: wrap; }
+  .demo-accessible-tabs { position: relative; min-width: 0; height: 44px; flex-basis: 100%; overflow-x: auto; scrollbar-width: none; }
+  .demo-accessible-tabs::-webkit-scrollbar { display: none; }
   .terminal-demo :global(button) { min-width: 44px; min-height: 44px; border: 0; border-radius: 0.3rem; padding: 0.3rem 0.6rem; background: transparent; color: #cdd6f4; font: inherit; cursor: pointer; }
   .terminal-demo :global(button:hover) { background: #313244; }
   .terminal-demo :global(button:focus-visible) { outline: 2px solid #89b4fa; outline-offset: -2px; }
   .terminal-demo :global(button:disabled) { opacity: 0.5; cursor: default; }
-  .demo-actions [data-submit] { background: #cdd6f4; color: #181825; font-weight: 700; }
-  .demo-accessible-tabs :global(button) { flex: 0 0 auto; max-width: 100%; overflow-wrap: anywhere; }
+  .demo-actions [data-submit] { min-width: 7rem; background: #cdd6f4; color: #181825; font-weight: 700; }
+  .demo-accessible-tabs :global(button) { flex: 0 0 auto; white-space: nowrap; }
   .demo-accessible-tabs :global(button[aria-selected=true]) { background: #a6e3a1; color: #181825; }
   .demo-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   @media (min-width: 50rem) {
-    .demo-accessible-tabs:not(:focus-within) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .demo-accessible-tabs { position: absolute; bottom: 100%; left: 0.75rem; width: calc(100% - 1.5rem); background: #1e1e2e; }
+    .demo-accessible-tabs:not(:focus-within) { width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   }
   @media (max-width: 35rem) {
     .demo-shortcuts { grid-template-columns: 1fr; }

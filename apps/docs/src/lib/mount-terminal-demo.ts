@@ -84,6 +84,15 @@ export async function mountTerminalDemo(root: HTMLElement): Promise<void> {
     return `${demo.currentPane.id}:${demo.currentPane.mode}`;
   };
 
+  const revealSelectedTab = (): void => {
+    if (tabs.clientWidth <= 1) return;
+    const selected = tabs.querySelector<HTMLButtonElement>("[aria-selected=true]");
+    if (!selected) return;
+    const left = selected.offsetLeft;
+    const right = left + selected.offsetWidth;
+    tabs.scrollLeft = Math.min(left, Math.max(tabs.scrollLeft, right - tabs.clientWidth));
+  };
+
   const render = (): void => {
     input.context(context(), demo.suggestedInput);
     requestedPaint += 1;
@@ -102,8 +111,8 @@ export async function mountTerminalDemo(root: HTMLElement): Promise<void> {
     root.dataset.rows = String(term.rows);
     term.textarea?.setAttribute("aria-label", mode.startsWith("rename-") ? "Terminal name" : demo.inputLabel);
     action.textContent = demo.attached ? (demo.currentPane.busy ? "Stop" : (demo.currentPane.mode === "codex" ? "Send ↵" : "Run ↵")) : (demo.connectedBefore ? "Reconnect ↵" : "Connect ↵");
-    detach.hidden = !demo.attached;
-    tabs.hidden = !demo.attached;
+    detach.inert = !demo.attached;
+    tabs.inert = !demo.attached;
     const tabKey = demo.orderedTabs.map((tab) => `${tab.id}:${tab.name}`).join("|");
     if (tabKey !== accessibleTabKey) {
       const buttons = demo.orderedTabs.map((tab, index) => {
@@ -125,6 +134,7 @@ export async function mountTerminalDemo(root: HTMLElement): Promise<void> {
       button.setAttribute("aria-selected", String(selected));
       button.tabIndex = selected ? 0 : -1;
     }
+    revealSelectedTab();
     host.setAttribute("role", demo.attached ? "tabpanel" : "region");
     if (demo.attached) {
       host.setAttribute("aria-labelledby", `${instanceId}-${demo.active}`);
@@ -337,6 +347,7 @@ export async function mountTerminalDemo(root: HTMLElement): Promise<void> {
     const id = event.target.closest<HTMLButtonElement>("button[data-tab]")?.dataset.tab;
     if (id) { lockAfter(() => { demo.selectTab(id); }); focusTerminal(); }
   }, { signal: lifetime.signal });
+  tabs.addEventListener("focusin", revealSelectedTab, { signal: lifetime.signal });
   tabs.addEventListener("keydown", (event) => {
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const ordered = demo.orderedTabs;
