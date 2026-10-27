@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from contextlib import suppress
+import os
+import signal
 import socket
 from typing import TYPE_CHECKING
 
@@ -46,10 +49,16 @@ def launch_master(arguments: Sequence[str], *, timeout: float = 30) -> int:
     try:
         return child.wait(timeout=timeout)
     except ProcessTimeout:
-        child.kill()
-        child.wait()
+        _kill_master_group(child)
         return 124
     except BaseException:
-        child.kill()
-        child.wait()
+        _kill_master_group(child)
         raise
+
+
+def _kill_master_group(child: ChildProcess) -> None:
+    # An unreaped leader reserves the process-group ID. Never signal a reused ID.
+    if child.returncode is None:
+        with suppress(ProcessLookupError):
+            os.killpg(child.pid, signal.SIGKILL)
+    child.wait()
