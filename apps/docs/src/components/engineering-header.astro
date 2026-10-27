@@ -1,0 +1,19 @@
+---
+import { siteHref } from "../lib/paths";
+---
+
+<header aria-label="Sarj Engineering" class="engineering-header">
+  <div class="engineering-header-inner">
+    <a aria-label="Sarj Engineering home" class="engineering-brand" href="/">
+      <img alt="Sarj" class="engineering-logo engineering-logo-light" decoding="async" height="28" src={siteHref("/sarj-logo-light.webp")} width="49" />
+      <img alt="" aria-hidden="true" class="engineering-logo engineering-logo-dark" decoding="async" height="28" src={siteHref("/sarj-logo-dark.webp")} width="49" />
+    </a>
+    <nav aria-label="Engineering links" class="engineering-header-actions">
+      <button aria-label="Dark theme" aria-pressed="false" class="engineering-theme-toggle" data-engineering-theme-toggle disabled title="Change color theme" type="button">
+        <svg aria-hidden="true" class="engineering-theme-moon" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24" width="16"><path d="M19.5 15.5A8 8 0 0 1 8.5 4.5a8 8 0 1 0 11 11Z" /></svg>
+        <svg aria-hidden="true" class="engineering-theme-sun" fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-width="1.75" viewBox="0 0 24 24" width="16"><circle cx="12" cy="12" r="4" /><path d="M12 1v3m0 16v3M1 12h3m16 0h3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg>
+      </button>
+      <a class="engineering-github" href="https://github.com/sarj-ai">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </div>
+</header>

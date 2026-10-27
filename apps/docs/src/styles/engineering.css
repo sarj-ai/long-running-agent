@@ -1,0 +1,129 @@
+@font-face { font-family: EngineeringGeist; src: url("../assets/engineering/geist.woff2") format("woff2"); font-style: normal; font-weight: 100 900; font-display: swap; }
+@font-face { font-family: EngineeringNewsreader; src: url("../assets/engineering/newsreader.woff2") format("woff2"); font-style: normal; font-weight: 200 800; font-display: swap; }
+@font-face { font-family: EngineeringGeistMono; src: url("../assets/engineering/geist-mono.woff2") format("woff2"); font-style: normal; font-weight: 100 900; font-display: swap; }
+
+html:has(.engineering-home) {
+  --engineering-page: light-dark(#fff, #111014);
+  --engineering-surface: light-dark(#faf9f6, #18171c);
+  --engineering-line: light-dark(#e3e2df, #2a2930);
+  --engineering-ink: light-dark(#292929, #ededf0);
+  --engineering-strong: light-dark(#1c1c1c, #fff);
+  --engineering-muted: light-dark(#707070, #908f99);
+  --engineering-accent: light-dark(#2b165e, #b3a4f5);
+  --engineering-focus: light-dark(#4959e4, #8f9bff);
+  --engineering-header: light-dark(#ffffffeb, #111014e6);
+  --engineering-hatch: light-dark(#bcbcbc26, #ffffff09);
+  --engineering-gutter: clamp(0rem, 5vw - 1rem, 5rem);
+  --engineering-ease: cubic-bezier(.2, .7, .2, 1);
+  background: var(--engineering-page);
+  color-scheme: light dark;
+  scroll-padding-top: 6rem;
+}
+
+html[data-theme="light"]:has(.engineering-home) { color-scheme: light; }
+html[data-theme="dark"]:has(.engineering-home) { color-scheme: dark; }
+
+.engineering-home, .engineering-home *, .engineering-home *::before, .engineering-home *::after { box-sizing: border-box; }
+.engineering-home { margin: 0; min-block-size: 100svh; color: var(--engineering-ink); background: repeating-linear-gradient(45deg, var(--engineering-hatch) 0 1.75px, transparent 1.75px 7.81px), var(--engineering-page); font: 400 1rem/1.5 EngineeringGeist, ui-sans-serif, system-ui, sans-serif; font-synthesis: none; -webkit-font-smoothing: antialiased; }
+.engineering-home a { color: inherit; text-decoration: none; }
+.engineering-home a, .engineering-home button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.engineering-home :focus-visible { outline: 2px solid var(--engineering-focus); outline-offset: 3px; }
+.engineering-home ::selection { color: var(--engineering-page); background: var(--engineering-accent); }
+.engineering-home svg { flex: none; }
+.engineering-skip { position: fixed; z-index: 100; inset: .5rem auto auto .5rem; padding: .65rem 1rem; background: var(--engineering-page); border: 1px solid var(--engineering-line); transform: translateY(-200%); }
+.engineering-skip:focus { transform: none; }
+.engineering-header { position: sticky; inset-block-start: 0; z-index: 40; border-block-end: 1px solid var(--engineering-line); background: var(--engineering-header); backdrop-filter: blur(16px) saturate(1.4); }
+.engineering-header-inner { display: flex; align-items: center; gap: 1rem; block-size: 4rem; inline-size: min(80rem, calc(100% - 2 * var(--engineering-gutter))); margin-inline: auto; padding-inline: clamp(1rem, 4vw, 2.5rem); }
+.engineering-brand { display: inline-flex; align-items: center; min-block-size: 44px; flex: none; }
+.engineering-logo { display: block; inline-size: auto; block-size: 28px; }
+.engineering-logo-dark, .engineering-theme-sun { display: none; }
+[data-theme="dark"] .engineering-logo-dark, [data-theme="dark"] .engineering-theme-sun { display: block; }
+[data-theme="dark"] .engineering-logo-light, [data-theme="dark"] .engineering-theme-moon { display: none; }
+.engineering-header-actions { display: flex; align-items: center; gap: .5rem; margin-inline-start: auto; }
+.engineering-theme-toggle { position: relative; display: grid; place-content: center; inline-size: 40px; block-size: 40px; padding: 0; border: 1px solid var(--engineering-line); border-radius: 4px; color: inherit; background: transparent; cursor: pointer; }
+.engineering-theme-toggle::before { position: absolute; inset: -2px; content: ""; }
+.engineering-theme-toggle:disabled { cursor: default; opacity: .5; }
+.engineering-github { display: inline-flex; align-items: center; justify-content: center; gap: .75rem; min-block-size: 40px; padding-inline: 1.125rem; border: 1px solid var(--engineering-strong); border-radius: 4px; background: var(--engineering-strong); color: var(--engineering-page) !important; font-size: .875rem; font-weight: 500; }
+.engineering-theme-toggle:hover { border-color: var(--engineering-muted); }
+.engineering-github:hover { border-color: var(--engineering-accent); background: var(--engineering-accent); }
+.engineering-band { border-block-end: 1px solid var(--engineering-line); }
+.engineering-frame { inline-size: min(80rem, calc(100% - 2 * var(--engineering-gutter))); margin-inline: auto; border-inline: 1px solid var(--engineering-line); background: var(--engineering-page); container-type: inline-size; }
+.engineering-intro-inner { display: grid; gap: 1rem; padding: clamp(2.5rem, 6vw, 5rem) clamp(1rem, 4vw, 2.5rem); }
+.engineering-eyebrow { display: flex; align-items: center; gap: .75rem; margin: 0; color: var(--engineering-muted); font: 400 .75rem/1 EngineeringGeistMono, monospace; letter-spacing: .06em; text-transform: uppercase; }
+.engineering-eyebrow::before { inline-size: .5rem; block-size: .5rem; flex: none; background: var(--engineering-accent); content: ""; }
+.engineering-intro h1 { margin: 0; color: var(--engineering-strong); font: 400 clamp(2.25rem, 4.6vw, 4rem)/1.04 EngineeringNewsreader, Georgia, serif; letter-spacing: -.04em; text-wrap: balance; }
+.engineering-summary { margin: 0; color: var(--engineering-muted); font-size: clamp(1.0625rem, 1.4vw, 1.1875rem); line-height: 1.55; }
+.engineering-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.5rem clamp(1rem, 4vw, 2.5rem); border-block-end: 1px solid var(--engineering-line); }
+.engineering-section-heading > p { margin: 0; color: var(--engineering-muted); font: .75rem/1.4 EngineeringGeistMono, monospace; }
+.engineering-project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr)); margin: 0 0 -1px; padding: 0; list-style: none; background: repeating-linear-gradient(45deg, var(--engineering-hatch) 0 1.75px, transparent 1.75px 7.81px); }
+.engineering-project-grid > li { min-inline-size: 0; border-block-end: 1px solid var(--engineering-line); background: var(--engineering-page); }
+.engineering-project-card { display: flex; block-size: 100%; min-inline-size: 0; flex-direction: column; transition: background-color 300ms var(--engineering-ease); }
+.engineering-project-card:focus-visible { position: relative; z-index: 1; outline-offset: -3px; }
+.engineering-cover { display: grid; place-items: center; position: relative; overflow: hidden; aspect-ratio: 16 / 10; border-block-end: 1px solid var(--engineering-line); background: var(--engineering-surface); }
+.engineering-preview-panel { inline-size: 82%; border: 1px solid var(--engineering-line); color: var(--engineering-ink); background: var(--engineering-page); box-shadow: .6rem .6rem 0 color-mix(in srgb, var(--engineering-line) 35%, transparent); font: 400 clamp(.55rem, .8vw, .75rem)/1.65 EngineeringGeistMono, monospace; transform: rotate(-3deg); transition: transform 700ms var(--engineering-ease); }
+.engineering-preview-label { display: flex; align-items: center; gap: .5rem; padding: .6rem .8rem; border-block-end: 1px solid var(--engineering-line); color: var(--engineering-muted); font-size: .9em; }
+.engineering-file-symbol, .engineering-folder-symbol { color: var(--engineering-accent); }
+.engineering-code-lines { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr); gap: .25rem .75rem; padding: .85rem; }
+.engineering-code-lines code { white-space: pre; font: inherit; }
+.engineering-line-number { color: var(--engineering-muted); text-align: end; }
+.engineering-syntax-keyword { color: var(--engineering-accent); }
+.engineering-preview-command { padding: .55rem .85rem; border-block-start: 1px solid var(--engineering-line); color: var(--engineering-muted); font-size: .85em; }
+.engineering-repository-preview { inline-size: 74%; transform: rotate(3deg); }
+.engineering-repository-tree { display: grid; grid-template-columns: auto 1fr; gap: .4rem .75rem; padding: .9rem 1.1rem; }
+.engineering-tree-junction { color: var(--engineering-line); }
+.engineering-terminal-preview { position: relative; inline-size: 80%; transform: rotate(-2deg); }
+.engineering-terminal-lines { display: grid; gap: .5rem; min-block-size: 8rem; padding: 1rem 1.1rem; }
+.engineering-terminal-lines code { font: inherit; }
+.engineering-terminal-lines code > span, .engineering-terminal-cursor { color: var(--engineering-accent); }
+.engineering-browser-preview { position: absolute; inset: auto -5% -12% auto; inline-size: 43%; block-size: auto; color: var(--engineering-muted); background: var(--engineering-page); transform: rotate(7deg); }
+.engineering-card-body { display: flex; flex: 1; flex-direction: column; gap: .875rem; min-inline-size: 0; padding: 1.5rem clamp(1.25rem, 2.5vw, 1.75rem) 1.75rem; }
+.engineering-card-body h3 { margin: 0; color: var(--engineering-strong); font: 400 1.5rem/1.15 EngineeringNewsreader, Georgia, serif; letter-spacing: -.025em; text-wrap: balance; }
+.engineering-card-title { background: linear-gradient(currentColor, currentColor) left bottom / 0 1px no-repeat; transition: background-size 500ms var(--engineering-ease); }
+.engineering-card-body > p { margin: 0; color: var(--engineering-muted); font-size: .9375rem; line-height: 1.55; }
+.engineering-card-destination { display: flex; justify-content: space-between; gap: 1rem; margin-block-start: auto; padding-block-start: .5rem; color: var(--engineering-muted); font: .75rem/1.4 EngineeringGeistMono, monospace; }
+.engineering-font-notices { inline-size: min(80rem, calc(100% - 2 * var(--engineering-gutter))); margin-inline: auto; padding: 1.25rem clamp(1rem, 4vw, 2.5rem); color: var(--engineering-muted); font-size: .75rem; }
+.engineering-font-notices a { text-decoration: underline; text-underline-offset: .2em; }
+
+@media (hover: hover) and (pointer: fine) {
+  .engineering-project-card:hover { background: var(--engineering-surface); }
+  .engineering-project-card:hover .engineering-preview-panel { transform: rotate(0) scale(1.03); }
+  .engineering-project-card:hover .engineering-card-title { background-size: 100% 1px; }
+}
+.engineering-project-card:focus-visible .engineering-card-title { background-size: 100% 1px; }
+
+@media (max-width: 47.99rem) {
+  html:has(.engineering-home) { --engineering-gutter: 0rem; }
+  .engineering-frame { border-inline: 0; }
+  .engineering-section-heading { gap: .5rem; }
+  .engineering-cover { aspect-ratio: 2 / 1; }
+  .engineering-terminal-lines { min-block-size: 5.5rem; }
+}
+
+@container (min-width: 40rem) {
+  .engineering-project-grid > li { border-inline-end: 1px solid var(--engineering-line); }
+  .engineering-project-grid > li:nth-child(2n) { border-inline-end: 0; }
+}
+
+@container (min-width: 60rem) {
+  .engineering-project-grid > li:nth-child(2n) { border-inline-end: 1px solid var(--engineering-line); }
+  .engineering-project-grid > li:nth-child(3n) { border-inline-end: 0; }
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .engineering-logo-dark, html:not([data-theme]) .engineering-theme-sun { display: block; }
+  html:not([data-theme]) .engineering-logo-light, html:not([data-theme]) .engineering-theme-moon { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .engineering-home *, .engineering-home *::before, .engineering-home *::after { transition: none !important; scroll-behavior: auto !important; }
+}
+
+@media (forced-colors: active) {
+  .engineering-home { background: Canvas; color: CanvasText; }
+  .engineering-header { background: Canvas; }
+  .engineering-frame, .engineering-cover, .engineering-preview-panel { color: CanvasText; background: Canvas; border-color: CanvasText; }
+  .engineering-preview-panel { box-shadow: none; }
+  .engineering-home :focus-visible { outline-color: Highlight; }
+  .engineering-card-title { background: none; }
+  .engineering-project-card:hover .engineering-card-title, .engineering-project-card:focus-visible .engineering-card-title { text-decoration: underline; }
+}
