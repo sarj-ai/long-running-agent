@@ -42,8 +42,9 @@ export const WIKI_PROJECT: string = `<!doctype html>
       <p class="muted">Open source · MIT license</p>
       <h1>Sarj Wiki</h1>
       <p class="intro">Your Google Drive documents, in one focused workspace. Browse shared drives, find a page, and keep team knowledge close at hand.</p>
-      <div class="links"><a href="https://github.com/sarj-ai/wiki">Browse the source ↗</a><a href="https://wiki.sarj.ai/">Open Sarj Wiki ↗</a></div>
-      <p class="muted">The hosted workspace requires an authorized Google account. Self-host with your own Google OAuth application and infrastructure.</p>
+      <div class="links"><a href="https://wiki.sarj.ai/demo">Try the demo ↗</a><a href="https://github.com/sarj-ai/wiki">Browse the source ↗</a><a href="https://wiki.sarj.ai/">Open Sarj Wiki ↗</a></div>
+      <p class="muted">Explore a read-only sample workspace with no sign-in. Browse Word, PowerPoint, Excel, and HTML files, and compare an AI-pasted draft with the same document clearly formatted.</p>
+      <p class="muted">The full hosted workspace requires an authorized Google account. Self-host with your own Google OAuth application and infrastructure.</p>
     </header>
     <section aria-labelledby="features">
       <h2 id="features">A workspace around your documents</h2>
