@@ -1,0 +1,92 @@
+---
+import "../styles/engineering.css";
+
+import GEIST_LICENSE from "../assets/engineering/geist-ofl.txt?url&no-inline";
+import NEWSREADER_LICENSE from "../assets/engineering/newsreader-ofl.txt?url&no-inline";
+import EngineeringHeader from "../components/engineering-header.astro";
+import EngineeringProjectCard from "../components/engineering-project-card.astro";
+import { ENGINEERING_PROJECTS } from "../lib/engineering-projects";
+import { SITE_ORIGIN, siteHref } from "../lib/paths";
+
+const CANONICAL = `${SITE_ORIGIN}/`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width,initial-scale=1" name="viewport" />
+    <meta content="light dark" name="color-scheme" />
+    <meta content="Sarj engineering projects and developer tools." name="description" />
+    <link href={CANONICAL} rel="canonical" />
+    <link href={siteHref("/favicon.ico")} rel="icon" />
+    <title>Sarj Engineering</title>
+    <script is:inline>
+      (() => {
+        const ROOT = document.documentElement;
+        const KEY = "starlight-theme";
+        const MEDIA = window.matchMedia("(prefers-color-scheme: dark)");
+        function preference(value) {
+          try {
+            if (value) localStorage.setItem(KEY, value);
+            return localStorage.getItem(KEY);
+          } catch {
+            return null;
+          }
+        }
+        let selected = preference();
+        function synchronize() {
+          const dark = selected === "dark" || (selected !== "light" && MEDIA.matches);
+          ROOT.dataset.theme = dark ? "dark" : "light";
+          const button = document.querySelector("[data-engineering-theme-toggle]");
+          if (button instanceof HTMLButtonElement) {
+            button.setAttribute("aria-pressed", String(dark));
+            button.setAttribute("title", dark ? "Switch to light theme" : "Switch to dark theme");
+          }
+        }
+        synchronize();
+        document.addEventListener("DOMContentLoaded", () => {
+          const button = document.querySelector("[data-engineering-theme-toggle]");
+          if (button instanceof HTMLButtonElement) {
+            button.disabled = false;
+            button.addEventListener("click", () => {
+              selected = ROOT.dataset.theme === "dark" ? "light" : "dark";
+              preference(selected);
+              synchronize();
+            });
+          }
+          synchronize();
+        }, { once: true });
+        MEDIA.addEventListener("change", synchronize);
+        window.addEventListener("storage", (event) => {
+          if (event.key === KEY || event.key === null) {
+            selected = event.newValue;
+            synchronize();
+          }
+        });
+      })();
+    </script>
+  </head>
+  <body class="engineering-home">
+    <a class="engineering-skip" href="#main-content">Skip to projects</a>
+    <EngineeringHeader />
+    <main id="main-content" tabindex="-1">
+      <section class="engineering-intro engineering-band">
+        <div class="engineering-frame engineering-intro-inner">
+          <p class="engineering-eyebrow">Engineering</p>
+          <h1>Sarj Engineering</h1>
+          <p class="engineering-summary">Projects and developer tools.</p>
+        </div>
+      </section>
+      <section aria-labelledby="projects-title" class="engineering-band">
+        <div class="engineering-frame">
+          <div class="engineering-section-heading"><h2 class="engineering-eyebrow" id="projects-title">Projects</h2><p>{ENGINEERING_PROJECTS.length} projects</p></div>
+          <ul aria-label="Engineering projects" class="engineering-project-grid">
+            {ENGINEERING_PROJECTS.map((project) => <li><EngineeringProjectCard project={project} /></li>)}
+          </ul>
+        </div>
+      </section>
+    </main>
+    <footer class="engineering-font-notices">Font licenses: <a href={GEIST_LICENSE}>Geist</a> · <a href={NEWSREADER_LICENSE}>Newsreader</a></footer>
+  </body>
+</html>

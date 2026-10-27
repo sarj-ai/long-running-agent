@@ -2,8 +2,8 @@ import sitemap from "@astrojs/sitemap";
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 
-import cloudflareArtifacts from "./src/integrations/cloudflare-artifacts";
-import { SITE_BASE_PATH, SITE_ORIGIN } from "./src/lib/paths";
+import cloudflareArtifacts, { ENGINEERING_ROUTE } from "./src/integrations/cloudflare-artifacts";
+import { SITE_BASE_PATH, SITE_HOMEPAGE, SITE_ORIGIN } from "./src/lib/paths";
 import { REFERENCE, SIDEBAR } from "./src/lib/reference";
 import { TERMINAL_STYLE_HASHES } from "./src/lib/terminal-style-hashes";
 
@@ -35,7 +35,10 @@ export default defineConfig({
     },
   },
   integrations: [
-    sitemap(),
+    sitemap({
+      customPages: [`${SITE_ORIGIN}/`],
+      filter: (page) => page !== new URL(ENGINEERING_ROUTE, SITE_HOMEPAGE).href,
+    }),
     starlight({
       title: REFERENCE.package.name,
       description: REFERENCE.package.description,
