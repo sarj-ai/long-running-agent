@@ -42,7 +42,7 @@ export const WIKI_PROJECT: string = `<!doctype html>
       <p class="muted">Open source · MIT license</p>
       <h1>Sarj Wiki</h1>
       <p class="intro">Your Google Drive documents, in one focused workspace. Browse shared drives, find a page, and keep team knowledge close at hand.</p>
-      <div class="links"><a href="https://github.com/sarj-ai/sarj-wiki">Browse the source ↗</a><a href="https://wiki.sarj.ai/">Open Sarj Wiki ↗</a></div>
+      <div class="links"><a href="https://github.com/sarj-ai/wiki">Browse the source ↗</a><a href="https://wiki.sarj.ai/">Open Sarj Wiki ↗</a></div>
       <p class="muted">The hosted workspace requires an authorized Google account. Self-host with your own Google OAuth application and infrastructure.</p>
     </header>
     <section aria-labelledby="features">
@@ -57,8 +57,8 @@ export const WIKI_PROJECT: string = `<!doctype html>
     <section aria-labelledby="start">
       <h2 id="start">Run it locally</h2>
       <p>Install <a href="https://mise.jdx.dev/">mise</a> and PostgreSQL. The repository pins Node.js, npm, Python tooling, and Terraform.</p>
-      <pre tabindex="0" aria-label="Clone and install commands"><code>git clone https://github.com/sarj-ai/sarj-wiki.git
-cd sarj-wiki
+      <pre tabindex="0" aria-label="Clone and install commands"><code>git clone https://github.com/sarj-ai/wiki.git
+cd wiki
 mise install
 mise exec -- uv run scripts/wiki.py setup
 cp backend/.env.example backend/.env</code></pre>
@@ -78,7 +78,7 @@ mise exec -- uv run scripts/wiki.py audit</code></pre>
       <p>The checks cover source standards, types, tests, the production frontend build, API schema consistency, and offline Terraform validation. Deployment configuration is in <code>terraform/</code> and <code>.github/workflows/</code>.</p>
     </section>
   </main>
-  <footer><a href="https://github.com/sarj-ai/sarj-wiki/blob/main/LICENSE">MIT license</a> · <a href="https://github.com/sarj-ai/sarj-wiki/issues">Report an issue</a></footer>
+  <footer><a href="https://github.com/sarj-ai/wiki/blob/main/LICENSE">MIT license</a> · <a href="https://github.com/sarj-ai/wiki/issues">Report an issue</a></footer>
 </body>
 </html>
 `;
