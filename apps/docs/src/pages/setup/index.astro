@@ -12,8 +12,10 @@ import { REFERENCE } from "../../lib/reference";
     <p>You need access to an LRA VM with the matching connection runtime, <a href="https://docs.astral.sh/uv/">uv</a>, and the <a href="https://cloud.google.com/sdk/docs/install">Google Cloud CLI</a>. Your administrator prepares the VM.</p>
     <h2>Install</h2>
     <Code code={`git clone https://github.com/sarj-ai/long-running-agent.git\ncd long-running-agent\n${REFERENCE.package.install.join("\n")}`} lang="bash" />
+    <h2 id="vm-details">VM details</h2>
+    <p>Set this once in <code>{REFERENCE.settings.profilePath}</code>. Your administrator provides the VM details.</p>
+    <Code code={REFERENCE.settings.example} lang="toml" />
     <h2>Connect your account</h2>
-    <p>Save your <a href={siteHref("/settings/")}>VM details</a>, then sign in and connect.</p>
     <Code code={"gcloud auth login you@example.com\nlra vm setup\nsarj-connect terminal"} lang="bash" />
     <p>Setup configures SSH and your VM user’s terminal runtime. <a href={siteHref("/cli/")}>See connection commands</a>.</p>
     <h2>Reconnect</h2>

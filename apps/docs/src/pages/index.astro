@@ -3,7 +3,6 @@ import { Code } from "@astrojs/starlight/components";
 
 import ReferencePage from "../components/reference-page.astro";
 import TerminalDemo from "../components/terminal-demo.astro";
-import { siteHref } from "../lib/paths";
 import { CONNECTION_COMMANDS, REFERENCE } from "../lib/reference";
 ---
 
@@ -13,8 +12,5 @@ import { CONNECTION_COMMANDS, REFERENCE } from "../lib/reference";
     <p class="command-help">{REFERENCE.package.description}</p>
     <TerminalDemo />
     <Code code={CONNECTION_COMMANDS.map((command) => command.path.join(" ")).join("\n")} lang="bash" />
-    <p>Reconnect to the same terminal windows, browser tabs, and sign-ins.</p>
-    <p>First time? <a href={siteHref("/setup/")}>Set up your connection</a>.</p>
-    <p class="release-note">Version {REFERENCE.package.version} · Python {REFERENCE.package.requiresPython} · {REFERENCE.package.license}</p>
   </article>
 </ReferencePage>
