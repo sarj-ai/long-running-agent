@@ -20,7 +20,7 @@ for (const [path, destination] of LEGACY_URLS) {
   });
 }
 
-for (const name of ["code-standards", "repo-standards", "lra"]) {
+for (const name of ["code-standards", "repo-standards", "lra", "wiki"]) {
   await test(`${name} project root retains query strings when adding its trailing slash`, async () => {
     const response = await worker.fetch(new Request(`https://engineering.sarj.ai/projects/${name}?from=hub`), {
       ASSETS: { fetch: () => Promise.reject(new Error("Project roots must redirect")) },
@@ -30,7 +30,7 @@ for (const name of ["code-standards", "repo-standards", "lra"]) {
   });
 }
 
-for (const path of ["/", "/projects/lra/", "/projects/lra/setup/", "/projects/unknown/"]) {
+for (const path of ["/", "/projects/lra/", "/projects/lra/setup/", "/projects/wiki/", "/projects/unknown/"]) {
   await test(`${path} uses native asset handling`, async () => {
     const request = new Request(`https://engineering.sarj.ai${path}`);
     const assetResponse = new Response("Asset response");

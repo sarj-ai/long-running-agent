@@ -14,4 +14,9 @@ export const ENGINEERING_PROJECTS = [
     name: "Long Running Agent",
     description: "Persistent terminals and browser on your VM.",
   },
+  {
+    path: "/projects/wiki/",
+    name: "Wiki",
+    description: "A focused workspace for Google Drive documents.",
+  },
 ] as const;

@@ -1,10 +1,11 @@
 import { hash } from "node:crypto";
-import { readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import type { AstroIntegration } from "astro";
 
 import { ENGINEERING_INDEX, ENGINEERING_POLICY } from "../lib/engineering-index";
 import { SITE_BASE_PATH, SITE_HOMEPAGE, siteHref } from "../lib/paths";
+import { WIKI_PROJECT, WIKI_PROJECT_POLICY } from "../lib/wiki-project";
 
 const POLICY_PATTERN = /<meta http-equiv="content-security-policy" content="([^"]+)">/u;
 
@@ -67,8 +68,11 @@ export default function cloudflareArtifacts(assetRoot: URL): AstroIntegration {
         const scoped = headers.replace("/*\n", () => `/*\n${header}\n`).split("\n")
           .map((line) => line.startsWith("/") ? siteHref(line) : line).join("\n");
         const homepageHeaders = `/\n  Content-Security-Policy: ${ENGINEERING_POLICY}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`;
-        await writeFile(new URL("_headers", assetRoot), `${scoped}\n${homepageHeaders}`, "utf8");
+        const wikiHeaders = `/projects/wiki/*\n  Content-Security-Policy: ${WIKI_PROJECT_POLICY}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`;
+        await writeFile(new URL("_headers", assetRoot), `${scoped}\n${homepageHeaders}\n${wikiHeaders}`, "utf8");
         await writeFile(new URL("index.html", assetRoot), ENGINEERING_INDEX, "utf8");
+        await mkdir(new URL("projects/wiki/", assetRoot), { recursive: true });
+        await writeFile(new URL("projects/wiki/index.html", assetRoot), WIKI_PROJECT, "utf8");
         await writeLegacyRedirects(dir, assetRoot);
         if (dir.href !== assetRoot.href) await rm(headersUrl);
       },
