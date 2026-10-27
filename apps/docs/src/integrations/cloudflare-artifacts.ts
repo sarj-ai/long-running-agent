@@ -3,10 +3,32 @@ import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import type { AstroIntegration } from "astro";
 
-import { ENGINEERING_INDEX, ENGINEERING_POLICY } from "../lib/engineering-index";
 import { SITE_BASE_PATH, SITE_HOMEPAGE, siteHref } from "../lib/paths";
 
+export const ENGINEERING_ROUTE = "engineering-home/";
+
 const POLICY_PATTERN = /<meta http-equiv="content-security-policy" content="([^"]+)">/u;
+
+function securityHeader(documents: readonly string[]): string {
+  const policy = POLICY_PATTERN.exec(documents[0] ?? "")?.[1];
+  if (!policy) throw new Error("Astro did not emit a Content Security Policy");
+  const hashes = new Set<string>();
+  for (const document of documents) {
+    for (const match of document.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gu)) {
+      hashes.add(`'sha256-${hash("sha256", match[1], "base64")}'`);
+    }
+  }
+  const directive = /(script-src-elem [^;]*)(;)/u;
+  const current = directive.exec(policy)?.[1];
+  if (!current) throw new Error("Content Security Policy is missing script-src-elem");
+  const additions = [...hashes].toSorted().filter((value) => !current.includes(value));
+  const updated = policy.replace(directive, (_match, prefix: string, suffix: string) => `${prefix} ${additions.join(" ")}${suffix}`);
+  const header = `  Content-Security-Policy: ${updated}`;
+  if (Buffer.byteLength(header, "utf8") > 2_000) {
+    throw new Error("Cloudflare Content Security Policy exceeds the header size limit");
+  }
+  return header;
+}
 
 async function writeLegacyRedirects(projectDirectory: URL, assetRoot: URL): Promise<void> {
   if (SITE_BASE_PATH === "/") return;
@@ -40,25 +62,12 @@ export default function cloudflareArtifacts(assetRoot: URL): AstroIntegration {
         const documents = await Promise.all(
           paths.map(async (path) => ({ path, document: await readFile(new URL(path, dir), "utf8") })),
         );
-        const policy = POLICY_PATTERN.exec(documents[0]?.document ?? "")?.[1];
-        if (!policy) throw new Error("Astro did not emit a Content Security Policy");
-        const hashes = new Set<string>();
-        for (const { document } of documents) {
-          for (const match of document.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gu)) {
-            const body = match[1];
-            hashes.add(`'sha256-${hash("sha256", body, "base64")}'`);
-          }
-        }
-        const directive = /(script-src-elem [^;]*)(;)/u;
-        const current = directive.exec(policy)?.[1];
-        if (!current) throw new Error("Content Security Policy is missing script-src-elem");
-        const additions = [...hashes].toSorted().filter((value) => !current.includes(value));
-        const updated = policy.replace(directive, (_match, prefix: string, suffix: string) => `${prefix} ${additions.join(" ")}${suffix}`);
-        const header = `  Content-Security-Policy: ${updated}`;
-        if (Buffer.byteLength(header, "utf8") > 2_000) {
-          throw new Error("Cloudflare Content Security Policy exceeds the header size limit");
-        }
-        await Promise.all(documents.map(({ path, document }) =>
+        const homepage = documents.find(({ path }) => path === `${ENGINEERING_ROUTE}index.html`);
+        if (!homepage) throw new Error("Astro did not render the Engineering homepage");
+        const projectDocuments = documents.filter((page) => page !== homepage);
+        const header = securityHeader(projectDocuments.map(({ document }) => document));
+        const homepageHeader = securityHeader([homepage.document]);
+        await Promise.all(projectDocuments.map(({ path, document }) =>
           writeFile(new URL(path, dir), document.replace(POLICY_PATTERN, ""), "utf8"),
         ));
         const headersUrl = new URL("_headers", dir);
@@ -66,9 +75,11 @@ export default function cloudflareArtifacts(assetRoot: URL): AstroIntegration {
         if (!headers.startsWith("/*\n")) throw new Error("Cloudflare headers must begin with the global route");
         const scoped = headers.replace("/*\n", () => `/*\n${header}\n`).split("\n")
           .map((line) => line.startsWith("/") ? siteHref(line) : line).join("\n");
-        const homepageHeaders = `/\n  Content-Security-Policy: ${ENGINEERING_POLICY}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`;
-        await writeFile(new URL("_headers", assetRoot), `${scoped}\n${homepageHeaders}`, "utf8");
-        await writeFile(new URL("index.html", assetRoot), ENGINEERING_INDEX, "utf8");
+        const [globalHeaders = ""] = headers.split("\n\n", 1);
+        const homepageHeaders = globalHeaders.replace("/*\n", () => `/\n${homepageHeader}\n`);
+        await writeFile(new URL("_headers", assetRoot), `${scoped}\n${homepageHeaders}\n`, "utf8");
+        await writeFile(new URL("index.html", assetRoot), homepage.document.replace(POLICY_PATTERN, ""), "utf8");
+        await rm(new URL(ENGINEERING_ROUTE, dir), { recursive: true });
         await writeLegacyRedirects(dir, assetRoot);
         if (dir.href !== assetRoot.href) await rm(headersUrl);
       },

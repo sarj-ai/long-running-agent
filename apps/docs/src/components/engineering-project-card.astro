@@ -1,0 +1,52 @@
+---
+import type { ENGINEERING_PROJECTS } from "../lib/engineering-projects";
+
+interface Props {
+  project: (typeof ENGINEERING_PROJECTS)[number];
+}
+
+const { project: PROJECT } = Astro.props;
+const TITLE_ID = `project-${PROJECT.id}`;
+const DESCRIPTION_ID = `${TITLE_ID}-description`;
+---
+
+<a aria-describedby={DESCRIPTION_ID} aria-labelledby={TITLE_ID} class="engineering-project-card" href={PROJECT.path}>
+  <div aria-hidden="true" class={`engineering-cover engineering-cover-${PROJECT.id}`}>
+    {PROJECT.id === "code-standards" && (
+      <div class="engineering-code-preview engineering-preview-panel">
+        <div class="engineering-preview-label"><span class="engineering-file-symbol">◇</span> source.py</div>
+        <div class="engineering-code-lines">
+          <span class="engineering-line-number">1</span><code><span class="engineering-syntax-keyword">from</span> uuid <span class="engineering-syntax-keyword">import</span> UUID</code>
+          <span class="engineering-line-number">2</span><code> </code>
+          <span class="engineering-line-number">3</span><code><span class="engineering-syntax-keyword">def</span> identify(value: UUID):</code>
+          <span class="engineering-line-number">4</span><code>    <span class="engineering-syntax-keyword">return</span> str(value)</code>
+        </div>
+        <div class="engineering-preview-command">code-standards check</div>
+      </div>
+    )}
+    {PROJECT.id === "repo-standards" && (
+      <div class="engineering-repository-preview engineering-preview-panel">
+        <div class="engineering-preview-label"><span class="engineering-file-symbol">▱</span> repository/</div>
+        <div class="engineering-repository-tree">
+          <span class="engineering-tree-junction">├─</span><span><span class="engineering-folder-symbol">▱</span> .github/</span>
+          <span class="engineering-tree-junction">├─</span><span><span class="engineering-folder-symbol">▱</span> src/</span>
+          <span class="engineering-tree-junction">├─</span><span><span class="engineering-folder-symbol">▱</span> tests/</span>
+          <span class="engineering-tree-junction">└─</span><span><span class="engineering-file-symbol">◇</span> pyproject.toml</span>
+        </div>
+        <div class="engineering-preview-command">structure · ownership · delivery</div>
+      </div>
+    )}
+    {PROJECT.id === "lra" && (
+      <div class="engineering-terminal-preview engineering-preview-panel">
+        <div class="engineering-preview-label"><span aria-hidden="true">›_</span> terminal</div>
+        <div class="engineering-terminal-lines"><code><span>$</span> vm</code><code><span>$</span> vm browser</code><span class="engineering-terminal-cursor">▊</span></div>
+        <svg class="engineering-browser-preview" fill="none" height="70" stroke="currentColor" stroke-width="1" viewBox="0 0 116 70" width="116"><rect height="68" width="114" x="1" y="1" /><path d="M1 16h114M10 9h3m4 0h3m4 0h3M14 30h52m-52 9h72m-72 9h43" /></svg>
+      </div>
+    )}
+  </div>
+  <div class="engineering-card-body">
+    <h3 id={TITLE_ID}><span class="engineering-card-title">{PROJECT.name}</span></h3>
+    <p id={DESCRIPTION_ID}>{PROJECT.description}</p>
+    <span aria-hidden="true" class="engineering-card-destination">Documentation <span>↗</span></span>
+  </div>
+</a>
