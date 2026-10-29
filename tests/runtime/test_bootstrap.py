@@ -181,12 +181,39 @@ def test_first_boot_installs_github_cli_from_its_signed_repository(tmp_path: Pat
                 "deb [signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] "
                 "https://cli.github.com/packages stable main\n"
             )
-            assert commands[-2] == (*bootstrap.APT, "update")
+            assert commands[-2] == (*bootstrap.APT, "update", "--error-on=any")
         return subprocess.CompletedProcess(arguments, 0, "fixture armored Google key" if capture else "", "")
 
     bootstrap.install_packages(paths, record)
     assert commands[-1] == (*bootstrap.APT, "install", "-y", "google-cloud-cli", "gh")
     assert github_source.stat().st_mode & 0o777 == 0o644
+
+
+def test_repository_update_failure_stops_before_installing_the_old_github_cli(tmp_path: Path) -> None:
+    paths = bootstrap.HostPaths(tmp_path)
+    commands: list[tuple[str, ...]] = []
+
+    def unavailable_repository(
+        arguments: Sequence[str], *, capture: bool = False, input_text: str | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(tuple(arguments))
+        if arguments[0] == "/usr/bin/curl" and "-o" in arguments:
+            Path(arguments[arguments.index("-o") + 1]).write_bytes(b"fixture GitHub keyring")
+        elif arguments[0] == "/usr/bin/gpg":
+            assert input_text == "fixture armored Google key"
+            Path(arguments[-1]).write_bytes(b"fixture Google keyring")
+        elif "--error-on=any" in arguments:
+            assert paths.path("/etc/apt/sources.list.d/github-cli.list").is_file()
+            raise subprocess.CalledProcessError(100, arguments)
+        return subprocess.CompletedProcess(arguments, 0, "fixture armored Google key" if capture else "", "")
+
+    with pytest.raises(subprocess.CalledProcessError):
+        bootstrap.install_packages(paths, unavailable_repository)
+    assert commands[0] == (*bootstrap.APT, "update")
+    assert commands[-1] == (*bootstrap.APT, "update", "--error-on=any")
+    assert [command for command in commands if "install" in command] == [
+        (*bootstrap.APT, "install", "-y", *bootstrap.PACKAGES)
+    ]
 
 
 def test_github_key_download_failure_preserves_the_previous_repository_key(tmp_path: Path) -> None:

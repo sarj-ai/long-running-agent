@@ -241,7 +241,7 @@ def install_packages(paths: HostPaths, runner: CommandRunner) -> None:
     runner([*APT, "update"])
     runner([*APT, "install", "-y", *PACKAGES])
     configure_repositories(paths, runner)
-    runner([*APT, "update"])
+    runner([*APT, "update", "--error-on=any"])
     runner([*APT, "install", "-y", "google-cloud-cli", "gh"])
 
 
