@@ -21,7 +21,7 @@ import typer
 
 from long_running_agent.process import CommandError, environment_snapshot, run
 
-from . import cleanup_activity, cleanup_inspection, cleanup_publication
+from . import cleanup_activity, cleanup_capacity, cleanup_inspection, cleanup_publication
 from .cleanup_state import (
     CAPACITY_ATTEMPTS,
     MAX_ATTEMPTS,
@@ -47,7 +47,6 @@ if TYPE_CHECKING:
 
 DAY: Final = 86400
 MAX_REMOVALS: Final = 2
-CAPACITY_RECOVERY_PERCENT: Final = 78
 RECOVERY_AGE_DAYS: Final = 0.25
 MAX_FETCH_REPOSITORIES: Final = 2
 MAX_PUBLICATION_LOOKUPS: Final = 6
@@ -1284,11 +1283,8 @@ def normalized_remote(value: str) -> str:
 
 
 def capacity_recovery_needed(home: Path) -> bool:
-    values = os.statvfs(home)
-    if values.f_blocks <= 0 or not 0 <= values.f_bavail <= values.f_blocks:
-        message = "Filesystem capacity is unknown; retained"
-        raise RuntimeError(message)
-    return (values.f_blocks - values.f_bavail) * 100 >= CAPACITY_RECOVERY_PERCENT * values.f_blocks
+    current = cleanup_capacity.policy(home)
+    return current.volume.used >= current.thresholds.stop
 
 
 def refresh_default(entry: Worktree) -> bool:
@@ -1765,6 +1761,32 @@ def cache_maintenance(paths: RuntimePaths, state: Path, decisions: list[Decision
     return cache
 
 
+baseline_app = typer.Typer(help="Record and inspect a per-volume clean-footprint baseline.", no_args_is_help=True)
+app.add_typer(baseline_app, name="baseline")
+
+
+@baseline_app.command("status")
+def baseline_status() -> None:
+    """Show computed thresholds and whether this volume has a calibrated baseline."""
+    current = cleanup_capacity.policy(RuntimePaths.current().home)
+    typer.echo(json.dumps(asdict(current)))
+
+
+@baseline_app.command("calibrate")
+def baseline_calibrate(*, apply: bool = False, replace: bool = False) -> None:
+    """Preview the current footprint; use --apply only after finishing authorized cleanup."""
+    if os.getuid() == 0:
+        message = "Calibrate maintenance as your own user, never with sudo"
+        raise RuntimeError(message)
+    paths = RuntimePaths.current()
+    if apply:
+        with cleanup_lock(paths):
+            current = cleanup_capacity.calibrate(paths.home, apply=True, replace=replace)
+    else:
+        current = cleanup_capacity.calibrate(paths.home, replace=replace)
+    typer.echo(json.dumps({"applied": apply, "policy": asdict(current)}))
+
+
 @app.command("run")
 def cleanup_run(
     *,
@@ -1774,7 +1796,7 @@ def cleanup_run(
         int,
         typer.Option(
             min=1,
-            help="Normal retention is 7 days; guarded capacity recovery uses 6 hours while usage is at least 78%.",
+            help="Normal retention is 7 days; guarded capacity recovery uses 6 hours above this volume's recovery floor.",
         ),
     ] = 7,
 ) -> None:
