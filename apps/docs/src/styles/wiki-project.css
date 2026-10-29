@@ -56,6 +56,9 @@
 @media (prefers-reduced-motion: reduce) { .wiki-project { scroll-behavior: auto; } }
 @media (forced-colors: active) {
   .wiki-project { color: CanvasText; background: Canvas; }
-  .wiki-actions .wiki-primary { color: HighlightText; background: Highlight; border-color: Highlight; }
+  /* Preserve this system-color pair without Canvas backplates hiding the text. */
+  .wiki-actions .wiki-primary { forced-color-adjust: none; color: HighlightText; background: Highlight; border-color: Highlight; }
+  .wiki-project .engineering-brand .engineering-logo { display: none; }
+  .wiki-project .engineering-brand::after { content: "Sarj"; color: LinkText; font-weight: 700; }
   .wiki-project :focus-visible { outline-color: Highlight; }
 }
