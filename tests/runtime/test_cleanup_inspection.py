@@ -35,7 +35,9 @@ def success(request: cleanup_inspection.ProbeRequest) -> dict[str, object]:
 
 
 @contextmanager
-def responder(socket_dir: Path, factory: Callable[[cleanup_inspection.ProbeRequest], bytes]) -> Generator[Path]:
+def responder(
+    socket_dir: Path, factory: Callable[[cleanup_inspection.ProbeRequest], bytes], *, requests: int = 1
+) -> Generator[Path]:
     endpoint = socket_dir / "probe.sock"
     errors: list[str] = []
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
@@ -55,8 +57,9 @@ def responder(socket_dir: Path, factory: Callable[[cleanup_inspection.ProbeReque
 
         def serve() -> None:
             try:
-                connection = server.accept()[0]
-                respond(connection)
+                for _request in range(requests):
+                    connection = server.accept()[0]
+                    respond(connection)
             except OSError as error:
                 errors.append(type(error).__name__)
 
@@ -159,6 +162,8 @@ def test_prepared_units_parse_and_restrict_the_privileged_surface(tmp_path: Path
     assert "CapabilityBoundingSet=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH" in unit.read_text()
     assert "NoNewPrivileges=true" in unit.read_text()
     assert "ProtectSystem=strict" in unit.read_text()
+    assert "CPUQuota=50%" in unit.read_text()
+    assert "MemoryMax=256M" in unit.read_text()
     commands = cleanup_inspection.installation_commands(tmp_path)
     service_changes = [command for command in commands if "/usr/bin/systemctl" in command]
     assert service_changes == [
@@ -324,16 +329,158 @@ def test_outgoing_byte_bound_and_deadline_fail_without_retries_then_fresh_reply_
     def expired_clock() -> float:
         return next(moments, cleanup_inspection.TIMEOUT + 1.0)
 
-    def never_called(_value: cleanup_inspection.ProbeRequest) -> bytes:
-        pytest.fail("Expired client must close before sending a request")
-
     request = cleanup_inspection.ProbeRequest(nonce="a" * 32, candidates=[])
-    with responder(socket_dir, never_called) as endpoint, monkeypatch.context() as clock:
+    endpoint = socket_dir / "probe.sock"
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server, monkeypatch.context() as clock:
+        server.bind(str(endpoint))
+        server.listen(1)
         clock.setattr(  # sarj-noqa: SARJ445 -- Advance only the OS monotonic clock to expire a real socket after authenticated connect without sleeping75seconds.
             time, "monotonic", expired_clock
         )
         with pytest.raises(cleanup_inspection.ProbeUnavailableError) as expired:
             cleanup_inspection.exchange(request, endpoint, owner=os.getuid())
+        server.setblocking(False)
+        with pytest.raises(BlockingIOError):
+            server.accept()
     assert expired.value.reason == "deadline"
+    endpoint.unlink()
+    recovered_client_exchange(socket_dir)
+
+
+@pytest.mark.usefixtures("local_trust")
+def test_inspect_retries_incomplete_snapshots_with_fresh_nonces_and_one_deadline(
+    socket_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    received: list[cleanup_inspection.ProbeRequest] = []
+    deadlines: list[float | None] = []
+
+    def reply(request: cleanup_inspection.ProbeRequest) -> bytes:
+        received.append(request)
+        if len(received) < cleanup_inspection.PROBE_ATTEMPTS:
+            return b'{"error":"inspection incomplete","code":"incomplete"}'
+        return json.dumps(success(request)).encode()
+
+    native = cleanup_inspection.exchange
+    with responder(socket_dir, reply, requests=cleanup_inspection.PROBE_ATTEMPTS) as endpoint:
+
+        def routed(
+            request: cleanup_inspection.ProbeRequest, *, deadline: float | None = None
+        ) -> cleanup_inspection.ProbeReply:
+            deadlines.append(deadline)
+            return native(request, endpoint, owner=os.getuid(), deadline=deadline)
+
+        monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Route only the native Unix endpoint into private storage; authentication, framing, scope, and complete replies remain real.
+            cleanup_inspection, "exchange", routed
+        )
+        result = cleanup_inspection.inspect((socket_dir / "retained",))
+    assert result.protected == [str(socket_dir / "retained")]
+    assert len(received) == cleanup_inspection.PROBE_ATTEMPTS
+    assert len({request.nonce for request in received}) == cleanup_inspection.PROBE_ATTEMPTS
+    assert deadlines[0] is not None
+    assert all(deadline == deadlines[0] for deadline in deadlines)
+
+
+@pytest.mark.usefixtures("local_trust")
+def test_inspect_keeps_persistent_incomplete_snapshots_blocked(
+    socket_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    received: list[str] = []
+
+    def reply(request: cleanup_inspection.ProbeRequest) -> bytes:
+        received.append(request.nonce)
+        return b'{"error":"inspection incomplete","code":"incomplete"}'
+
+    native = cleanup_inspection.exchange
+    with responder(socket_dir, reply, requests=cleanup_inspection.PROBE_ATTEMPTS) as endpoint:
+
+        def routed(
+            request: cleanup_inspection.ProbeRequest, *, deadline: float | None = None
+        ) -> cleanup_inspection.ProbeReply:
+            return native(request, endpoint, owner=os.getuid(), deadline=deadline)
+
+        monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Route only the external Unix transport; no incomplete response is converted into a reference result.
+            cleanup_inspection, "exchange", routed
+        )
+        with pytest.raises(cleanup_inspection.ProbeUnavailableError) as error:
+            cleanup_inspection.inspect((socket_dir / "retained",))
+    assert error.value.reason == "worker-incomplete"
+    assert len(received) == cleanup_inspection.PROBE_ATTEMPTS
+
+
+@pytest.mark.parametrize(
+    ("code", "reason"),
+    [
+        ("deadline", "worker-deadline"),
+        ("byte-budget", "worker-byte-budget"),
+        ("process-limit", "worker-process-limit"),
+        ("maps-too-large", "worker-maps-too-large"),
+    ],
+)
+@pytest.mark.usefixtures("local_trust")
+def test_inspect_never_retries_resource_limits(
+    socket_dir: Path, monkeypatch: pytest.MonkeyPatch, code: str, reason: str
+) -> None:
+    received: list[str] = []
+
+    def reply(request: cleanup_inspection.ProbeRequest) -> bytes:
+        received.append(request.nonce)
+        return json.dumps({"error": "inspection incomplete", "code": code}).encode()
+
+    native = cleanup_inspection.exchange
+    with responder(socket_dir, reply) as endpoint:
+
+        def routed(
+            request: cleanup_inspection.ProbeRequest, *, deadline: float | None = None
+        ) -> cleanup_inspection.ProbeReply:
+            return native(request, endpoint, owner=os.getuid(), deadline=deadline)
+
+        monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Use a native private socket to exercise the unchanged hard resource-error boundary.
+            cleanup_inspection, "exchange", routed
+        )
+        with pytest.raises(cleanup_inspection.ProbeUnavailableError) as error:
+            cleanup_inspection.inspect((socket_dir / "retained",))
+    assert error.value.reason == reason
+    assert len(received) == 1
+
+
+@pytest.mark.usefixtures("local_trust")
+def test_inspect_does_not_reset_deadline_after_an_incomplete_snapshot(
+    socket_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    received: list[str] = []
+    elapsed: list[float] = [0]
+    native_clock = time.monotonic
+    native = cleanup_inspection.exchange
+
+    def current_time() -> float:
+        return native_clock() + elapsed[0]
+
+    def consume_deadline(_seconds: float) -> None:
+        elapsed[0] += cleanup_inspection.TIMEOUT + 1
+
+    def reply(request: cleanup_inspection.ProbeRequest) -> bytes:
+        received.append(request.nonce)
+        return b'{"error":"inspection incomplete","code":"incomplete"}'
+
+    with responder(socket_dir, reply) as endpoint, monkeypatch.context() as clock:
+
+        def routed(
+            request: cleanup_inspection.ProbeRequest, *, deadline: float | None = None
+        ) -> cleanup_inspection.ProbeReply:
+            return native(request, endpoint, owner=os.getuid(), deadline=deadline)
+
+        clock.setattr(  # sarj-noqa: SARJ445 -- Change only the OS clock while the real Unix transport and first incomplete reply execute normally.
+            time, "monotonic", current_time
+        )
+        clock.setattr(  # sarj-noqa: SARJ445 -- The native backoff boundary consumes the caller's remaining time; no process-reference outcome is synthesized.
+            time, "sleep", consume_deadline
+        )
+        clock.setattr(  # sarj-noqa: SARJ445 -- Route only the authenticated Unix endpoint into private fixture storage.
+            cleanup_inspection, "exchange", routed
+        )
+        with pytest.raises(cleanup_inspection.ProbeUnavailableError) as error:
+            cleanup_inspection.inspect((socket_dir / "retained",))
+    assert error.value.reason == "deadline"
+    assert len(received) == 1
     endpoint.unlink()
     recovered_client_exchange(socket_dir)

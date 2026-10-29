@@ -27,13 +27,15 @@ PROC: Final = Path("/proc")
 MAX_MESSAGE_BYTES: Final = 2 * 1024 * 1024
 MAX_REGISTRATION_BYTES: Final = 65536
 MAP_BYTES: Final = 8 * 1024 * 1024
-MAX_CANDIDATES: Final = 512
+MAX_CANDIDATES: Final = 1024
 MAX_PATH_BYTES: Final = 4096
 MIN_USER_UID: Final = 1000
 STAT_FIELDS: Final = 20
 MAP_FIELDS: Final = 6
 ERROR: Final = "inspection incomplete"
 REQUEST_SECONDS: Final = 70
+PROCESS_ATTEMPTS: Final = 2
+PROCESS_EXIT_WAIT_SECONDS: Final = 0.1
 PACKAGE_MANAGERS: Final = frozenset({"uv", "uvx", "pip", "pip3", "pnpm", "npm", "npx", "yarn", "bun"})
 
 
@@ -101,6 +103,10 @@ class Budget:
         if self.processes > self.limits.processes:
             code = "process-limit"
             raise InspectionError(code)
+
+    def exit_wait(self) -> float:
+        self.check()
+        return max(0.0, min(PROCESS_EXIT_WAIT_SECONDS, self.deadline - time.monotonic()))
 
     def descriptor(self) -> None:
         self.check()
@@ -443,7 +449,7 @@ def inspect_process(
         if before.uid != uid:
             raise InspectionError
         if before.state == "Z":
-            if not confirmed_exit(process):
+            if not confirmed_exit(process, timeout=budget.exit_wait()):
                 raise InspectionError
             return ProcessReferences()
         result = ProcessReferences(process_count=1)
@@ -455,7 +461,7 @@ def inspect_process(
         after = identity(directory, budget)
         if after.uid != before.uid or after.start != before.start:
             raise InspectionError
-        if after.state == "Z" and not confirmed_exit(process):
+        if after.state == "Z" and not confirmed_exit(process, timeout=budget.exit_wait()):
             raise InspectionError
         budget.check()
         return result
@@ -463,7 +469,7 @@ def inspect_process(
         os.close(directory)
 
 
-def confirmed_exit(path: Path) -> bool:
+def confirmed_exit(path: Path, *, timeout: float = 0) -> bool:
     # A zombie leader may still have live threads; require a process pidfd.
     try:
         directory = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
@@ -482,7 +488,10 @@ def confirmed_exit(path: Path) -> bool:
             poller = select.poll()
             accepted = select.POLLIN | select.POLLHUP
             poller.register(descriptor, accepted)
-            events = poller.poll(0)
+            # Zombie state can precede the whole-group pidfd readiness signal.
+            # Waiting never substitutes for that signal or resets the budget.
+            milliseconds = int(max(0.0, min(timeout, PROCESS_EXIT_WAIT_SECONDS)) * 1000)
+            events = poller.poll(milliseconds)
             if len(events) != 1:
                 return False
             event_descriptor, mask = events[0]
@@ -523,13 +532,29 @@ def collect(
             if process.name.isdigit():
                 budget.process()
                 path = Path(process.path)
-                try:
-                    result.include(inspect_process(path, selected, uid, budget, proc=proc))
-                except FileNotFoundError:
-                    if not confirmed_exit(path):
-                        raise InspectionError from None
+                result.include(stable_process(path, selected, uid, budget, proc=proc))
     budget.check()
     return result
+
+
+def stable_process(
+    path: Path, candidates: Collection[Path], uid: int, budget: Budget, *, proc: Path = PROC
+) -> ProcessReferences:
+    for attempt in range(PROCESS_ATTEMPTS):
+        try:
+            return inspect_process(path, candidates, uid, budget, proc=proc)
+        except (OSError, InspectionError) as error:
+            if isinstance(error, InspectionError) and error.code != "incomplete":
+                raise
+            # procfs can report ESRCH, EACCES, or incomplete metadata during
+            # exit, not just ENOENT. Only a whole-process kernel exit proof
+            # permits skipping it. A live leader with remaining threads fails.
+            if confirmed_exit(path):
+                return ProcessReferences()
+            if attempt + 1 == PROCESS_ATTEMPTS:
+                raise
+            budget.check()
+    raise InspectionError
 
 
 def receive(channel: socket.socket, deadline: float) -> bytes:

@@ -121,6 +121,72 @@ def save_review_cursor(state: Path, root: Path, cursor: ReviewCursor) -> None:
     private_write(state / "cleanup-cursor.json", payload)
 
 
+def quarantine_advisory(path: Path, *, limit: int = PRIVATE_LIMIT) -> None:
+    # Only derived progress/status may be reset. Removal receipts and capacity
+    # attestations must retain their original fail-closed semantics.
+    if path.name not in {"cleanup-daemon.json", "cleanup-inventory-cursor.json"}:
+        message = "Only known derived maintenance status may be quarantined"
+        raise ValueError(message)
+    private_payload(path, limit)
+    backup = path.with_name(path.name + ".invalid")
+    if backup.exists() or backup.is_symlink():
+        private_payload(backup, limit)
+    path.replace(backup)
+
+
+class InventoryCursor(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+    version: Annotated[int, Field(ge=1, le=1)] = 1
+    repository: Path
+    worktree: Path | None = None
+    errors: Annotated[int, Field(ge=0, le=4096)] = 0
+
+    def within(self, root: Path) -> None:
+        if self.worktree == root:
+            message = "Primary code root is not a candidate worktree"
+            raise ValueError(message)
+        for path in (self.repository, self.worktree):
+            if path is None:
+                continue
+            if (
+                not path.is_absolute()
+                or not path.is_relative_to(root)
+                or ".." in path.parts
+                or len(os.fsencode(path)) > CURSOR_LIMIT // 2
+            ):
+                message = "Unknown candidate-discovery progress path"
+                raise ValueError(message)
+
+
+def inventory_cursor(state: Path, root: Path) -> InventoryCursor | None:
+    path = state / "cleanup-inventory-cursor.json"
+    try:
+        payload = private_payload(path, CURSOR_LIMIT)
+    except FileNotFoundError:
+        return None
+    try:
+        cursor = InventoryCursor.model_validate_json(payload)
+        cursor.within(root)
+    except ValueError:
+        quarantine_advisory(path, limit=CURSOR_LIMIT)
+        return None
+    return cursor
+
+
+def save_inventory_cursor(state: Path, root: Path, cursor: InventoryCursor | None) -> None:
+    path = state / "cleanup-inventory-cursor.json"
+    inventory_cursor(state, root)
+    if cursor is None:
+        path.unlink(missing_ok=True)
+        return
+    cursor.within(root)
+    payload = cursor.model_dump_json() + "\n"
+    if len(payload.encode()) > CURSOR_LIMIT:
+        message = "Candidate-discovery progress exceeds its private limit"
+        raise ValueError(message)
+    private_write(path, payload)
+
+
 @dataclass(frozen=True)
 class ActiveReceipts:
     receipts: tuple[AttemptReceipt, ...]

@@ -28,9 +28,11 @@ WORKER: Final = Path("/opt/long-running-agent/cleanup_probe.py")
 SOCKET_UNIT: Final = "lra-cleanup-probe.socket"
 SERVICE_UNIT: Final = "lra-cleanup-probe@.service"
 MAX_MESSAGE: Final = 2 * 1024 * 1024
-MAX_CANDIDATES: Final = 512
+MAX_CANDIDATES: Final = 1024
 MAX_PATH: Final = 4096
 TIMEOUT: Final = REQUEST_SECONDS + 5
+PROBE_ATTEMPTS: Final = 3
+RETRY_SECONDS: Final = 0.05
 Candidate = Annotated[str, Field(min_length=1, max_length=MAX_PATH)]
 
 
@@ -122,7 +124,9 @@ def trusted_socket(endpoint: Path, *, owner: int) -> os.stat_result:
     return metadata
 
 
-def exchange(request: ProbeRequest, endpoint: Path = SOCKET, *, owner: int = 0) -> ProbeReply:
+def exchange(
+    request: ProbeRequest, endpoint: Path = SOCKET, *, owner: int = 0, deadline: float | None = None
+) -> ProbeReply:
     reason: ProbeFailureReason
     try:
         payload = request.model_dump_json(by_alias=True).encode() + b"\n"
@@ -140,7 +144,8 @@ def exchange(request: ProbeRequest, endpoint: Path = SOCKET, *, owner: int = 0) 
     except OSError:
         reason = "socket-trust"
         raise ProbeUnavailableError(reason) from None
-    deadline = time.monotonic() + TIMEOUT
+    maximum = time.monotonic() + TIMEOUT
+    deadline = maximum if deadline is None else min(deadline, maximum)
     try:
         response = exchange_transport(payload, endpoint, owner, before, deadline)
     except TimeoutError:
@@ -157,7 +162,11 @@ def exchange_transport(
 ) -> bytearray:
     reason: ProbeFailureReason
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-        connection.settimeout(TIMEOUT)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            reason = "deadline"
+            raise ProbeUnavailableError(reason)
+        connection.settimeout(remaining)
         try:
             connection.connect(str(endpoint))
         except FileNotFoundError:
@@ -249,18 +258,36 @@ def checked_reply(request: ProbeRequest, response: bytearray) -> ProbeReply:
     return reply
 
 
-def inspect(candidates: Sequence[Path]) -> ProbeReply:
+def probe_request(candidates: Sequence[Path]) -> ProbeRequest:
     reason: ProbeFailureReason
     try:
-        request = ProbeRequest(nonce=secrets.token_hex(16), candidates=[str(path) for path in candidates])
+        return ProbeRequest(nonce=secrets.token_hex(16), candidates=[str(path) for path in candidates])
     except OSError, ValueError:
         reason = "request-invalid"
         raise ProbeUnavailableError(reason) from None
-    try:
-        return exchange(request)
-    except OSError, ValueError:
-        reason = "transport"
-        raise ProbeUnavailableError(reason) from None
+
+
+def inspect(candidates: Sequence[Path]) -> ProbeReply:
+    reason: ProbeFailureReason
+    deadline = time.monotonic() + TIMEOUT
+    for attempt in range(PROBE_ATTEMPTS):
+        # Each retry requires a fresh complete authenticated snapshot and nonce.
+        request = probe_request(candidates)
+        try:
+            return exchange(request, deadline=deadline)
+        except ProbeUnavailableError as error:
+            if error.reason != "worker-incomplete" or attempt + 1 == PROBE_ATTEMPTS:
+                raise
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                reason = "deadline"
+                raise ProbeUnavailableError(reason) from None
+            time.sleep(min(RETRY_SECONDS, remaining))
+        except OSError, ValueError:
+            reason = "transport"
+            raise ProbeUnavailableError(reason) from None
+    reason = "worker-incomplete"
+    raise ProbeUnavailableError(reason)
 
 
 def socket_text() -> str:
@@ -282,7 +309,7 @@ def service_text() -> str:
         "ProtectSystem=strict\nProtectHome=read-only\nPrivateDevices=true\n"
         "ProtectKernelTunables=true\nProtectKernelModules=true\nProtectControlGroups=true\n"
         "RestrictSUIDSGID=true\nLockPersonality=true\nRestrictAddressFamilies=AF_UNIX\n"
-        "Nice=19\nIOSchedulingClass=idle\nCPUQuota=10%\nMemoryMax=128M\nMemorySwapMax=0\n"
+        "Nice=19\nIOSchedulingClass=idle\nCPUQuota=50%\nMemoryMax=256M\nMemorySwapMax=0\n"
         "TasksMax=4\nRuntimeMaxSec=90\nTimeoutStopSec=2\nKillMode=control-group\nLimitCORE=0\n"
         "LogRateLimitIntervalSec=1h\nLogRateLimitBurst=10\n"
     )
