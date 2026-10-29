@@ -84,6 +84,9 @@ SWAP_ENTRY: Final = "/swapfile.sarj none swap sw 0 0\n"
 GCLOUD_REPOSITORY: Final = (
     "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main\n"
 )
+GITHUB_REPOSITORY: Final = (
+    "deb [signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\n"
+)
 APT: Final = ("/usr/bin/apt-get", "-o", "DPkg::Lock::Timeout=600")
 
 
@@ -185,6 +188,37 @@ def configure_repositories(paths: HostPaths, runner: CommandRunner) -> None:
     runner(["/usr/bin/gpg", "--batch", "--yes", "--dearmor", "-o", str(key_path)], input_text=response.stdout)
     key_path.chmod(0o644)
     write_configuration(paths, "/etc/apt/sources.list.d/google-cloud-sdk.list", GCLOUD_REPOSITORY)
+    configure_github_repository(paths, runner)
+
+
+def configure_github_repository(paths: HostPaths, runner: CommandRunner) -> None:
+    key = paths.path("/etc/apt/keyrings/githubcli-archive-keyring.gpg")
+    key.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+    key.parent.chmod(0o755)
+    descriptor, temporary = tempfile.mkstemp(prefix=".github-cli-", dir=key.parent)
+    os.close(descriptor)
+    candidate = Path(temporary)
+    try:
+        runner(
+            [
+                "/usr/bin/curl",
+                "--retry",
+                "3",
+                "--connect-timeout",
+                "15",
+                "--max-time",
+                "120",
+                "-fsSL",
+                "-o",
+                str(candidate),
+                "https://cli.github.com/packages/githubcli-archive-keyring.gpg",
+            ]
+        )
+        candidate.chmod(0o644)
+        candidate.replace(key)
+    finally:
+        candidate.unlink(missing_ok=True)
+    write_configuration(paths, "/etc/apt/sources.list.d/github-cli.list", GITHUB_REPOSITORY)
 
 
 def configure_host(paths: HostPaths, runner: CommandRunner) -> None:
@@ -203,13 +237,17 @@ def configure_host(paths: HostPaths, runner: CommandRunner) -> None:
     runner(["/usr/sbin/sysctl", "--system"])
 
 
-def install(paths: HostPaths, runner: CommandRunner) -> None:
-    configure_swap(paths, runner)
+def install_packages(paths: HostPaths, runner: CommandRunner) -> None:
     runner([*APT, "update"])
     runner([*APT, "install", "-y", *PACKAGES])
     configure_repositories(paths, runner)
     runner([*APT, "update"])
-    runner([*APT, "install", "-y", "google-cloud-cli"])
+    runner([*APT, "install", "-y", "google-cloud-cli", "gh"])
+
+
+def install(paths: HostPaths, runner: CommandRunner) -> None:
+    configure_swap(paths, runner)
+    install_packages(paths, runner)
     configure_host(paths, runner)
 
 
