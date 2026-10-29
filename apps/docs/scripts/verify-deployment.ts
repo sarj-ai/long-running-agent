@@ -50,8 +50,36 @@ async function main(): Promise<void> {
     referenceSha256: hash("sha256", referenceBytes, "hex"),
   }, "Published source revision or reference digest differs");
   await verifyEngineering(mode);
+  await verifyWiki(mode);
   if (mode === "artifact") await verifyTerminalStyles();
   process.stdout.write("Deployment verified.\n");
+}
+
+async function verifyWiki(mode: VerificationMode): Promise<void> {
+  const artifact = await readFile(new URL("projects/wiki/index.html", DIST_ROOT), "utf8");
+  const ownedDocument = activeDocument(artifact);
+  const response = mode === "live" ? await deployedResponse(new URL("/projects/wiki/", SITE_URL), "text/html") : undefined;
+  const document = response ? activeDocument(await response.text()) : ownedDocument;
+  const headers = await readFile(new URL("_headers", DIST_ROOT), "utf8");
+  const expectedPolicy = /(?:^|\n\n)\/projects\/wiki\/\*\n {2}Content-Security-Policy: ([^\n]+)/u.exec(headers)?.[1];
+  assert.ok(expectedPolicy, "Immutable Wiki CSP missing");
+  const policy = response ? response.headers.get("Content-Security-Policy") : expectedPolicy;
+  assert.ok(policy, "Published Wiki CSP missing");
+  verifyPolicy(policy, expectedPolicy, document);
+  for (const [element, body] of ownedDocument.inlineElements) {
+    assert.ok(document.inlineElements.has(element), "Owned Wiki script or style missing or changed");
+    assert.ok(policy.includes(`'sha256-${hash("sha256", body, "base64")}'`), "Owned Wiki inline hash missing");
+  }
+  assert.match(document.markup, /<h1\b[^>]*>\s*Sarj Wiki\s*<\/h1>/u, "Wiki heading missing");
+  assert.ok(document.markup.includes(`href="${SITE_URL.origin}/projects/wiki/"`), "Wiki canonical URL differs");
+  for (const href of ["https://wiki.sarj.ai/demo", "https://github.com/sarj-ai/wiki", "https://wiki.sarj.ai/", "https://github.com/sarj-ai/wiki/blob/main/LICENSE"]) {
+    assert.ok(document.markup.includes(`href="${href}"`), "Wiki project destination missing");
+  }
+  assert.doesNotMatch(document.markup, /http-equiv="content-security-policy"|\/wiki-project\//u, "Unpublished Wiki metadata survived promotion");
+  await verifyEngineeringAssets(mode, ownedDocument.markup, document.markup);
+  if (mode === "artifact") {
+    await assert.rejects(readFile(new URL("wiki-project/index.html", ARTIFACT_ROOT)), { code: "ENOENT" });
+  }
 }
 
 async function verifyEngineering(mode: VerificationMode): Promise<void> {

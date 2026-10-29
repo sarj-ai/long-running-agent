@@ -1,0 +1,61 @@
+:root {
+  color-scheme: light dark;
+  --engineering-page: var(--sl-color-black);
+  --engineering-ink: var(--sl-color-gray-1);
+  --engineering-line: var(--sarj-color-rule);
+  --engineering-strong: var(--sl-color-white);
+  --engineering-muted: var(--sl-color-gray-2);
+  --engineering-accent: var(--sl-color-accent-high);
+  --engineering-focus: var(--sl-color-accent);
+  --engineering-header: var(--sl-color-black);
+  --engineering-gutter: clamp(0rem, 5vw - 1rem, 5rem);
+  scroll-padding-top: 6rem;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+.wiki-project, .wiki-project *, .wiki-project *::before, .wiki-project *::after { box-sizing: border-box; }
+.wiki-project { margin: 0; color: var(--sl-color-white); background: var(--sl-color-black); font: 450 1rem/1.65 var(--sl-font); -webkit-font-smoothing: antialiased; }
+.wiki-project a { color: var(--sl-color-accent-high); text-underline-offset: .2em; }
+.wiki-project :focus-visible { outline: 2px solid var(--sl-color-accent); outline-offset: 4px; }
+.wiki-project main { max-width: 72rem; margin-inline: auto; padding: 1.5rem clamp(1.25rem, 5vw, 3rem) 4rem; }
+.wiki-project section { margin-top: 3rem; scroll-margin-top: 6rem; }
+.wiki-project h1, .wiki-project h2, .wiki-project h3 { line-height: 1.25; text-wrap: balance; }
+.wiki-project h1 { margin: .75rem 0 1rem; font-size: clamp(2.75rem, 6vw, 4rem); letter-spacing: -.045em; }
+.wiki-project h2 { margin: 0 0 1.25rem; font-size: clamp(1.5rem, 3vw, 1.875rem); letter-spacing: -.025em; }
+.wiki-project h3 { margin: 0 0 .6rem; font-size: 1.125rem; }
+.wiki-project p { max-width: 60rem; }
+.wiki-project code { overflow-wrap: anywhere; font-family: var(--sl-font-mono); }
+.wiki-project p code { padding: .15rem .3rem; border-radius: .25rem; background: var(--sl-color-gray-6); font-size: .875em; }
+.wiki-breadcrumb { display: flex; align-items: center; gap: .75rem; color: var(--sl-color-gray-2); font-size: .875rem; }
+.wiki-breadcrumb a { display: inline-flex; min-height: 44px; align-items: center; }
+.wiki-intro { padding-block: 2rem; }
+.wiki-eyebrow { margin: 0; color: var(--sl-color-gray-2); font-size: .875rem; }
+.wiki-summary { margin: 0; font-size: clamp(1.5rem, 3.25vw, 2.25rem); line-height: 1.3; letter-spacing: -.025em; text-wrap: balance; }
+.wiki-lede { color: var(--sl-color-gray-2); font-size: 1.125rem; }
+.wiki-actions, .wiki-jump-links { display: flex; flex-wrap: wrap; gap: .75rem; }
+.wiki-actions { margin-block: 1.75rem 1rem; }
+.wiki-actions a { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: .75rem; padding: .55rem 1rem; border: 1px solid var(--sarj-color-rule); border-radius: .35rem; font-weight: 650; text-decoration: none; }
+.wiki-actions .wiki-primary { color: var(--sl-color-black); background: var(--sl-color-white); border-color: var(--sl-color-white); }
+.wiki-actions a:hover { text-decoration: underline; }
+.wiki-demo-note, .wiki-note { color: var(--sl-color-gray-2); }
+.wiki-demo-note { font-size: .9375rem; }
+.wiki-jump-links { padding-block: .75rem; border-block: 1px solid var(--sarj-color-rule); }
+.wiki-jump-links a { display: inline-flex; min-height: 44px; align-items: center; padding-inline: .5rem; font-size: .9375rem; }
+.wiki-features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.wiki-features > div { padding: 1.5rem; border: 1px solid var(--sarj-color-rule); border-radius: .5rem; }
+.wiki-features p { margin: 0; color: var(--sl-color-gray-2); }
+.wiki-project .expressive-code { margin-block: 1.25rem; }
+.wiki-project .expressive-code pre code { overflow-wrap: normal; }
+.wiki-footer { display: flex; flex-wrap: wrap; gap: .25rem 1.5rem; max-width: 72rem; margin-inline: auto; padding: 1.25rem clamp(1.25rem, 5vw, 3rem) 2rem; border-top: 1px solid var(--sarj-color-rule); font-size: .875rem; }
+.wiki-footer a { display: inline-flex; align-items: center; min-height: 44px; }
+@media (max-width: 39.99rem) {
+  .wiki-features { grid-template-columns: 1fr; }
+  .wiki-features > div { padding: 1.25rem; }
+  .wiki-wide-break { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .wiki-project { scroll-behavior: auto; } }
+@media (forced-colors: active) {
+  .wiki-project { color: CanvasText; background: Canvas; }
+  .wiki-actions .wiki-primary { color: HighlightText; background: Highlight; border-color: Highlight; }
+  .wiki-project :focus-visible { outline-color: Highlight; }
+}

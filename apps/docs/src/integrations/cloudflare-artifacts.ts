@@ -4,9 +4,9 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import type { AstroIntegration } from "astro";
 
 import { SITE_BASE_PATH, SITE_HOMEPAGE, siteHref } from "../lib/paths";
-import { WIKI_PROJECT, WIKI_PROJECT_POLICY } from "../lib/wiki-project";
 
 export const ENGINEERING_ROUTE = "engineering-home/";
+export const WIKI_ROUTE = "wiki-project/";
 
 const POLICY_PATTERN = /<meta http-equiv="content-security-policy" content="([^"]+)">/u;
 
@@ -65,9 +65,12 @@ export default function cloudflareArtifacts(assetRoot: URL): AstroIntegration {
         );
         const homepage = documents.find(({ path }) => path === `${ENGINEERING_ROUTE}index.html`);
         if (!homepage) throw new Error("Astro did not render the Engineering homepage");
-        const projectDocuments = documents.filter((page) => page !== homepage);
+        const wiki = documents.find(({ path }) => path === `${WIKI_ROUTE}index.html`);
+        if (!wiki) throw new Error("Astro did not render the Wiki project page");
+        const projectDocuments = documents.filter((page) => page !== homepage && page !== wiki);
         const header = securityHeader(projectDocuments.map(({ document }) => document));
         const homepageHeader = securityHeader([homepage.document]);
+        const wikiHeader = securityHeader([wiki.document]);
         await Promise.all(projectDocuments.map(({ path, document }) =>
           writeFile(new URL(path, dir), document.replace(POLICY_PATTERN, ""), "utf8"),
         ));
@@ -78,12 +81,13 @@ export default function cloudflareArtifacts(assetRoot: URL): AstroIntegration {
           .map((line) => line.startsWith("/") ? siteHref(line) : line).join("\n");
         const [globalHeaders = ""] = headers.split("\n\n", 1);
         const homepageHeaders = globalHeaders.replace("/*\n", () => `/\n${homepageHeader}\n`);
-        const wikiHeaders = `/projects/wiki/*\n  Content-Security-Policy: ${WIKI_PROJECT_POLICY}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`;
-        await writeFile(new URL("_headers", assetRoot), `${scoped}\n${homepageHeaders}\n${wikiHeaders}`, "utf8");
+        const wikiHeaders = globalHeaders.replace("/*\n", () => `/projects/wiki/*\n${wikiHeader}\n`);
+        await writeFile(new URL("_headers", assetRoot), `${scoped}\n${homepageHeaders}\n\n${wikiHeaders}\n`, "utf8");
         await writeFile(new URL("index.html", assetRoot), homepage.document.replace(POLICY_PATTERN, ""), "utf8");
         await rm(new URL(ENGINEERING_ROUTE, dir), { recursive: true });
         await mkdir(new URL("projects/wiki/", assetRoot), { recursive: true });
-        await writeFile(new URL("projects/wiki/index.html", assetRoot), WIKI_PROJECT, "utf8");
+        await writeFile(new URL("projects/wiki/index.html", assetRoot), wiki.document.replace(POLICY_PATTERN, ""), "utf8");
+        await rm(new URL(WIKI_ROUTE, dir), { recursive: true });
         await writeLegacyRedirects(dir, assetRoot);
         if (dir.href !== assetRoot.href) await rm(headersUrl);
       },
