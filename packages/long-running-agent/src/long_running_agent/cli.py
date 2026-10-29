@@ -9,6 +9,7 @@ import typer
 from long_running_agent import infra
 from long_running_agent.client import app as client
 from long_running_agent.config import load_settings
+from long_running_agent.runtime import codex
 from long_running_agent.runtime.app import app as runtime_app
 
 
@@ -20,6 +21,7 @@ app = typer.Typer(
     pretty_exceptions_enable=False,
 )
 app.add_typer(client.app, name="vm")
+app.add_typer(codex.app, name="codex")
 app.add_typer(runtime_app, name="runtime", hidden=True)
 app.add_typer(infra.app, name="infra", hidden=True)
 

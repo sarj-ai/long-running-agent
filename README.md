@@ -15,4 +15,7 @@ uv tool install --editable ./packages/long-running-agent
 | `sarj-connect terminal` | Open your persistent terminal. Reconnect to return to the same windows. |
 | `sarj-connect browser` | Open your VM browser with its saved tabs and sign-ins. |
 
+On the VM, `lra codex switch` changes accounts and reopens saved conversations.
+Use `lra codex retry enable` to recover temporary model-capacity failures automatically.
+
 Version 0.7.2 · Python >=3.14,<3.15 · MIT

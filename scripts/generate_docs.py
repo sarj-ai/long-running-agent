@@ -390,6 +390,9 @@ def readme(document: Document) -> str:
             for group in groups
         ],
         "",
+        "On the VM, `lra codex switch` changes accounts and reopens saved conversations.",
+        "Use `lra codex retry enable` to recover temporary model-capacity failures automatically.",
+        "",
         f"Version {text(package['version'])} · Python {text(package['requiresPython'])} · {text(package['license'])}",
         "",
     ]

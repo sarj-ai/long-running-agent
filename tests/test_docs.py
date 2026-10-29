@@ -113,8 +113,12 @@ def test_reference_omits_internal_operations_and_transport_flags(tmp_path: Path)
     reference = Reference.model_validate_json((tmp_path / REFERENCE).read_bytes())
     published = [command for entry in reference.entrypoints for command in commands(entry.command)]
     assert not any(
-        part in {"runtime", "infra", "tunnel", "codex", "send", "get"} for command in published for part in command.path
+        part in {"runtime", "infra", "tunnel", "send", "get"} for command in published for part in command.path
     )
+    paths = {tuple(command.path) for command in published}
+    assert ("lra", "codex", "switch") in paths
+    assert ("lra", "codex", "retry", "enable") in paths
+    assert ("lra", "codex", "retry", "run") not in paths
     assert not any(
         flag in {"--no-host", "--help", "--install-completion", "--show-completion"}
         for command in published
