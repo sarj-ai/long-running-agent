@@ -449,14 +449,20 @@ def test_database_hard_links_cannot_select_an_unrelated_native_wal(home: Path) -
         activity.collect(home)
 
 
-def test_wal_database_without_existing_sidecars_is_retained_without_creating_them(home: Path) -> None:
-    database = native_database(home / ".codex")
+def test_closed_wal_database_preserves_saved_references_with_native_coordination(home: Path) -> None:
+    workspace = home / "code/retained-after-checkpoint"
+    database = native_database(home / ".codex", [SavedThread(str(workspace))])
     with closing(sqlite3.connect(database)) as writer:
         writer.execute("PRAGMA journal_mode=WAL")
     before = {path.name for path in database.parent.iterdir()}
-    with pytest.raises(RuntimeError, match="existing native WAL and SHM"):
-        activity.collect(home)
-    assert {path.name for path in database.parent.iterdir()} == before
+    contents = database.read_bytes()
+    assert workspace in activity.collect(home).paths
+    after = {path.name for path in database.parent.iterdir()}
+    sidecars = {database.name + "-wal", database.name + "-shm"}
+    assert before <= after
+    assert after <= before | sidecars
+    assert (database.name + "-wal" in after) == (database.name + "-shm" in after)
+    assert database.read_bytes() == contents
 
 
 def test_wal_sidecar_symbolic_links_are_not_followed(home: Path) -> None:

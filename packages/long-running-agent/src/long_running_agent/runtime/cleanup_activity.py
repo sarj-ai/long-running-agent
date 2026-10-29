@@ -43,6 +43,24 @@ THREAD_COLUMNS: Final = {
 }
 
 
+class MetadataChangedError(RuntimeError):
+    """A fresh complete inspection may recover from an atomic metadata replacement."""
+
+
+class DatabaseBusyError(RuntimeError):
+    """Native SQLite could not obtain its read lock within the bounded wait."""
+
+
+def database_inspection_error(error: sqlite3.Error) -> RuntimeError:
+    message = "Codex activity database could not be verified"
+    if hasattr(error, "sqlite_errorcode") and error.sqlite_errorcode & 0xFF in {
+        sqlite3.SQLITE_BUSY,
+        sqlite3.SQLITE_LOCKED,
+    }:
+        return DatabaseBusyError(message)
+    return RuntimeError(message)
+
+
 @dataclass(frozen=True)
 class ActivityReferences:
     paths: frozenset[Path]
@@ -195,7 +213,7 @@ def metadata_bytes(
         actual = os.fstat(stream.fileno())
         if identity(actual) != identity(expected):
             message = "Codex activity metadata changed identity during inspection"
-            raise RuntimeError(message)
+            raise MetadataChangedError(message)
         if (
             not stat.S_ISREG(actual.st_mode)
             or actual.st_uid != os.getuid()
@@ -394,11 +412,13 @@ def database_layout(database: Path, home: Path) -> dict[Path, FileIdentity]:
         ):
             message = "Codex activity database has unsafe permissions or ambiguous hard links"
             raise RuntimeError(message)
-        header = stream.read(20)
     identities = {database: identity(metadata)}
     sidecars = [database.with_name(database.name + suffix) for suffix in ("-wal", "-shm")]
     present_sidecars = [path for path in sidecars if present(path)]
-    if (header[18:20] == b"\x02\x02" or present_sidecars) and len(present_sidecars) != len(sidecars):
+    # A checkpointed WAL database can legitimately have no sidecars.
+    # Native SQLite mode=ro manages its coordination files and locking.
+    # An existing incomplete pair remains an inspection failure.
+    if present_sidecars and len(present_sidecars) != len(sidecars):
         message = "Codex WAL metadata requires existing native WAL and SHM files"
         raise RuntimeError(message)
     for path in present_sidecars:
@@ -458,7 +478,7 @@ def read_database(database: Path, home: Path, budget: InventoryBudget) -> None:
             )
     if any(identity(path.stat()) != previous for path, previous in before.items()):
         message = "Codex activity database changed identity during inspection"
-        raise RuntimeError(message)
+        raise MetadataChangedError(message)
 
 
 def collect(home: Path, *, codex_home: Path | None = None) -> ActivityReferences:
@@ -494,7 +514,6 @@ def collect(home: Path, *, codex_home: Path | None = None) -> ActivityReferences
                 raise RuntimeError(message)
             try:
                 read_database(database, home, budget)
-            except sqlite3.Error:
-                message = "Codex activity database could not be verified"
-                raise RuntimeError(message) from None
+            except sqlite3.Error as error:
+                raise database_inspection_error(error) from None
     return ActivityReferences(budget.resolved_paths(), len(stores), len(seen), frozenset(budget.storage))

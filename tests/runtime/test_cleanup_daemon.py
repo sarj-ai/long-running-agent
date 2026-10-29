@@ -563,13 +563,21 @@ def test_parent_lock_does_not_block_the_cleanup_worker_but_excludes_another_daem
 
 def test_resident_unit_has_worker_isolation_and_low_resource_limits() -> None:
     text = cleanup_daemon.service_text(Path("/home/a%user/tool path/bin/python"))
-    assert 'ExecStart="/home/a%%user/tool path/bin/python" -m long_running_agent.cli runtime cleanup daemon run' in text
+    assert (
+        'ExecStart="/home/a%%user/tool path/bin/python" -I -m long_running_agent.cli runtime cleanup daemon run' in text
+    )
     for directive in (
-        "Type=simple",
-        "Nice=19",
-        "IOSchedulingClass=idle",
-        "CPUQuota=10%",
-        "MemoryMax=256M",
+        "Type=notify",
+        "NotifyAccess=main",
+        "WatchdogSec=360",
+        "WatchdogSignal=SIGKILL",
+        "LimitCORE=0",
+        "Nice=0",
+        "CPUWeight=100",
+        "IOSchedulingClass=best-effort",
+        "IOSchedulingPriority=7",
+        "CPUQuota=50%",
+        "MemoryMax=1G",
         "MemorySwapMax=0",
         "TasksMax=32",
         "Environment=OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 UV_CONCURRENT_BUILDS=1",
@@ -806,8 +814,18 @@ def test_sweep_selects_guarded_capacity_worker_arguments(
     schedule.capacity_recovery = previously_latched
     cleanup_daemon.sweep(paths, state, schedule, Event())
     assert len(calls) == 1
-    assert calls[0][:7] == [sys.executable, "-m", "long_running_agent.cli", "runtime", "cleanup", "run", "--apply"]
-    assert calls[0][7:9] == ["--min-age-days", "7"]
+    assert calls[0][:8] == [
+        sys.executable,
+        "-I",
+        "-m",
+        "long_running_agent.cli",
+        "runtime",
+        "cleanup",
+        "run",
+        "--apply",
+    ]
+    assert "--paged" in calls[0]
+    assert calls[0][8:10] == ["--min-age-days", "7"]
     assert ("--capacity-recovery" in calls[0]) is capacity_argument
     published = cleanup_daemon.Heartbeat.model_validate_json((state / cleanup_daemon.STATUS_FILE).read_bytes())
     assert published.version == 1
@@ -1149,6 +1167,8 @@ def test_status_distinguishes_deferred_and_failed_inspections_without_mutating_s
     payload = RootModel[dict[str, JsonValue]].model_validate_json(result.stdout).root
     assert payload["deferred_worktrees"] == 370
     assert payload["inspection_failure_worktrees"] == 5
+    assert payload["inspection_blocked"] is True
+    assert payload["cleanup_healthy"] is False
     assert payload["latest_attempt_failed"] is False
     policy = payload["policy"]
     assert isinstance(policy, dict)

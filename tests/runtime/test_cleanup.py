@@ -4417,3 +4417,129 @@ def test_baseline_cli_preview_and_apply_preserve_private_removal_state(
     assert thresholds["mode"] == "calibrated"
     assert thresholds["baseline_allocated"] == 300 * 4096
     assert {name: (state / name).read_bytes() for name in before} == before
+
+
+@pytest.mark.parametrize("change", ["unchanged", "dirty", "live"])
+def test_paged_cli_resumes_after_a_slow_candidate_and_rechecks_every_removal(
+    repository: Repository, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    first, second, late = paged_candidates(repository)
+    isolate_native_git(repository, monkeypatch)
+    monkeypatch.setenv("HOME", str(repository.paths.home))
+    state = cleanup.state_directory(repository.paths)
+    cache = state / "cache-pruned"
+    private_write(cache, "previous native verification\n")
+    os.utime(cache, (repository.now, repository.now))
+    expire_before_ancestry(first, monkeypatch)
+    runner = CliRunner()
+    initial = runner.invoke(cleanup.app, ["run", "--apply", "--paged"])
+    assert initial.exit_code == 0, initial.output
+    report = cleanup_daemon.WorkerReport.model_validate_json(initial.stdout)
+    assert all(row.reason == cleanup.DEFERRED for row in report.worktrees)
+    assert report.inventory_pending
+    cursor = cleanup_state.inventory_cursor(state, repository.paths.code)
+    assert cursor is not None
+    assert cursor.worktree == first.path
+    assert not (state / "cleanup-attempts.json").exists()
+    if change == "dirty":
+        (late.path / "source.txt").write_text("Preserve work written between cleanup sweeps.\n")
+    elif change == "live":
+
+        def held(_paths: RuntimePaths, _candidates: Sequence[Path] | None = None) -> cleanup.References:
+            return cleanup.References(frozenset({late.path}))
+
+        monkeypatch.setattr(  # sarj-noqa: SARJ445 -- A native holder appears between actual CLI sweeps at the external process boundary; Git and removal proofs remain real.
+            cleanup, "references", held
+        )
+    resumed = runner.invoke(cleanup.app, ["run", "--apply", "--paged"])
+    assert resumed.exit_code == 0, resumed.output
+    report = cleanup_daemon.WorkerReport.model_validate_json(resumed.stdout)
+    assert not report.inventory_pending
+    assert {row.path for row in report.worktrees} == {str(second.path), str(late.path)}
+    late_result = next(row for row in report.worktrees if row.path == str(late.path))
+    assert late_result.removed is (change == "unchanged")
+    assert late.path.exists() is (change != "unchanged")
+    assert first.path.is_dir()
+    assert second.path.is_dir()
+    assert cleanup_state.inventory_cursor(state, repository.paths.code) is None
+    receipts = cleanup_state.active_receipts(state, cleanup_state.AttemptStamp.current()).receipts
+    assert len(receipts) == (1 if change == "unchanged" else 0)
+    for entry in (first, second, late):
+        assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
+
+
+def test_paged_cli_keeps_the_removal_budget_and_unexamined_suffix(
+    repository: Repository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entries = [repository.linked(f"budget-{index}") for index in range(4)]
+    isolate_native_git(repository, monkeypatch)
+    monkeypatch.setenv("HOME", str(repository.paths.home))
+    state = cleanup.state_directory(repository.paths)
+    cache = state / "cache-pruned"
+    private_write(cache, "previous native verification\n")
+    os.utime(cache, (repository.now, repository.now))
+    runner = CliRunner()
+    first = runner.invoke(cleanup.app, ["run", "--apply", "--paged"])
+    assert first.exit_code == 0, first.output
+    report = cleanup_daemon.WorkerReport.model_validate_json(first.stdout)
+    assert sum(row.removed for row in report.worktrees) == cleanup.MAX_REMOVALS
+    assert report.inventory_pending
+    cursor = cleanup_state.inventory_cursor(state, repository.paths.code)
+    assert cursor is not None
+    assert cursor.worktree == entries[1].path
+    ledger = (state / "cleanup-attempts.json").read_bytes()
+    second = runner.invoke(cleanup.app, ["run", "--apply", "--paged"])
+    assert second.exit_code == 0, second.output
+    report = cleanup_daemon.WorkerReport.model_validate_json(second.stdout)
+    assert report.inventory_pending
+    assert not any(row.attempted or row.removed for row in report.worktrees)
+    assert all("24-hour" in row.reason for row in report.worktrees)
+    assert cleanup_state.inventory_cursor(state, repository.paths.code) == cursor
+    assert (
+        (state / "cleanup-attempts.json").read_bytes() == ledger
+    )  # sarj-noqa: SARJ402 -- An exhausted removal budget must preserve the durable attempt ledger byte-for-byte.
+    assert [entry.path.exists() for entry in entries] == [False, False, True, True]
+    for entry in entries:
+        assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
+
+
+@pytest.mark.parametrize("protected", [True, False], ids=["fresh-reference-protected", "fresh-reference-eligible"])
+def test_transient_reference_recovery_rebuilds_native_removal_proof_and_preserves_branch(
+    repository: Repository, monkeypatch: pytest.MonkeyPatch, protected: bool
+) -> None:
+    entry = repository.linked("fresh-census-after-replacement")
+    isolate_native_git(repository, monkeypatch)
+    failed = False
+
+    def external_references(_paths: RuntimePaths, _candidates: Sequence[Path] | None = None) -> cleanup.References:
+        nonlocal failed
+        if not failed:
+            failed = True
+            with cleanup.reference_stage("workspaces"):
+                message = "native registry replacement"
+                raise cleanup_activity.MetadataChangedError(message)
+        return cleanup.References(frozenset({entry.path}) if protected else frozenset())
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Replace only the external live-holder reader with one transient failure and a fresh census; native Git, ownership, eligibility, final removal proof and durable ledger remain unchanged.
+        cleanup, "references", external_references
+    )
+    state = cleanup.state_directory(repository.paths)
+    first = cleanup.reap(repository.paths, apply=True)
+    assert failed
+    assert len(first) == 1
+    if protected:
+        assert not first[0].attempted
+        assert not first[0].removed
+        assert entry.path.is_dir()
+        assert not (state / "cleanup-attempts.json").exists()
+        protected = False
+        second = cleanup.reap(repository.paths, apply=True)
+        assert len(second) == 1
+        assert second[0].removed
+        assert second[0].attempted
+    else:
+        assert first[0].removed
+        assert first[0].attempted
+    assert not entry.path.exists()
+    assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
+    assert len(cleanup_state.active_receipts(state, cleanup_state.AttemptStamp.current()).receipts) == 1

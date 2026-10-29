@@ -10,6 +10,7 @@ from pathlib import Path
 import secrets
 import selectors
 import signal
+import socket
 import sys
 from threading import Event
 import time
@@ -18,10 +19,10 @@ from typing import TYPE_CHECKING, Annotated, Final, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 import typer
 
-from long_running_agent.process import DEVNULL, PIPE, ChildProcess, ProcessTimeout, run, spawn
+from long_running_agent.process import DEVNULL, PIPE, ChildProcess, ProcessTimeout, environment_snapshot, run, spawn
 
 from . import cleanup, cleanup_capacity
-from .cleanup_state import CAPACITY_ATTEMPTS, MAX_ATTEMPTS, Timestamp, private_payload, valid_time
+from .cleanup_state import CAPACITY_ATTEMPTS, MAX_ATTEMPTS, Timestamp, private_payload, quarantine_advisory, valid_time
 from .settings import RuntimePaths, private_write, systemd_value, user_environment
 
 
@@ -41,13 +42,16 @@ GROWTH_MIN_SAMPLES: Final = 2
 GROWTH_MAX_GAP_SECONDS: Final = 5 * 60
 GROWTH_NOISE_BYTES: Final = 1024**2
 WORKER_SECONDS: Final = 285
+WATCHDOG_SECONDS: Final = 360
 REPORT_LIMIT: Final = 4 * 1024 * 1024
 READ_SIZE: Final = 65536
+PROCESS_STAT_LIMIT: Final = 4096
 CHILD_POLL_SECONDS: Final = 0.05
 MAX_FAILURES: Final = 8
 MAX_REASONS: Final = 16
 URGENT_DECISIONS: Final = (
     "inspection failed",
+    "inspection deferred",
     "24-hour",
     "pressure is high or unknown",
     "native removal did not complete",
@@ -170,8 +174,11 @@ class WorkerReport(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     apply: bool
     max_removals: Literal[2]
-    worktrees: Annotated[list[WorktreeResult], Field(max_length=512)]
+    worktrees: Annotated[list[WorktreeResult], Field(max_length=1024)]
     cache: Annotated[str, Field(max_length=512)]
+    inventory_paged: bool = False
+    inventory_pending: bool = False
+    inventory_errors: Annotated[int, Field(ge=0, le=cleanup.MAX_DIRECTORIES)] = 0
 
     @model_validator(mode="after")
     def consistent_results(self) -> Self:
@@ -185,16 +192,22 @@ class WorkerReport(BaseModel):
         ):
             message = "Cleanup worker returned inconsistent results"
             raise ValueError(message)
+        if not self.inventory_paged and (self.inventory_pending or self.inventory_errors):
+            message = "Cleanup worker returned inconsistent inventory progress"
+            raise ValueError(message)
         return self
 
 
 class Summary(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
-    worktrees: Annotated[int, Field(ge=0, le=512)]
+    worktrees: Annotated[int, Field(ge=0, le=1024)]
     attempted: Annotated[int, Field(ge=0, le=2)]
     removed: Annotated[int, Field(ge=0, le=2)]
     reasons: Annotated[dict[str, Annotated[int, Field(ge=1)]], Field(max_length=MAX_REASONS)]
     cache: Annotated[str, Field(max_length=512)]
+    inventory_paged: bool = False
+    inventory_pending: bool = False
+    inventory_errors: Annotated[int, Field(ge=0, le=cleanup.MAX_DIRECTORIES)] = 0
 
     @model_validator(mode="after")
     def consistent_counts(self) -> Self:
@@ -204,6 +217,9 @@ class Summary(BaseModel):
             or sum(self.reasons.values()) > self.worktrees
         ):
             message = "Cleanup summary returned inconsistent counts"
+            raise ValueError(message)
+        if not self.inventory_paged and (self.inventory_pending or self.inventory_errors):
+            message = "Cleanup summary returned inconsistent inventory progress"
             raise ValueError(message)
         return self
 
@@ -232,6 +248,8 @@ class Heartbeat(BaseModel):
     last_run_at: Timestamp | None
     last_result: Summary | None
     consecutive_failures: Annotated[int, Field(ge=0, le=MAX_FAILURES)]
+    process_start: Annotated[int, Field(gt=0)] | None = None
+    boot_id: Annotated[str, Field(pattern=r"^[0-9a-f-]{36}$")] | None = None
 
 
 @dataclass(frozen=True)
@@ -303,10 +321,19 @@ class Schedule:
 
     @classmethod
     def restore(cls, state: Path, now: float, wall: float) -> Self:
+        path = state / STATUS_FILE
         try:
-            previous = Heartbeat.model_validate_json(private_payload(state / STATUS_FILE))
+            payload = private_payload(path)
         except FileNotFoundError:
             return cls.new()
+        try:
+            previous = Heartbeat.model_validate_json(payload)
+        except ValueError:
+            quarantine_advisory(path)
+            schedule = cls.new()
+            schedule.failed(now)
+            schedule.last_failure = Failure(stage="heartbeat", kind="invalid-data", at=wall)
+            return schedule
         delay = min(NORMAL_SECONDS, max(0, previous.next_sweep_at - wall))
         phase = previous.phase
         if phase == "running":
@@ -383,11 +410,18 @@ class Schedule:
         self.last_run_at = wall
         self.observe(space, now, thresholds=thresholds)
         pressured = any("pressure is high or unknown" in reason for reason in result.reasons)
-        delay = PRESSURE_SECONDS if pressured else (LOW_SPACE_SECONDS if self.capacity_recovery else NORMAL_SECONDS)
+        delay = (
+            PRESSURE_SECONDS
+            if pressured or result.inventory_errors
+            else (LOW_SPACE_SECONDS if self.capacity_recovery or result.inventory_pending else NORMAL_SECONDS)
+        )
+        incomplete = incomplete_inspection(result)
+        if incomplete:
+            delay = min(delay, PRESSURE_SECONDS)
         self.due = now + delay
         if result.removed:
             self.phase = "cleaned"
-        elif any("inspection failed" in reason for reason in result.reasons):
+        elif incomplete:
             self.phase = "blocked"
         elif any("24-hour" in reason for reason in result.reasons):
             self.phase = "budget"
@@ -396,6 +430,14 @@ class Schedule:
         else:
             self.phase = "retained"
         return self.phase
+
+
+def incomplete_inspection(result: Summary) -> bool:
+    return bool(
+        result.inventory_errors
+        or cleanup.DEFERRED in result.reasons
+        or any("inspection failed" in reason for reason in result.reasons)
+    )
 
 
 def capacity_thresholds(space: Space, thresholds: cleanup_capacity.Thresholds | None) -> cleanup_capacity.Thresholds:
@@ -418,7 +460,8 @@ def capacity(home: Path) -> Space:
 def baseline_learning_eligible(result: Summary) -> bool:
     incomplete = ("inspection", "deferred", "24-hour", "per-run", "pressure")
     eligible = (
-        result.attempted == result.removed
+        not result.inventory_paged
+        and result.attempted == result.removed
         and "other retained decisions" not in result.reasons
         and sum(result.reasons.values()) == result.worktrees
     ) and not any(fragment in reason for reason in result.reasons for fragment in incomplete)
@@ -459,6 +502,9 @@ def summarize(report: WorkerReport) -> Summary:
         removed=sum(row.removed for row in report.worktrees),
         reasons=retained,
         cache=report.cache,
+        inventory_paged=report.inventory_paged,
+        inventory_pending=report.inventory_pending,
+        inventory_errors=report.inventory_errors,
     )
 
 
@@ -595,9 +641,58 @@ def publish(state: Path, schedule: Schedule, space: Space, phase: Phase) -> None
         last_run_at=schedule.last_run_at,
         last_result=schedule.last_result,
         consecutive_failures=schedule.failures,
+        process_start=process_start(os.getpid()),
+        boot_id=Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip(),
     )
     private_write(state / STATUS_FILE, heartbeat.model_dump_json() + "\n")
     persist_failure(state, schedule.last_failure)
+
+
+def process_start(pid: int) -> int:
+    path = Path(f"/proc/{pid}")
+    if path.stat().st_uid != os.getuid():
+        message = "Maintenance process belongs to another user"
+        raise ValueError(message)
+    payload = (path / "stat").read_bytes()
+    if len(payload) > PROCESS_STAT_LIMIT:
+        message = "Maintenance process identity is oversized"
+        raise ValueError(message)
+    _name, separator, fields = payload.rpartition(b") ")
+    if not separator:
+        message = "Maintenance process identity is incomplete"
+        raise ValueError(message)
+    try:
+        columns = fields.split()
+        if columns[0] in {b"Z", b"X", b"x"}:
+            message = "Maintenance process has exited"
+            raise ValueError(message)
+        return int(columns[19])
+    except IndexError:
+        message = "Maintenance process identity is incomplete"
+        raise ValueError(message) from None
+
+
+def daemon_alive(heartbeat: Heartbeat) -> bool:
+    if heartbeat.phase == "stopped" or heartbeat.process_start is None or heartbeat.boot_id is None:
+        return False
+    try:
+        boot = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
+        return heartbeat.boot_id == boot and heartbeat.process_start == process_start(heartbeat.pid)
+    except OSError, ValueError:
+        return False
+
+
+def systemd_notify(message: str) -> None:
+    environment = environment_snapshot()
+    endpoint = environment.get("NOTIFY_SOCKET", "")
+    if not endpoint.startswith(("/", "@")) or environment.get("WATCHDOG_PID", str(os.getpid())) != str(os.getpid()):
+        return
+    address = "\0" + endpoint[1:] if endpoint.startswith("@") else endpoint
+    # Notify from the supervisor only, after real loop progress. An independent
+    # ping thread would conceal a wedged supervisor from systemd's watchdog.
+    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as connection:
+        connection.settimeout(1)
+        connection.sendto(message.encode("ascii"), address)
 
 
 def record_failure(state: Path, schedule: Schedule, error: OSError | RuntimeError | ValueError) -> None:
@@ -624,6 +719,7 @@ def sweep(paths: RuntimePaths, state: Path, schedule: Schedule, stopped: Event) 
             publish(state, schedule, space, "running")
             arguments = [
                 sys.executable,
+                "-I",
                 "-m",
                 "long_running_agent.cli",
                 "runtime",
@@ -632,6 +728,7 @@ def sweep(paths: RuntimePaths, state: Path, schedule: Schedule, stopped: Event) 
                 "--apply",
                 "--min-age-days",
                 "7",
+                "--paged",
             ]
             if schedule.capacity_recovery:
                 arguments.append("--capacity-recovery")
@@ -658,6 +755,8 @@ def sweep(paths: RuntimePaths, state: Path, schedule: Schedule, stopped: Event) 
 def supervise(paths: RuntimePaths, *, once: bool) -> None:
     with cleanup.cleanup_lock(paths, daemon=True) as state, stop_requested() as stopped:
         schedule = Schedule.restore(state, time.monotonic(), time.time())
+        if not once:
+            systemd_notify("READY=1\nWATCHDOG=1")
         while not stopped.is_set():
             failed = False
             try:
@@ -677,6 +776,7 @@ def supervise(paths: RuntimePaths, *, once: bool) -> None:
                 if failed:
                     raise typer.Exit(code=1)
                 return
+            systemd_notify("WATCHDOG=1")
             stopped.wait(POLL_SECONDS)
         try:
             publish(state, schedule, capacity(paths.home), "stopped")
@@ -707,11 +807,29 @@ def status() -> None:
     current = cleanup_capacity.policy(RuntimePaths.current().home)
     space = Space(total=current.volume.total, available=current.volume.available)
     failure = load_failure(path.parent)
+    alive = daemon_alive(heartbeat)
+    progress_age = None if heartbeat.last_run_at is None else time.time() - heartbeat.last_run_at
+    progress_overdue = (
+        progress_age is None or not 0 <= progress_age <= NORMAL_SECONDS + WORKER_SECONDS + PRESSURE_SECONDS
+    )
+    fresh = alive and 0 <= age <= allowance
+    inspection_blocked = heartbeat.last_result is not None and incomplete_inspection(heartbeat.last_result)
     typer.echo(
         json.dumps(
             {
                 "heartbeat": heartbeat.model_dump(mode="json"),
-                "fresh": 0 <= age <= allowance,
+                "fresh": fresh,
+                "cleanup_healthy": (
+                    fresh
+                    and heartbeat.last_result is not None
+                    and not heartbeat.consecutive_failures
+                    and not inspection_blocked
+                    and not progress_overdue
+                    and heartbeat.phase not in {"pressure", "blocked", "error", "stopped"}
+                ),
+                "inspection_blocked": inspection_blocked,
+                "daemon_alive": alive,
+                "progress_overdue": progress_overdue,
                 "last_completed_at": heartbeat.last_run_at,
                 "latest_attempt_failed": heartbeat.consecutive_failures > 0,
                 "attempt_in_progress": heartbeat.phase == "running",
@@ -753,11 +871,13 @@ def status() -> None:
 def service_text(executable: Path) -> str:
     return (
         "[Unit]\nDescription=Continuous guarded developer disk maintenance\nStartLimitIntervalSec=0\n"
-        "[Service]\nType=simple\nUMask=0077\nNice=19\nIOSchedulingClass=idle\nNoNewPrivileges=true\n"
+        "[Service]\nType=notify\nNotifyAccess=main\nTimeoutStartSec=60\n"
+        f"WatchdogSec={WATCHDOG_SECONDS}\nWatchdogSignal=SIGKILL\nLimitCORE=0\n"
+        "UMask=0077\nNice=0\nCPUWeight=100\nIOSchedulingClass=best-effort\nIOSchedulingPriority=7\nNoNewPrivileges=true\n"
         "Environment=OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 UV_CONCURRENT_BUILDS=1\n"
-        "CPUQuota=10%\nMemoryMax=256M\nMemorySwapMax=0\nTasksMax=32\nRestart=always\nRestartSec=60\nOOMPolicy=stop\n"
+        "CPUQuota=50%\nMemoryMax=1G\nMemorySwapMax=0\nTasksMax=32\nRestart=always\nRestartSec=60\nOOMPolicy=stop\n"
         "KillMode=mixed\nTimeoutStopSec=15\nLogRateLimitIntervalSec=1h\nLogRateLimitBurst=10\n"
-        f"ExecStart={systemd_value(str(executable))} -m long_running_agent.cli runtime cleanup daemon run\n"
+        f"ExecStart={systemd_value(str(executable))} -I -m long_running_agent.cli runtime cleanup daemon run\n"
         "[Install]\nWantedBy=default.target\n"
     )
 
@@ -771,7 +891,7 @@ def enable() -> None:
     paths = RuntimePaths.current()
     executable = Path(sys.executable)
     if not executable.is_relative_to(paths.home / ".local/share"):
-        message = "Enable maintenance with the durable installed lra runtime"
+        message = "Enable maintenance with a durable installed cleanup runtime"
         raise RuntimeError(message)
     folder = paths.home / ".config/systemd/user"
     folder.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -782,6 +902,7 @@ def enable() -> None:
     environment = user_environment(paths)
     run(["systemctl", "--user", "daemon-reload"], capture_output=True, timeout=15, env=environment)
     run(["systemctl", "--user", "enable", "--now", SERVICE], capture_output=True, timeout=15, env=environment)
+    run(["systemctl", "--user", "restart", SERVICE], capture_output=True, timeout=30, env=environment)
     run(["systemctl", "--user", "is-active", "--quiet", SERVICE], capture_output=True, timeout=10, env=environment)
     timer = run(
         ["systemctl", "--user", "show", cleanup.TIMER, "--property=LoadState", "--value"],

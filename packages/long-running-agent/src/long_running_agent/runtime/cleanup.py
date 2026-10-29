@@ -4,6 +4,7 @@ from collections import deque
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass, replace
+import errno
 import fcntl
 import json
 import os
@@ -26,11 +27,14 @@ from .cleanup_state import (
     CAPACITY_ATTEMPTS,
     MAX_ATTEMPTS,
     AttemptStamp,
+    InventoryCursor,
     ReviewCursor,
     active_receipts,
+    inventory_cursor,
     remaining_attempts,
     reserve_attempt,
     review_cursor,
+    save_inventory_cursor,
     save_review_cursor,
     valid_time,
 )
@@ -58,7 +62,9 @@ STALE_REMOTE: Final = "remote view is stale; fetch origin before cleanup"
 MISSING_DEFAULT_FETCH: Final = "origin's default branch has no recent verified fetch"
 MAX_DIRECTORIES: Final = 4096
 MAX_DISCOVERY_ENTRIES: Final = 262144
-MAX_WORKTREES: Final = 512
+MAX_WORKTREES: Final = 1024
+INVENTORY_PAGE_SIZE: Final = 16
+INVENTORY_PAGE_SECONDS: Final = 45
 MAX_FDS: Final = 32768
 GENERATED_ENTRIES: Final = 1048576
 GENERATED_DIRECTORIES: Final = 32768
@@ -68,7 +74,7 @@ MAX_PROCESS_BYTES: Final = 1024 * 1024
 PROCESS_START_FIELD: Final = 19
 PROCESS_START_DIGITS: Final = 20
 PROCESS_STATES: Final = frozenset({b"R", b"S", b"D", b"Z", b"T", b"t", b"K", b"W", b"P", b"I"})
-DISCOVERY_DEPTH: Final = 3
+DISCOVERY_DEPTH: Final = 2
 DISCOVERY_SECONDS: Final = 15
 MAP_FIELDS: Final = 6
 FETCH_FIELDS: Final = 3
@@ -80,6 +86,55 @@ FINAL_PROOF_SECONDS: Final = 150
 REPORT_SECONDS: Final = 120
 COMMAND_TIMEOUT_STATUS: Final = 124
 DEFERRED: Final = "inspection deferred: sweep time budget exhausted; retained"
+REFERENCE_ATTEMPTS: Final = 2
+REFERENCE_RETRY_SECONDS: Final = 0.05
+ReferenceStage = Literal["processes", "terminals", "boot-policy", "containers", "workspaces", "workspace-containers"]
+ReferenceKind = Literal[
+    "not-found",
+    "process-exited",
+    "permission",
+    "memory",
+    "file-limit",
+    "io",
+    "timeout",
+    "database-busy",
+    "metadata-changed",
+    "invalid-data",
+    "command-failed",
+    "unavailable",
+]
+REFERENCE_STAGES: Final = frozenset(
+    {"processes", "terminals", "boot-policy", "containers", "workspaces", "workspace-containers"}
+)
+REFERENCE_KINDS: Final = frozenset(
+    {
+        "not-found",
+        "process-exited",
+        "permission",
+        "memory",
+        "file-limit",
+        "io",
+        "timeout",
+        "database-busy",
+        "metadata-changed",
+        "invalid-data",
+        "command-failed",
+        "unavailable",
+    }
+)
+TRANSIENT_REFERENCE_KINDS: Final = frozenset(
+    {"not-found", "process-exited", "timeout", "database-busy", "metadata-changed"}
+)
+REFERENCE_OS_KINDS: Final[dict[int, ReferenceKind]] = {
+    errno.ENOENT: "not-found",
+    errno.ESRCH: "process-exited",
+    errno.EACCES: "permission",
+    errno.EPERM: "permission",
+    errno.ENOMEM: "memory",
+    errno.EMFILE: "file-limit",
+    errno.ENFILE: "file-limit",
+    errno.EIO: "io",
+}
 REFERENCED: Final = "referenced by a process, saved workspace, terminal, or boot policy"
 INSPECTION_DEADLINE: Final = ContextVar[float | None]("cleanup_inspection_deadline", default=None)
 DiscoveryLimitKind = Literal["entries", "directories", "deadline", "worktrees"]
@@ -131,6 +186,20 @@ class Decision:
     reason: str
     removed: bool = False
     attempted: bool = False
+
+
+@dataclass(frozen=True)
+class InventoryPage:
+    entries: list[Worktree]
+    cursor: InventoryCursor | None
+    pending: bool
+    errors: int = 0
+
+
+@dataclass
+class ReviewProgress:
+    examined: int = 0
+    last_started: Worktree | None = None
 
 
 @dataclass(frozen=True)
@@ -262,6 +331,42 @@ class LiveInspectionFailedError(Exception):
     """Global uncertainty stops the sweep without losing earlier actual outcomes."""
 
 
+class ReferenceInspectionError(RuntimeError):
+    def __init__(self, stage: ReferenceStage, kind: ReferenceKind) -> None:
+        super().__init__(f"Live references could not be verified: {stage} ({kind})")
+        self.stage: ReferenceStage = stage
+        self.kind: ReferenceKind = kind
+
+
+def reference_failure_kind(error: OSError | RuntimeError | ValueError | sqlite3.Error) -> ReferenceKind:
+    if isinstance(error, cleanup_activity.MetadataChangedError):
+        return "metadata-changed"
+    if isinstance(error, cleanup_activity.DatabaseBusyError):
+        return "database-busy"
+    if (
+        isinstance(error, sqlite3.Error)
+        and hasattr(error, "sqlite_errorcode")
+        and error.sqlite_errorcode & 0xFF in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}
+    ):
+        return "database-busy"
+    if isinstance(error, CommandError):
+        return "timeout" if error.returncode == COMMAND_TIMEOUT_STATUS else "command-failed"
+    if isinstance(error, OSError):
+        return REFERENCE_OS_KINDS.get(error.errno or 0, "unavailable")
+    return "invalid-data" if isinstance(error, ValueError) else "unavailable"
+
+
+@contextmanager
+def reference_stage(stage: ReferenceStage) -> Generator[None]:
+    try:
+        yield
+    except cleanup_inspection.ProbeUnavailableError:
+        # The authenticated probe already has its own bounded retry policy and safe reason codes.
+        raise
+    except (OSError, RuntimeError, ValueError, sqlite3.Error) as error:
+        raise ReferenceInspectionError(stage, reference_failure_kind(error)) from error
+
+
 @contextmanager
 def inspection_window(deadline: float | None) -> Generator[None]:
     token = INSPECTION_DEADLINE.set(deadline)
@@ -286,6 +391,17 @@ def inspection_check() -> None:
     deadline = INSPECTION_DEADLINE.get()
     if deadline is not None and time.monotonic() >= deadline:
         raise InspectionDeferredError(DEFERRED)
+
+
+@contextmanager
+def review_window(deadline: float, entry: Worktree, progress: ReviewProgress | None) -> Generator[None]:
+    with inspection_window(deadline):
+        inspection_check()
+        # Count a candidate only after it was admitted to the bounded review.
+        if progress is not None:
+            progress.examined += 1
+            progress.last_started = entry
+        yield
 
 
 def inspection_run(
@@ -415,6 +531,14 @@ def child_directories(directory: Path, remaining: int) -> DirectoryScan:
     return DirectoryScan(children, inspected)
 
 
+def owned_discovery_directory(directory: Path) -> bool:
+    try:
+        metadata = directory.lstat()
+    except FileNotFoundError:
+        return False
+    return stat.S_ISDIR(metadata.st_mode) and metadata.st_uid == os.getuid()
+
+
 def repositories(root: Path) -> Iterator[Path]:
     pending = deque([(root, 0)])
     inspected = 0
@@ -430,7 +554,7 @@ def repositories(root: Path) -> Iterator[Path]:
         if time.monotonic() > deadline:
             message = "Repository discovery exceeded its bounded deadline; nothing will be removed"
             raise InventoryLimitError(message, kind="deadline")
-        if directory.is_symlink() or directory.stat().st_uid != os.getuid():
+        if not owned_discovery_directory(directory):
             continue
         marker = directory / ".git"
         if cleanup_activity.present(marker) and not empty_git_marker(marker):
@@ -439,7 +563,7 @@ def repositories(root: Path) -> Iterator[Path]:
             if marker.is_dir() and not marker.is_symlink():
                 yield directory
             continue
-        if depth < DISCOVERY_DEPTH:
+        if depth < DISCOVERY_DEPTH and directory != root / "worktrees":
             scan = child_directories(directory, MAX_DISCOVERY_ENTRIES - inspected_entries)
             inspected_entries += scan.inspected
             pending.extend((child, depth + 1) for child in scan.children)
@@ -450,7 +574,8 @@ def inventory(root: Path) -> list[Worktree]:
     if not root.exists():
         return []
     found: dict[Path, Worktree] = {}
-    for repository in repositories(root):
+    # Git subprocess latency is not directory-discovery time.
+    for repository in list(repositories(root)):
         inspection_check()
         # Native ordering places the main worktree first; it is never a candidate.
         for entry in parse_worktrees(git(repository, "worktree", "list", "--porcelain", "-z"), repository)[1:]:
@@ -460,6 +585,53 @@ def inventory(root: Path) -> list[Worktree]:
                 message = "Worktree inventory exceeded its bounded limit; nothing will be removed"
                 raise InventoryLimitError(message, kind="worktrees")
     return sorted(found.values(), key=lambda entry: str(entry.path))
+
+
+def repository_candidates(repository: Path, root: Path, cursor: InventoryCursor | None) -> list[Worktree]:
+    rows = parse_worktrees(git(repository, "worktree", "list", "--porcelain", "-z"), repository)[1:]
+    after = None if cursor is None or cursor.repository != repository else cursor.worktree
+    found: list[Worktree] = []
+    for entry in rows:
+        if not entry.path.is_relative_to(root) or entry.path == root or ".." in entry.path.parts:
+            continue
+        if after is not None and str(entry.path) <= str(after):
+            continue
+        found.append(entry)
+    return sorted(found, key=lambda entry: str(entry.path))
+
+
+def candidate_page(paths: RuntimePaths) -> InventoryPage:
+    root = paths.code
+    if not root.exists():
+        return InventoryPage([], None, pending=False)
+    cursor = inventory_cursor(state_directory(paths), root)
+    deadline = time.monotonic() + INVENTORY_PAGE_SECONDS
+    discovered = sorted(repositories(root), key=str)
+    entries: dict[Path, Worktree] = {}
+    errors = 0 if cursor is None else cursor.errors
+    progress = cursor
+    for repository in discovered:
+        if cursor is not None and (
+            str(repository) < str(cursor.repository) or (repository == cursor.repository and cursor.worktree is None)
+        ):
+            continue
+        if time.monotonic() >= deadline:
+            return InventoryPage(list(entries.values()), progress, pending=True, errors=errors)
+        try:
+            rows = repository_candidates(repository, root, cursor)
+        except OSError, RuntimeError, ValueError:
+            # One broken repository must not starve unrelated repositories.
+            # It is retried on the next complete rotation and remains visible.
+            errors = min(MAX_DIRECTORIES, errors + 1)
+            progress = InventoryCursor(repository=repository, errors=errors)
+            continue
+        for entry in rows:
+            if len(entries) >= INVENTORY_PAGE_SIZE:
+                return InventoryPage(list(entries.values()), progress, pending=True, errors=errors)
+            entries[entry.path] = entry
+            progress = InventoryCursor(repository=repository, worktree=entry.path, errors=errors)
+        progress = InventoryCursor(repository=repository, errors=errors)
+    return InventoryPage(list(entries.values()), None, pending=False, errors=errors)
 
 
 def bounded_bytes(path: Path, *, budget: cleanup_activity.InventoryBudget | None = None) -> bytes:
@@ -765,16 +937,20 @@ def workspace_containers(paths: RuntimePaths) -> frozenset[Path]:
 
 
 def native_references(paths: RuntimePaths, candidates: Sequence[Path] | None = None) -> References:
-    processes = inspected_processes(paths, candidates)
+    with reference_stage("processes"):
+        processes = inspected_processes(paths, candidates)
     inspection_check()
-    panes = zellij_references(paths, running=any(Path(word).name == "zellij" for word in processes.arguments))
+    with reference_stage("terminals"):
+        panes = zellij_references(paths, running=any(Path(word).name == "zellij" for word in processes.arguments))
     inspection_check()
-    aliases = boot_aliases(home=paths.home)
+    with reference_stage("boot-policy"):
+        aliases = frozenset(Path(value).resolve() for value in boot_aliases(home=paths.home).values())
     inspection_check()
-    mounted = docker_references(paths)
+    with reference_stage("containers"):
+        mounted = docker_references(paths)
     inspection_check()
     return References(
-        processes.paths | panes.paths | frozenset(Path(value).resolve() for value in aliases.values()),
+        processes.paths | panes.paths | aliases,
         (*processes.arguments, *panes.arguments),
         processes.package_writer,
         mounted=mounted,
@@ -784,34 +960,71 @@ def native_references(paths: RuntimePaths, candidates: Sequence[Path] | None = N
 def references(paths: RuntimePaths, candidates: Sequence[Path] | None = None) -> References:
     inspection_check()
     codex_home = environment_snapshot().get("CODEX_HOME")
-    try:
-        native = native_references(paths, candidates)
-    except (OSError, ValueError, sqlite3.Error) as error:
-        message = "Live process or workspace references could not be verified; nothing will be removed"
-        raise RuntimeError(message) from error
+    native = native_references(paths, candidates)
     inspection_check()
-    activity = cleanup_activity.collect(paths.home, codex_home=Path(codex_home) if codex_home else None)
+    with reference_stage("workspaces"):
+        activity = cleanup_activity.collect(paths.home, codex_home=Path(codex_home) if codex_home else None)
     inspection_check()
+    with reference_stage("workspace-containers"):
+        containers = workspace_containers(paths)
     return References(
         native.paths,
         native.arguments,
         native.package_writer,
         mounted=native.mounted,
         workspaces=activity.paths,
-        workspace_containers=workspace_containers(paths),
+        workspace_containers=containers,
         storage=activity.storage | native.storage,
     )
 
 
+def reference_snapshot(paths: RuntimePaths, candidates: Sequence[Path] | None) -> References:
+    deadline = INSPECTION_DEADLINE.get()
+    if deadline is None:
+        deadline = time.monotonic() + FINAL_PROOF_SECONDS
+    with inspection_window(deadline):
+        for attempt in range(REFERENCE_ATTEMPTS):
+            inspection_check()
+            try:
+                result = references(paths) if candidates is None else references(paths, candidates)
+                inspection_check()
+            except ReferenceInspectionError as error:
+                if (
+                    type(error.kind) is not str
+                    or error.kind not in TRANSIENT_REFERENCE_KINDS
+                    or attempt + 1 == REFERENCE_ATTEMPTS
+                ):
+                    raise
+                inspection_check()
+                # Discard every part of the failed census. Only a complete fresh
+                # snapshot may proceed, under the original caller's deadline.
+                time.sleep(min(REFERENCE_RETRY_SECONDS, max(0.0, deadline - time.monotonic())))
+            else:
+                return result
+        message = "Reference inspection attempts were exhausted"
+        raise RuntimeError(message)
+
+
 def live_references(paths: RuntimePaths, candidates: Sequence[Path] | None = None) -> References:
     try:
-        return references(paths) if candidates is None else references(paths, candidates)
+        return reference_snapshot(paths, candidates)
     except cleanup_inspection.ProbeUnavailableError as error:
         reason = error.reason
         if type(reason) is not str or reason not in cleanup_inspection.PROBE_FAILURE_REASONS:
             reason = "unavailable"
         detail = "" if reason == "unavailable" else f" ({reason})"
         message = f"live reference inspection failed: read-only process probe unavailable{detail}; retained"
+        raise LiveInspectionFailedError(message) from error
+    except ReferenceInspectionError as error:
+        detail = (
+            f": {error.stage} ({error.kind})"
+            if type(error.stage) is str
+            and type(error.kind) is str
+            and error.stage in REFERENCE_STAGES
+            and error.kind in REFERENCE_KINDS
+            else ""
+        )
+        message = f"live reference inspection failed{detail}; retained"
         raise LiveInspectionFailedError(message) from error
     except (OSError, RuntimeError, ValueError, sqlite3.Error) as error:
         message = "live reference inspection failed; retained"
@@ -1512,11 +1725,13 @@ def removal_budget(paths: RuntimePaths, limit: int) -> RemovalBudget:
     return RemovalBudget(min(MAX_REMOVALS, remaining_attempts(state, stamp, limit=limit)), recent)
 
 
-def ordered_reviews(entries: list[Worktree], cursor: ReviewCursor | None) -> list[tuple[ReviewCursor, Worktree]]:
-    ordered = sorted(
-        ((ReviewCursor(version=1, modified=worktree_age(entry), path=entry.path), entry) for entry in entries),
-        key=lambda item: (item[0].modified, str(item[0].path)),
-    )
+def ordered_reviews(
+    entries: list[Worktree], cursor: ReviewCursor | None, *, inventory_order: bool = False
+) -> list[tuple[ReviewCursor, Worktree]]:
+    ordered = [(ReviewCursor(version=1, modified=worktree_age(entry), path=entry.path), entry) for entry in entries]
+    if inventory_order:
+        return ordered
+    ordered.sort(key=lambda item: (item[0].modified, str(item[0].path)))
     if cursor is None:
         return ordered
     anchor = cursor.modified, str(cursor.path)
@@ -1524,6 +1739,13 @@ def ordered_reviews(entries: list[Worktree], cursor: ReviewCursor | None) -> lis
         (index for index, (key, _entry) in enumerate(ordered) if (key.modified, str(key.path)) > anchor), len(ordered)
     )
     return ordered[start:] + ordered[:start]
+
+
+def checkpoint_legacy_review(paths: RuntimePaths, key: ReviewCursor, progress: ReviewProgress | None) -> None:
+    # Paged reviews commit their inventory checkpoint after the worker finishes.
+    # Legacy full-inventory callers retain their per-review durable age cursor.
+    if progress is None:
+        save_review_cursor(state_directory(paths), paths.code, key)
 
 
 def review_inventory(
@@ -1535,14 +1757,15 @@ def review_inventory(
     recovery: bool,
     min_age_days: float,
     started: float,
+    progress: ReviewProgress | None = None,
 ) -> list[Decision]:
     cursor = None
-    if apply:
+    if apply and progress is None:
         try:
             cursor = review_cursor(state_directory(paths), paths.code)
         except OSError, RuntimeError, ValueError:
             return retained_inventory(entries, "inspection cursor inspection failed; retained")
-    ordered = ordered_reviews(entries, cursor)
+    ordered = ordered_reviews(entries, cursor, inventory_order=progress is not None)
     protected = None
     if not apply:
         try:
@@ -1560,6 +1783,7 @@ def review_inventory(
         recovery=recovery,
         min_age_days=min_age_days,
         started=started,
+        progress=progress,
     )
 
 
@@ -1573,6 +1797,7 @@ def review_page(
     recovery: bool,
     min_age_days: float,
     started: float,
+    progress: ReviewProgress | None = None,
 ) -> list[Decision]:
     decisions: list[Decision] = []
     attempts = 0
@@ -1587,8 +1812,7 @@ def review_page(
         deadline = page_deadline + timing.final_seconds
         if final_deadline is not None:
             deadline = min(deadline, final_deadline)
-        with inspection_window(deadline):
-            inspection_check()
+        with review_window(deadline, entry, progress):
             if reason is not None:
                 return Decision(str(entry.path), reason)
             return review(
@@ -1629,7 +1853,7 @@ def review_page(
         if not apply:
             continue
         try:
-            save_review_cursor(state_directory(paths), paths.code, key)
+            checkpoint_legacy_review(paths, key, progress)
         except OSError, RuntimeError, ValueError:
             reason = "inspection failed: progress persistence failed; retained without further inspection"
             decisions[-1] = replace(result, reason=result.reason + "; inspection failed: progress persistence failed")
@@ -1637,11 +1861,22 @@ def review_page(
     return decisions
 
 
-def reap(paths: RuntimePaths, *, apply: bool, min_age_days: int = 7, capacity_recovery: bool = False) -> list[Decision]:
+def reap(
+    paths: RuntimePaths,
+    *,
+    apply: bool,
+    min_age_days: int = 7,
+    capacity_recovery: bool = False,
+    batch: InventoryPage | None = None,
+    progress: ReviewProgress | None = None,
+) -> list[Decision]:
+    if progress is not None and (batch is None or not apply):
+        message = "Inventory progress requires an applied candidate page"
+        raise ValueError(message)
     started = time.monotonic()
     with inspection_window(started + (FINAL_PROOF_SECONDS if apply else REPORT_SECONDS)):
         try:
-            entries = inventory(paths.code)
+            entries = inventory(paths.code) if batch is None else batch.entries
         except InspectionDeferredError as error:
             message = "Initial worktree inventory exceeded its inspection time budget; nothing will be removed"
             raise InventoryLimitError(message, kind="deadline") from error
@@ -1658,8 +1893,30 @@ def reap(paths: RuntimePaths, *, apply: bool, min_age_days: int = 7, capacity_re
         allowance = CAPACITY_PUBLICATION_LOOKUPS if recovery else MAX_PUBLICATION_LOOKUPS
         with publication_window(allowance), retention_window():
             return review_inventory(
-                entries, paths, budget, apply=apply, recovery=recovery, min_age_days=retention, started=started
+                entries,
+                paths,
+                budget,
+                apply=apply,
+                recovery=recovery,
+                min_age_days=retention,
+                started=started,
+                progress=progress,
             )
+
+
+def checkpoint_review(paths: RuntimePaths, batch: InventoryPage, progress: ReviewProgress) -> InventoryPage:
+    if progress.examined == len(batch.entries):
+        return batch
+    entry = progress.last_started
+    cursor = (
+        inventory_cursor(state_directory(paths), paths.code)
+        if entry is None
+        else InventoryCursor(repository=entry.repository, worktree=entry.path, errors=batch.errors)
+    )
+    # Resume after the last started review, never after the unexamined suffix.
+    # A timed-out candidate is retained and retried on the next rotation; it
+    # cannot monopolize every sweep. This checkpoint grants no removal authority.
+    return replace(batch, cursor=cursor, pending=True)
 
 
 def npm_arguments(paths: RuntimePaths) -> list[str]:
@@ -1792,6 +2049,7 @@ def cleanup_run(
     *,
     apply: bool = False,
     capacity_recovery: bool = False,
+    paged: bool = False,
     min_age_days: Annotated[
         int,
         typer.Option(
@@ -1808,11 +2066,23 @@ def cleanup_run(
     with cleanup_lock(paths) as state:
         started = time.monotonic()
         try:
-            decisions = reap(paths, apply=apply, min_age_days=min_age_days, capacity_recovery=capacity_recovery)
+            batch = candidate_page(paths) if paged else None
+            progress = ReviewProgress() if apply and batch is not None else None
+            decisions = reap(
+                paths,
+                apply=apply,
+                min_age_days=min_age_days,
+                capacity_recovery=capacity_recovery,
+                batch=batch,
+                progress=progress,
+            )
         except InventoryLimitError as error:
             failure = InventoryFailure(version=1, stage="repository-discovery", kind=error.kind)
             typer.echo(failure.model_dump_json())
             raise typer.Exit(code=1) from error
+        if batch is not None and progress is not None:
+            batch = checkpoint_review(paths, batch, progress)
+            save_inventory_cursor(state, paths.code, batch.cursor)
         cache = (
             cache_maintenance(paths, state, decisions, elapsed=time.monotonic() - started) if apply else "report only"
         )
@@ -1823,6 +2093,9 @@ def cleanup_run(
                     "max_removals": MAX_REMOVALS,
                     "worktrees": [asdict(item) for item in decisions],
                     "cache": cache,
+                    "inventory_paged": paged,
+                    "inventory_pending": False if batch is None else batch.pending,
+                    "inventory_errors": 0 if batch is None else batch.errors,
                 }
             )
         )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+import errno
 import json
 import os
 from pathlib import Path
@@ -413,8 +414,11 @@ def test_probe_request_keeps_candidate_order_and_rejects_duplicates() -> None:
 def test_request_cannot_select_another_uid_or_exceed_candidate_bounds(process: ProcessFixture) -> None:
     with pytest.raises(probe.InspectionError, match="inspection incomplete"):
         probe.request(request_bytes(process.candidates, uid=os.getuid() + 1), process.home)
+    candidates = tuple(process.candidates[0] / str(index) for index in range(probe.MAX_CANDIDATES))
+    assert probe.request(request_bytes(candidates), process.home).candidates == candidates
+    oversized = (*candidates, process.candidates[0] / "overflow")
     with pytest.raises(probe.InspectionError, match="inspection incomplete"):
-        probe.request(request_bytes((process.candidates[0],) * 513), process.home)
+        probe.request(request_bytes(oversized), process.home)
     with pytest.raises(probe.InspectionError, match="inspection incomplete"):
         probe.request(b"x" * (probe.MAX_MESSAGE_BYTES + 1), process.home)
     with pytest.raises(probe.InspectionError, match="inspection incomplete"):
@@ -1013,3 +1017,138 @@ def test_failure_boundary_clamps_mutated_error_code_then_fresh_request_recovers(
     recovered = probe.decode(socket_exchange(process, request_bytes(process.candidates) + b"\n"))
     assert recovered["protected"] == sorted(map(str, process.candidates[:4]))
     assert "error" not in recovered
+
+
+def test_process_probe_retries_transient_metadata_and_preserves_every_reference(process: ProcessFixture) -> None:
+    reads: list[str] = []
+
+    class RecoveringBudget(probe.Budget):
+        @override
+        def read(self, directory: int, name: str) -> bytes:
+            if name == "maps":
+                reads.append(name)
+                if len(reads) == 1:
+                    raise PermissionError(errno.EACCES, "transient native procfs permission boundary")
+            return super().read(directory, name)
+
+    budget = RecoveringBudget(probe.DEFAULT_LIMITS, time.monotonic() + 3)
+    found = probe.stable_process(process.process, process.candidates, os.getuid(), budget, proc=process.proc)
+    assert reads == ["maps", "maps"]
+    assert found.protected == set(process.candidates[:4])
+    assert found.process_count == 1
+    assert found.package_writer
+    assert found.zellij_running
+
+
+def test_process_probe_retry_is_bounded_and_never_returns_partial_live_references(process: ProcessFixture) -> None:
+    reads: list[str] = []
+
+    class UnavailableBudget(probe.Budget):
+        @override
+        def read(self, directory: int, name: str) -> bytes:
+            if name == "maps":
+                reads.append(name)
+                raise PermissionError(errno.EACCES, "unavailable native procfs permission boundary")
+            return super().read(directory, name)
+
+    budget = UnavailableBudget(probe.DEFAULT_LIMITS, time.monotonic() + 3)
+    with pytest.raises(PermissionError):
+        probe.stable_process(process.process, process.candidates, os.getuid(), budget, proc=process.proc)
+    assert len(reads) == probe.PROCESS_ATTEMPTS
+
+
+@pytest.mark.parametrize("fault", ["esrch", "incomplete"])
+def test_process_probe_skips_exit_races_only_after_native_whole_process_exit(
+    process: ProcessFixture, fault: str
+) -> None:
+    with native_process(process) as child:
+        path = Path("/proc") / str(child.pid)
+
+        class ExitingBudget(probe.Budget):
+            @override
+            def read(self, directory: int, name: str) -> bytes:
+                payload = super().read(directory, name)
+                if name == "maps":
+                    assert child.stdin is not None
+                    child.stdin.close()
+                    wait_for_zombie(child)
+                    if fault == "esrch":
+                        raise ProcessLookupError(errno.ESRCH, "native process exited during inspection")
+                    raise probe.InspectionError
+                return payload
+
+        budget = ExitingBudget(probe.DEFAULT_LIMITS, time.monotonic() + 3)
+        assert probe.stable_process(path, process.candidates, os.getuid(), budget) == probe.ProcessReferences()
+        assert probe.confirmed_exit(path)
+
+
+def test_process_probe_retry_never_hides_a_live_thread_behind_a_zombie_leader(process: ProcessFixture) -> None:
+    with native_process(process, zombie_leader=True) as child:
+        path = wait_for_zombie(child)
+        with pytest.raises(probe.InspectionError):
+            probe.stable_process(path, process.candidates, os.getuid(), new_budget())
+        assert not probe.confirmed_exit(path)
+
+
+@pytest.mark.parametrize(
+    "limits",
+    [
+        pytest.param(probe.Limits(seconds=0), id="deadline"),
+        pytest.param(probe.Limits(per_file_bytes=0), id="metadata-limit"),
+    ],
+)
+def test_process_probe_retry_never_ignores_resource_limits_even_after_exit(limits: probe.Limits) -> None:
+    with unreaped_child() as child, pytest.raises(probe.InspectionError) as failure:
+        probe.stable_process(Path("/proc") / str(child.pid), (), os.getuid(), new_budget(limits))
+    assert failure.value.code in {"deadline", "metadata-too-large"}
+
+
+def test_zombie_transition_waits_for_native_whole_group_exit(
+    process: ProcessFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with native_process(process, zombie_leader=True) as child:
+        path = wait_for_zombie(child)
+        assert not probe.confirmed_exit(path)
+        native_poll = select.poll
+        released: list[int] = []
+
+        class ReleasingPoll:
+            def __init__(self) -> None:
+                self.kernel = native_poll()
+
+            def register(self, descriptor: int, events: int) -> None:
+                self.kernel.register(descriptor, events)
+
+            def poll(
+                self, timeout: int
+            ) -> list[
+                tuple[int, int]
+            ]:  # sarj-noqa: SARJ026 -- Preserve the native poll descriptor/eventmask tuple protocol.
+                if timeout > 0 and not released:
+                    assert child.stdin is not None
+                    child.stdin.close()
+                    released.append(timeout)
+                return self.kernel.poll(timeout)
+
+        monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Release a real remaining worker only when its actual kernel pidfd wait begins; readiness events are never fabricated.
+            select, "poll", ReleasingPoll
+        )
+        assert probe.stable_process(path, process.candidates, os.getuid(), new_budget()) == probe.ProcessReferences()
+        assert released
+        assert probe.confirmed_exit(path)
+
+
+@pytest.mark.parametrize("remaining", [0.025, 1000], ids=["remaining-deadline", "maximum-wait"])
+def test_kernel_exit_wait_respects_the_original_snapshot_budget(
+    monkeypatch: pytest.MonkeyPatch, remaining: float
+) -> None:
+    def current_time() -> float:
+        return 100.0
+
+    budget = probe.Budget(probe.DEFAULT_LIMITS, 100 + remaining)
+    with monkeypatch.context() as clock:
+        clock.setattr(  # sarj-noqa: SARJ445 -- Fix only the OS monotonic clock to measure the existing shared deadline deterministically.
+            time, "monotonic", current_time
+        )
+        wait = budget.exit_wait()
+    assert wait == pytest.approx(min(remaining, probe.PROCESS_EXIT_WAIT_SECONDS))
