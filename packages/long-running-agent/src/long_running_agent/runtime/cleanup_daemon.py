@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from collections import Counter
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import errno
 import json
 import os
 from pathlib import Path
+import secrets
 import selectors
 import signal
 import sys
@@ -19,7 +20,7 @@ import typer
 
 from long_running_agent.process import DEVNULL, PIPE, ChildProcess, ProcessTimeout, run, spawn
 
-from . import cleanup
+from . import cleanup, cleanup_capacity
 from .cleanup_state import CAPACITY_ATTEMPTS, MAX_ATTEMPTS, Timestamp, private_payload, valid_time
 from .settings import RuntimePaths, private_write, systemd_value, user_environment
 
@@ -34,8 +35,6 @@ NORMAL_SECONDS: Final = 30 * 60
 LOW_SPACE_SECONDS: Final = 30
 CAPACITY_FAILURE_SECONDS: Final = 5 * 60
 PRESSURE_SECONDS: Final = 2 * 60
-TARGET_USED_PERCENT: Final = 80
-RECOVERY_USED_PERCENT: Final = 78
 GROWTH_HORIZON_SECONDS: Final = 60 * 60
 GROWTH_MIN_SECONDS: Final = 2 * 60
 GROWTH_MIN_SAMPLES: Final = 2
@@ -254,8 +253,14 @@ class GrowthTrend:
     started: CapacitySample | None = None
     previous: CapacitySample | None = None
     positive_samples: int = 0
+    target_enter: int | None = None
 
-    def observe(self, space: Space, now: float) -> bool:
+    def observe(self, space: Space, now: float, *, thresholds: cleanup_capacity.Thresholds | None = None) -> bool:
+        thresholds = capacity_thresholds(space, thresholds)
+        if self.target_enter != thresholds.enter:
+            self.started = self.previous = None
+            self.positive_samples = 0
+        self.target_enter = thresholds.enter
         sample = CapacitySample(space, now)
         previous, started = self.previous, self.started
         if previous is None or started is None or not sample.growing_from(previous):
@@ -267,11 +272,15 @@ class GrowthTrend:
         elapsed = now - started.checked_at
         if self.positive_samples < GROWTH_MIN_SAMPLES or elapsed < GROWTH_MIN_SECONDS:
             return False
-        distance = space.available * 100 - space.total * (100 - TARGET_USED_PERCENT)
+        distance = thresholds.enter - (space.total - space.available)
         consumed = started.space.available - space.available
         self.started = previous
         self.positive_samples = 1
-        return distance * elapsed <= consumed * 100 * GROWTH_HORIZON_SECONDS
+        return distance * elapsed <= consumed * GROWTH_HORIZON_SECONDS
+
+
+def new_baseline_epoch() -> str:
+    return secrets.token_hex(16)
 
 
 @dataclass
@@ -285,6 +294,8 @@ class Schedule:
     growth: GrowthTrend = field(default_factory=GrowthTrend)
     last_failure: Failure | None = None
     context: FailureContext = field(default_factory=FailureContext)
+    baseline_epoch: str = field(default_factory=new_baseline_epoch)
+    policy_identity: tuple[str | None, int, int, int, int, int] | None = None
 
     @classmethod
     def new(cls) -> Self:
@@ -312,11 +323,29 @@ class Schedule:
             last_failure=load_failure(state),
         )
 
-    def observe(self, space: Space, now: float) -> None:
-        predicted = self.growth.observe(space, now)
-        if low_space(space):
+    def bind_volume(self, current: cleanup_capacity.Policy) -> None:
+        identity = (
+            current.volume.key,
+            current.volume.total,
+            current.volume.reserved,
+            current.volume.unit,
+            current.thresholds.enter,
+            current.thresholds.stop,
+        )
+        changed = self.policy_identity is not None and self.policy_identity != identity
+        if current.volume.key is None or changed:
+            self.growth = GrowthTrend()
+        if changed:
+            self.capacity_recovery = False
+            self.baseline_epoch = new_baseline_epoch()
+        self.policy_identity = identity
+
+    def observe(self, space: Space, now: float, *, thresholds: cleanup_capacity.Thresholds | None = None) -> None:
+        thresholds = capacity_thresholds(space, thresholds)
+        predicted = self.growth.observe(space, now, thresholds=thresholds)
+        if low_space(space, thresholds=thresholds):
             self.capacity_recovery = True
-        elif space.available * 100 > space.total * (100 - RECOVERY_USED_PERCENT):
+        elif space.total - space.available < thresholds.stop:
             self.capacity_recovery = False
         elif predicted:
             self.capacity_recovery = True
@@ -333,17 +362,26 @@ class Schedule:
             self.due = min(self.due, now + maximum_delay)
 
     def failed(self, now: float) -> None:
+        self.baseline_epoch = new_baseline_epoch()
         self.failures = min(self.failures + 1, MAX_FAILURES)
         retry_seconds = PRESSURE_SECONDS * (1 << (self.failures - 1))
         maximum_retry = CAPACITY_FAILURE_SECONDS if self.capacity_recovery else NORMAL_SECONDS
         self.due = now + min(maximum_retry, retry_seconds)
         self.phase = "error"
 
-    def completed(self, result: Summary, space: Space, now: float, wall: float) -> Phase:
+    def completed(
+        self,
+        result: Summary,
+        space: Space,
+        now: float,
+        wall: float,
+        *,
+        thresholds: cleanup_capacity.Thresholds | None = None,
+    ) -> Phase:
         self.failures = 0
         self.last_result = result
         self.last_run_at = wall
-        self.observe(space, now)
+        self.observe(space, now, thresholds=thresholds)
         pressured = any("pressure is high or unknown" in reason for reason in result.reasons)
         delay = PRESSURE_SECONDS if pressured else (LOW_SPACE_SECONDS if self.capacity_recovery else NORMAL_SECONDS)
         self.due = now + delay
@@ -360,13 +398,48 @@ class Schedule:
         return self.phase
 
 
-def low_space(space: Space) -> bool:
-    return space.available * 100 <= space.total * (100 - TARGET_USED_PERCENT)
+def capacity_thresholds(space: Space, thresholds: cleanup_capacity.Thresholds | None) -> cleanup_capacity.Thresholds:
+    current = cleanup_capacity.bootstrap_thresholds(space.total) if thresholds is None else thresholds
+    if current.total != space.total:
+        message = "Maintenance thresholds belong to a different volume capacity"
+        raise ValueError(message)
+    return current
+
+
+def low_space(space: Space, *, thresholds: cleanup_capacity.Thresholds | None = None) -> bool:
+    return space.total - space.available >= capacity_thresholds(space, thresholds).enter
 
 
 def capacity(home: Path) -> Space:
-    values = os.statvfs(home)
-    return Space(total=values.f_blocks * values.f_frsize, available=values.f_bavail * values.f_frsize)
+    current = cleanup_capacity.read_volume(home)
+    return Space(total=current.total, available=current.available)
+
+
+def baseline_learning_eligible(result: Summary) -> bool:
+    incomplete = ("inspection", "deferred", "24-hour", "per-run", "pressure")
+    eligible = (
+        result.attempted == result.removed
+        and "other retained decisions" not in result.reasons
+        and sum(result.reasons.values()) == result.worktrees
+    ) and not any(fragment in reason for reason in result.reasons for fragment in incomplete)
+    return eligible and not any(
+        fragment in result.cache for fragment in ("active", "busy", "unavailable", "pressure", "deferred")
+    )
+
+
+def observe_lower_baseline(paths: RuntimePaths, schedule: Schedule, result: Summary) -> None:
+    # Calibration is independent of deletion authority; serialize its optional
+    # downward observations with explicit calibration and actual cleanup workers.
+    try:
+        with cleanup.cleanup_lock(paths):
+            cleanup_capacity.observe_lower(
+                paths.home,
+                now=time.monotonic(),
+                epoch=schedule.baseline_epoch,
+                eligible=baseline_learning_eligible(result),
+            )
+    except BlockingIOError:
+        schedule.baseline_epoch = new_baseline_epoch()
 
 
 def reason_priority(item: tuple[str, int]) -> int:
@@ -537,10 +610,12 @@ def record_failure(state: Path, schedule: Schedule, error: OSError | RuntimeErro
 
 def sweep(paths: RuntimePaths, state: Path, schedule: Schedule, stopped: Event) -> None:
     schedule.context.stage = "capacity"
-    space = capacity(paths.home)
+    current = cleanup_capacity.policy(paths.home)
+    space = Space(total=current.volume.total, available=current.volume.available)
     now = time.monotonic()
     phase = schedule.phase
-    schedule.observe(space, now)
+    schedule.bind_volume(current)
+    schedule.observe(space, now, thresholds=current.thresholds)
     if now >= schedule.due:
         schedule.context.stage = "pressure"
         if cleanup.maintenance_idle():
@@ -562,9 +637,17 @@ def sweep(paths: RuntimePaths, state: Path, schedule: Schedule, stopped: Event) 
                 arguments.append("--capacity-recovery")
             result = execute_worker(stopped, arguments, context=schedule.context)
             schedule.context.stage = "capacity"
-            space = capacity(paths.home)
-            phase = schedule.completed(result, space, time.monotonic(), time.time())
+            current = cleanup_capacity.policy(paths.home)
+            space = Space(total=current.volume.total, available=current.volume.available)
+            schedule.bind_volume(current)
+            phase = schedule.completed(result, space, time.monotonic(), time.time(), thresholds=current.thresholds)
+            observe_lower_baseline(paths, schedule, result)
+            current = cleanup_capacity.policy(paths.home)
+            space = Space(total=current.volume.total, available=current.volume.available)
+            schedule.bind_volume(current)
+            schedule.observe(space, time.monotonic(), thresholds=current.thresholds)
         else:
+            schedule.baseline_epoch = new_baseline_epoch()
             schedule.due = now + PRESSURE_SECONDS
             phase = "pressure"
             schedule.phase = phase
@@ -621,7 +704,8 @@ def status() -> None:
         return
     age = time.time() - heartbeat.checked_at
     allowance = WORKER_SECONDS + 2 * POLL_SECONDS if heartbeat.phase == "running" else 2 * POLL_SECONDS
-    space = heartbeat.space
+    current = cleanup_capacity.policy(RuntimePaths.current().home)
+    space = Space(total=current.volume.total, available=current.volume.available)
     failure = load_failure(path.parent)
     typer.echo(
         json.dumps(
@@ -646,9 +730,10 @@ def status() -> None:
                 ),
                 "capacity": {
                     "used_percent": round(100 * (space.total - space.available) / space.total, 2),
-                    "target_used_percent": TARGET_USED_PERCENT,
-                    "recovery_used_percent": RECOVERY_USED_PERCENT,
-                    "target_met": space.available * 100 >= space.total * (100 - TARGET_USED_PERCENT),
+                    "target_used_percent": round(100 * current.thresholds.enter / space.total, 3),
+                    "recovery_used_percent": round(100 * current.thresholds.stop / space.total, 3),
+                    "target_met": space.total - space.available < current.thresholds.enter,
+                    "baseline": asdict(current.thresholds),
                 },
                 "policy": {
                     "poll_seconds": POLL_SECONDS,
@@ -713,5 +798,5 @@ def enable() -> None:
         raise RuntimeError(message)
     typer.echo(
         "Continuous guarded cleanup enabled: 15-second capacity checks, 30-minute sweeps, "
-        "and guarded 30-second capacity recovery toward the 80% usage target."
+        "and guarded 30-second recovery toward this volume's clean-footprint target."
     )

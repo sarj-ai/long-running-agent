@@ -596,9 +596,10 @@ def test_fresh_second_merge_proof_rejects_a_changed_graphql_publication_snapshot
     [
         (False, 85, cleanup.MAX_PUBLICATION_LOOKUPS),
         (True, 85, cleanup.CAPACITY_PUBLICATION_LOOKUPS),
-        (True, 70, cleanup.MAX_PUBLICATION_LOOKUPS),
+        (True, 10, cleanup.MAX_PUBLICATION_LOOKUPS),
+        (True, 70, cleanup.CAPACITY_PUBLICATION_LOOKUPS),
     ],
-    ids=["routine-six", "capacity-twenty-four", "requested-below-floor-six"],
+    ids=["routine-six", "capacity-twenty-four", "requested-below-floor-six", "lower-target-capacity-twenty-four"],
 )
 def test_publication_budget_leaves_the_first_unqueried_native_candidate_pending(
     published: PublishedRepository,

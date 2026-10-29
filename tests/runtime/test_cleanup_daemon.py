@@ -10,9 +10,10 @@ import sys
 from threading import Event, Thread
 import time
 from typing import TYPE_CHECKING, Literal, TypedDict, Unpack
+from uuid import UUID
 
 from long_running_agent.process import DEVNULL, spawn
-from long_running_agent.runtime import cleanup, cleanup_daemon, cleanup_state
+from long_running_agent.runtime import cleanup, cleanup_capacity, cleanup_daemon, cleanup_state
 from long_running_agent.runtime.health import Pressure
 from long_running_agent.runtime.settings import RuntimePaths, private_write
 from pydantic import JsonValue, RootModel
@@ -136,7 +137,7 @@ def test_low_capacity_sweeps_earlier_without_changing_retention_or_budget() -> N
     phase = schedule.completed(summary(), cleanup_daemon.Space(total=300 * GIB, available=GIB), 100, 1000)
     assert phase == "retained"
     assert schedule.due == 100 + cleanup_daemon.LOW_SPACE_SECONDS
-    schedule.completed(summary(), cleanup_daemon.Space(total=300 * GIB, available=100 * GIB), 200, 1100)
+    schedule.completed(summary(), cleanup_daemon.Space(total=300 * GIB, available=275 * GIB), 200, 1100)
     assert schedule.due == 200 + cleanup_daemon.NORMAL_SECONDS
 
 
@@ -150,7 +151,7 @@ def test_repeated_failures_use_capped_backoff_and_success_resets_it() -> None:
     assert delays[-1] == cleanup_daemon.NORMAL_SECONDS
     assert delays == sorted(delays)
     assert schedule.failures == cleanup_daemon.MAX_FAILURES
-    schedule.completed(summary(), cleanup_daemon.Space(total=300 * GIB, available=100 * GIB), 200, 1100)
+    schedule.completed(summary(), cleanup_daemon.Space(total=300 * GIB, available=275 * GIB), 200, 1100)
     assert schedule.failures == 0
 
 
@@ -186,7 +187,7 @@ def test_pressure_retained_worktrees_use_the_short_retry_delay(removed: int) -> 
         reasons=reasons,
         cache="skipped: fixture guards",
     )
-    phase = schedule.completed(result, cleanup_daemon.Space(total=300 * GIB, available=100 * GIB), 100, 1000)
+    phase = schedule.completed(result, cleanup_daemon.Space(total=300 * GIB, available=275 * GIB), 100, 1000)
     assert phase == ("cleaned" if removed else "pressure")
     assert schedule.due == 100 + cleanup_daemon.PRESSURE_SECONDS
     assert schedule.last_result == result
@@ -202,7 +203,7 @@ def test_cache_only_pressure_does_not_repeat_an_unneeded_worktree_sweep() -> Non
     )
     schedule = cleanup_daemon.Schedule.new()
     assert (
-        schedule.completed(result, cleanup_daemon.Space(total=300 * GIB, available=100 * GIB), 100, 1000) == "retained"
+        schedule.completed(result, cleanup_daemon.Space(total=300 * GIB, available=275 * GIB), 100, 1000) == "retained"
     )
     assert schedule.due == 100 + cleanup_daemon.NORMAL_SECONDS
 
@@ -583,34 +584,34 @@ def test_resident_unit_has_worker_isolation_and_low_resource_limits() -> None:
 @pytest.mark.parametrize(
     ("available", "capacity_reached"),
     [
-        pytest.param(21 * GIB, False, id="below-eighty-percent"),
-        pytest.param(20 * GIB, True, id="exact-eighty-percent"),
-        pytest.param(19 * GIB, True, id="above-eighty-percent"),
+        pytest.param(76 * GIB, False, id="below-bootstrap-quarter"),
+        pytest.param(75 * GIB, True, id="exact-bootstrap-quarter"),
+        pytest.param(74 * GIB, True, id="above-bootstrap-quarter"),
     ],
 )
-def test_capacity_threshold_uses_the_eighty_percent_target(available: int, capacity_reached: bool) -> None:
+def test_capacity_threshold_uses_the_bootstrap_quarter_target(available: int, capacity_reached: bool) -> None:
     assert cleanup_daemon.low_space(cleanup_daemon.Space(total=100 * GIB, available=available)) is capacity_reached
 
 
-def test_capacity_latch_keeps_the_short_schedule_until_below_seventy_eight_percent() -> None:
+def test_capacity_latch_keeps_the_short_schedule_until_below_bootstrap_stop() -> None:
     schedule = cleanup_daemon.Schedule.new()
     schedule.due = 10000
     schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=20 * GIB), 100)
     assert schedule.capacity_recovery
     assert schedule.due == 100 + cleanup_daemon.LOW_SPACE_SECONDS
-    for now, available in ((160, 21 * GIB), (220, 22 * GIB)):
+    for now, available in ((160, 76 * GIB), (220, 80 * GIB)):
         schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=available), now)
         assert schedule.capacity_recovery
-    schedule.completed(summary(), cleanup_daemon.Space(total=100 * GIB, available=23 * GIB), 280, 1000)
+    schedule.completed(summary(), cleanup_daemon.Space(total=100 * GIB, available=81 * GIB), 280, 1000)
     assert not schedule.capacity_recovery
     assert schedule.due == 280 + cleanup_daemon.NORMAL_SECONDS
 
 
 @pytest.mark.parametrize(
     "available",
-    [pytest.param(21 * GIB, id="seventy-nine-percent"), pytest.param(22 * GIB, id="exact-recovery-floor")],
+    [pytest.param(76 * GIB, id="just-below-bootstrap-trigger"), pytest.param(80 * GIB, id="exact-bootstrap-stop")],
 )
-def test_sustained_growth_enters_capacity_recovery_before_eighty_percent(available: int) -> None:
+def test_sustained_growth_enters_capacity_recovery_before_the_bootstrap_target(available: int) -> None:
     schedule = cleanup_daemon.Schedule.new()
     schedule.due = 10000
     schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=available + 2 * GIB), 100)
@@ -623,19 +624,19 @@ def test_sustained_growth_enters_capacity_recovery_before_eighty_percent(availab
 
 def test_growth_prediction_requires_at_least_two_minutes_of_observation() -> None:
     schedule = cleanup_daemon.Schedule.new()
-    for now, available in ((100, 23 * GIB), (130, 22 * GIB), (160, 21 * GIB)):
+    for now, available in ((100, 81 * GIB), (130, 80 * GIB), (160, 76 * GIB)):
         schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=available), now)
     assert not schedule.capacity_recovery
-    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=21 * GIB - GIB // 2), 220)
+    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=76 * GIB - GIB // 2), 220)
     assert schedule.capacity_recovery
 
 
 @pytest.mark.parametrize(
     ("available", "decrement"),
     [
-        pytest.param(63 * GIB, GIB, id="growth-below-capacity-floor"),
-        pytest.param(21 * GIB, 1024**2, id="target-more-than-an-hour-away"),
-        pytest.param(21 * GIB, 512, id="metadata-sized-stat-noise"),
+        pytest.param(88 * GIB, GIB, id="growth-below-capacity-floor"),
+        pytest.param(76 * GIB, 1024**2, id="target-more-than-an-hour-away"),
+        pytest.param(76 * GIB, 512, id="metadata-sized-stat-noise"),
     ],
 )
 def test_growth_that_does_not_require_recovery_keeps_the_normal_schedule(available: int, decrement: int) -> None:
@@ -650,10 +651,10 @@ def test_growth_that_does_not_require_recovery_keeps_the_normal_schedule(availab
 
 def test_a_single_growth_burst_does_not_predict_continuing_consumption() -> None:
     schedule = cleanup_daemon.Schedule.new()
-    for now, available in ((100, 23 * GIB), (160, 21 * GIB), (220, 21 * GIB)):
+    for now, available in ((100, 81 * GIB), (160, 76 * GIB), (220, 76 * GIB)):
         schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=available), now)
     assert not schedule.capacity_recovery
-    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=21 * GIB - GIB // 2), 280)
+    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=76 * GIB - GIB // 2), 280)
     assert not schedule.capacity_recovery
 
 
@@ -667,19 +668,19 @@ def test_a_single_growth_burst_does_not_predict_continuing_consumption() -> None
 )
 def test_nonsequential_samples_reset_the_growth_forecast(reset_time: int) -> None:
     schedule = cleanup_daemon.Schedule.new()
-    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=23 * GIB), 100)
-    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=22 * GIB), 160)
-    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=21 * GIB), reset_time)
+    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=81 * GIB), 100)
+    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=80 * GIB), 160)
+    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=76 * GIB), reset_time)
     assert not schedule.capacity_recovery
-    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=21 * GIB - GIB // 4), reset_time + 60)
+    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=76 * GIB - GIB // 4), reset_time + 60)
     assert not schedule.capacity_recovery
 
 
 def test_filesystem_resize_starts_a_new_growth_baseline() -> None:
     schedule = cleanup_daemon.Schedule.new()
-    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=23 * GIB), 100)
-    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=22 * GIB), 160)
-    schedule.observe(cleanup_daemon.Space(total=101 * GIB, available=21 * GIB), 220)
+    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=81 * GIB), 100)
+    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=80 * GIB), 160)
+    schedule.observe(cleanup_daemon.Space(total=101 * GIB, available=76 * GIB), 220)
     assert not schedule.capacity_recovery
     assert schedule.growth.started == schedule.growth.previous
     assert schedule.growth.positive_samples == 0
@@ -752,25 +753,32 @@ def test_legacy_heartbeat_migration_resets_forecast_without_resetting_outcome_or
 
 
 @pytest.mark.parametrize(
-    ("available", "previously_latched", "capacity_argument"),
+    ("available", "previously_latched", "capacity_argument", "baseline_used"),
     [
-        pytest.param(40 * GIB, False, False, id="normal-seven-day-worker"),
-        pytest.param(20 * GIB, False, True, id="target-triggered-capacity-worker"),
-        pytest.param(21 * GIB, True, True, id="hysteresis-keeps-capacity-worker"),
-        pytest.param(23 * GIB, True, False, id="recovered-capacity-restores-normal-worker"),
+        pytest.param(85 * GIB, False, False, None, id="normal-seven-day-worker"),
+        pytest.param(75 * GIB, False, True, None, id="target-triggered-capacity-worker"),
+        pytest.param(76 * GIB, True, True, None, id="hysteresis-keeps-capacity-worker"),
+        pytest.param(81 * GIB, True, False, None, id="recovered-capacity-restores-normal-worker"),
+        pytest.param(90 * GIB, False, True, 5, id="calibrated-volume-recovers-below-bootstrap"),
+        pytest.param(99 * GIB, True, False, 5, id="calibrated-volume-stops-at-own-floor"),
     ],
 )
 def test_sweep_selects_guarded_capacity_worker_arguments(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    *,
     available: int,
     previously_latched: bool,
     capacity_argument: bool,
+    baseline_used: int | None,
 ) -> None:
     calls: list[list[str]] = []
+    current_available = available if baseline_used is None else (100 - baseline_used) * GIB
 
     def filesystem_capacity(_path: Path) -> os.statvfs_result:
-        return os.statvfs_result([1, 1, 100 * GIB, available, available, 0, 0, 0, 0, 255])
+        return os.statvfs_result(
+            [1, 1, 100 * GIB, current_available, current_available, 0, 0, 0, 0, 255], {"f_fsid": 123}
+        )
 
     def idle_pressure(_path: Path) -> Pressure:
         return Pressure(some=0, full=0)
@@ -790,6 +798,10 @@ def test_sweep_selects_guarded_capacity_worker_arguments(
     )
     paths = RuntimePaths(tmp_path)
     state = cleanup.state_directory(paths)
+    if baseline_used is not None:
+        with cleanup.cleanup_lock(paths):
+            cleanup_capacity.calibrate(paths.home, apply=True)
+    current_available = available
     schedule = cleanup_daemon.Schedule.new()
     schedule.capacity_recovery = previously_latched
     cleanup_daemon.sweep(paths, state, schedule, Event())
@@ -812,6 +824,13 @@ def test_status_exposes_capacity_policy_without_changing_persisted_heartbeat(
     private_write(path, previous.model_dump_json())
     before = path.read_bytes()
     monkeypatch.setenv("HOME", str(tmp_path))
+
+    def current_capacity(_path: Path) -> os.statvfs_result:
+        return os.statvfs_result((1, 1, 100, 10, 10, 0, 0, 0, 0, 255))
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Supply fresh native capacity for the status view independently of its preserved historical heartbeat.
+        os, "statvfs", current_capacity
+    )
     result = CliRunner().invoke(cleanup_daemon.app, ["status"])
     assert result.exit_code == 0
     payload = RootModel[dict[str, JsonValue]].model_validate_json(result.stdout).root
@@ -820,8 +839,8 @@ def test_status_exposes_capacity_policy_without_changing_persisted_heartbeat(
     assert isinstance(capacity, dict)
     assert isinstance(policy, dict)
     assert capacity["used_percent"] == 90
-    assert capacity["target_used_percent"] == 80
-    assert capacity["recovery_used_percent"] == 78
+    assert capacity["target_used_percent"] == 25
+    assert capacity["recovery_used_percent"] == 20
     assert capacity["target_met"] is False
     assert policy["poll_seconds"] == 15
     assert policy["normal_sweep_seconds"] == 1800
@@ -1219,3 +1238,125 @@ def test_zero_exit_discovery_failure_packet_is_never_a_success() -> None:
     payload = '{"version":1,"stage":"repository-discovery","kind":"entries"}'
     with pytest.raises(ValueError, match="validation error"):
         cleanup_daemon.execute_worker(Event(), worker_script(payload), timeout=10)
+
+
+def test_lower_target_shortens_a_saved_routine_budget_wait_without_resetting_receipts(tmp_path: Path) -> None:
+    state = cleanup.state_directory(RuntimePaths(tmp_path))
+    previous = heartbeat(
+        phase="budget",
+        next_sweep_at=2800,
+        failures=0,
+        result=summary(reason="rolling 24-hour native-removal budget exhausted; retained"),
+    ).model_copy(update={"space": cleanup_daemon.Space(total=100, available=25)})
+    private_write(state / cleanup_daemon.STATUS_FILE, previous.model_dump_json())
+    stamp = cleanup_state.AttemptStamp(wall=900.0, uptime=900.0, boot_id=UUID(int=1))
+    for index in range(2):
+        assert cleanup_state.reserve_attempt(state, stamp, tmp_path / f"previous-{index}", "f" * 40)
+    ledger = state / "cleanup-attempts.json"
+    marker = state / "cleanup-attempts-initialized"
+    before = ledger.read_bytes(), marker.read_bytes(), (state / cleanup_daemon.STATUS_FILE).read_bytes()
+    restored = cleanup_daemon.Schedule.restore(state, 100, 1000)
+    assert restored.due == 100 + cleanup_daemon.NORMAL_SECONDS
+    restored.observe(previous.space, 100)
+    assert restored.capacity_recovery
+    assert restored.due == 100 + cleanup_daemon.LOW_SPACE_SECONDS
+    assert restored.last_result == previous.last_result
+    assert restored.last_run_at == previous.last_run_at
+    assert (ledger.read_bytes(), marker.read_bytes(), (state / cleanup_daemon.STATUS_FILE).read_bytes()) == before
+
+
+@pytest.mark.parametrize("second_key", ["b" * 64, None], ids=["replacement-volume", "unknown-volume"])
+def test_same_size_volume_change_resets_forecast_and_recovery_latch(second_key: str | None) -> None:
+    thresholds = cleanup_capacity.bootstrap_thresholds(100 * GIB)
+    first = cleanup_capacity.VolumeReading(100 * GIB, 76 * GIB, 76 * GIB, 4096, "a" * 64)
+    second = cleanup_capacity.VolumeReading(100 * GIB, 76 * GIB, 76 * GIB, 4096, second_key)
+    schedule = cleanup_daemon.Schedule.new()
+    schedule.bind_volume(cleanup_capacity.Policy(first, thresholds))
+    schedule.capacity_recovery = True
+    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=76 * GIB), 100)
+    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=76 * GIB - GIB // 2), 160)
+    assert schedule.growth.positive_samples == 1
+    previous_epoch = schedule.baseline_epoch
+    schedule.bind_volume(cleanup_capacity.Policy(second, thresholds))
+    assert not schedule.capacity_recovery
+    assert schedule.growth.started is schedule.growth.previous is None
+    assert schedule.baseline_epoch != previous_epoch
+    schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=76 * GIB - GIB // 2), 220)
+    assert not schedule.capacity_recovery
+
+
+@pytest.mark.parametrize("interruption", ["failure", "pressure", "lock", "incomplete-removal", "folded-summary"])
+def test_interrupted_observations_cannot_certify_a_lower_baseline(
+    completed_sweep_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, interruption: str
+) -> None:
+    available = 700 * GIB
+    now = 0.0
+
+    def volume_capacity(_path: Path) -> os.statvfs_result:
+        return os.statvfs_result((1, 1, 1000 * GIB, available, available, 0, 0, 0, 0, 255), {"f_fsid": 123})
+
+    def monotonic_clock() -> float:
+        return now
+
+    def busy_pressure(_path: Path) -> Pressure:
+        return Pressure(some=100, full=100)
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Keep native filesystem identity and allocation counters inside the private calibration fixture.
+        os, "statvfs", volume_capacity
+    )
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Advance only the native monotonic clock to exercise a thirty-minute observation window without sleeping.
+        time, "monotonic", monotonic_clock
+    )
+    paths = RuntimePaths(tmp_path)
+    with cleanup.cleanup_lock(paths):
+        cleanup_capacity.calibrate(paths.home, apply=True)
+    available = 800 * GIB
+    schedule = cleanup_daemon.Schedule.new()
+    for instant in (0.0, 900.0):
+        now = instant
+        cleanup_daemon.observe_lower_baseline(paths, schedule, summary())
+    previous = cleanup_capacity.load_calibration(paths.home)
+    assert previous is not None
+    assert len(previous.observations) == 2
+    now = 901.0
+    match interruption:
+        case "failure":
+            schedule.failed(now)
+        case "pressure":
+            monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Native PSI denies admission; the fixture also forbids spawning an actual cleanup worker.
+                cleanup, "pressure", busy_pressure
+            )
+            cleanup_daemon.sweep(paths, completed_sweep_state, schedule, Event())
+            assert schedule.phase == "pressure"
+        case "lock":
+            with cleanup.cleanup_lock(paths):
+                cleanup_daemon.observe_lower_baseline(paths, schedule, summary())
+        case _:
+            reason = "native removal did not complete; inspect checkout; branch retained"
+            attempted = 1
+            if interruption == "folded-summary":
+                reason = "other retained decisions"
+                attempted = 0
+            incomplete = cleanup_daemon.Summary(
+                worktrees=1, attempted=attempted, removed=0, reasons={reason: 1}, cache="skipped: fixture guards"
+            )
+            assert not cleanup_daemon.baseline_learning_eligible(incomplete)
+            cleanup_daemon.observe_lower_baseline(paths, schedule, incomplete)
+    now = 1800.0
+    cleanup_daemon.observe_lower_baseline(paths, schedule, summary())
+    current = cleanup_capacity.load_calibration(paths.home)
+    assert current is not None
+    assert current.allocated == previous.allocated == 300 * GIB
+    assert current.generation == previous.generation
+    assert len(current.observations) == 1
+
+
+def test_unknown_identity_keeps_bootstrap_hysteresis_while_disabling_forecast() -> None:
+    schedule = cleanup_daemon.Schedule.new()
+    thresholds = cleanup_capacity.bootstrap_thresholds(100 * GIB)
+    for now, available, recovering in ((100, 75 * GIB, True), (160, 76 * GIB, True), (220, 81 * GIB, False)):
+        volume = cleanup_capacity.VolumeReading(100 * GIB, available, available, 4096, None)
+        schedule.bind_volume(cleanup_capacity.Policy(volume, thresholds))
+        schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=available), now, thresholds=thresholds)
+        assert schedule.capacity_recovery is recovering
+        assert schedule.growth.positive_samples == 0

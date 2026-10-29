@@ -17,9 +17,17 @@ from typing import TYPE_CHECKING, TypedDict, Unpack
 from uuid import UUID
 
 from long_running_agent.process import CommandError, run
-from long_running_agent.runtime import cleanup, cleanup_activity, cleanup_daemon, cleanup_inspection, cleanup_state
+from long_running_agent.runtime import (
+    cleanup,
+    cleanup_activity,
+    cleanup_capacity,
+    cleanup_daemon,
+    cleanup_inspection,
+    cleanup_state,
+)
 from long_running_agent.runtime.health import Pressure
 from long_running_agent.runtime.settings import RuntimePaths, private_write
+from pydantic import JsonValue, RootModel
 import pytest
 from typer.testing import CliRunner
 
@@ -353,7 +361,7 @@ def test_capacity_mode_uses_six_hour_retention_and_stops_when_headroom_recovers(
     isolate_native_git(recent, monkeypatch)
 
     def capacity_after_removal(_path: str | Path) -> os.statvfs_result:
-        available = 150 if entries[0].path.exists() else 250
+        available = 790 if entries[0].path.exists() else 810
         return os.statvfs_result((4096, 4096, 1000, available, available, 1000, 900, 900, 0, 255))
 
     monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Real native worktree removal changes the modeled kernel capacity; only this fixture's first deletion restores headroom.
@@ -403,7 +411,7 @@ def test_capacity_flag_below_recovery_floor_preserves_normal_seven_day_retention
     isolate_native_git(recent, monkeypatch)
 
     def recovered_filesystem(_path: str | Path) -> os.statvfs_result:
-        return os.statvfs_result((4096, 4096, 1000, 250, 250, 1000, 900, 900, 0, 255))
+        return os.statvfs_result((4096, 4096, 1000, 900, 900, 1000, 900, 900, 0, 255))
 
     monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Native filesystem counters prove recovery is no longer admitted; the flag cannot reduce ordinary retention.
         os, "statvfs", recovered_filesystem
@@ -4260,3 +4268,152 @@ def test_a_clear_singleton_snapshot_cannot_hide_another_childs_real_open_file(
         child.wait(timeout=5)
         if child.stdout is not None:
             child.stdout.close()
+
+
+@pytest.mark.parametrize("used_percent", [25, 30, 40, 50, 60, 70, 75])
+def test_bootstrap_capacity_target_reaps_from_twenty_five_percent_without_resetting_receipts(
+    repository: Repository, monkeypatch: pytest.MonkeyPatch, used_percent: int
+) -> None:
+    entry = repository.linked("lower-target")
+    recent = Repository(repository.paths, repository.main, time.time() + cleanup.DAY / 2)
+    os.utime(repository.main / ".git/FETCH_HEAD", (recent.now, recent.now))
+    isolate_native_git(recent, monkeypatch)
+
+    def lower_capacity_filesystem(_path: str | Path) -> os.statvfs_result:
+        available = 1000 - 10 * used_percent
+        return os.statvfs_result((4096, 4096, 1000, available, available, 1000, 900, 900, 0, 255))
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Native filesystem counters model the newly admitted disk-usage range; private Git fixtures never fill the shared VM.
+        os, "statvfs", lower_capacity_filesystem
+    )
+    state = cleanup.state_directory(recent.paths)
+    stamp = cleanup_state.AttemptStamp.current()
+    for index in range(2):
+        assert cleanup_state.reserve_attempt(state, stamp, recent.paths.code / f"previous-{index}", entry.head)
+    prefix = cleanup_state.active_receipts(state, stamp).receipts
+    initialized = (state / "cleanup-attempts-initialized").read_bytes()
+    normal = cleanup.reap(recent.paths, apply=True)
+    assert all("24-hour" in row.reason and not row.attempted for row in normal)
+    recovered = cleanup.reap(recent.paths, apply=True, capacity_recovery=True)
+    assert recovered == [
+        cleanup.Decision(
+            str(entry.path), "removed clean merged worktree; branch retained", removed=True, attempted=True
+        )
+    ]
+    receipts = cleanup_state.active_receipts(state, cleanup_state.AttemptStamp.current()).receipts
+    assert receipts[:2] == prefix
+    assert len(receipts) == 3
+    assert (state / "cleanup-attempts-initialized").read_bytes() == initialized
+    assert not entry.path.exists()
+    assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
+
+
+@pytest.mark.parametrize("held", [False, True], ids=["unused", "live-reference"])
+def test_calibrated_volume_changes_recovery_budget_without_overriding_native_guards(
+    repository: Repository, monkeypatch: pytest.MonkeyPatch, held: bool
+) -> None:
+    entry = repository.linked("calibrated-recovery")
+    recent = Repository(repository.paths, repository.main, time.time() + cleanup.DAY / 2)
+    os.utime(repository.main / ".git/FETCH_HEAD", (recent.now, recent.now))
+    isolate_native_git(recent, monkeypatch)
+    available = 950
+
+    def volume_capacity(_path: str | Path) -> os.statvfs_result:
+        return os.statvfs_result((4096, 4096, 1000, available, available, 1000, 900, 900, 0, 255), {"f_fsid": 123})
+
+    def current_references(_paths: RuntimePaths, _candidates: Sequence[Path] | None = None) -> cleanup.References:
+        return cleanup.References(frozenset({entry.path}) if held else frozenset())
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Model the native volume counters for a private calibration without filling or changing the shared filesystem.
+        os, "statvfs", volume_capacity
+    )
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Only the external holder inventory varies; native Git, source checks, private calibration and durable removal accounting remain real.
+        cleanup, "references", current_references
+    )
+    with cleanup.cleanup_lock(recent.paths):
+        cleanup_capacity.calibrate(recent.paths.home, apply=True)
+    available = 900
+    policy = cleanup_capacity.policy(recent.paths.home)
+    assert policy.thresholds.mode == "calibrated"
+    assert policy.volume.used < cleanup_capacity.bootstrap_thresholds(policy.volume.total).stop
+    report = cleanup.reap(recent.paths, apply=True, capacity_recovery=True)
+    assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
+    assert report[0].removed is (not held)
+    assert entry.path.exists() is held
+    if held:
+        assert report[0].reason == cleanup.REFERENCED
+        assert not report[0].attempted
+
+
+def test_calibration_changed_at_the_live_boundary_rechecks_recovery_before_charging(
+    repository: Repository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entry = repository.linked("calibration-boundary")
+    recent = Repository(repository.paths, repository.main, time.time() + cleanup.DAY / 2)
+    os.utime(repository.main / ".git/FETCH_HEAD", (recent.now, recent.now))
+    isolate_native_git(recent, monkeypatch)
+    available = 950
+
+    def volume_capacity(_path: str | Path) -> os.statvfs_result:
+        return os.statvfs_result((4096, 4096, 1000, available, available, 1000, 900, 900, 0, 255), {"f_fsid": 123})
+
+    def recalibrated_references(_paths: RuntimePaths, _candidates: Sequence[Path] | None = None) -> cleanup.References:
+        cleanup_capacity.calibrate(recent.paths.home, apply=True)
+        return cleanup.References(frozenset())
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Supply stable kernel volume identity and counters only for the private native Git fixture.
+        os, "statvfs", volume_capacity
+    )
+    with cleanup.cleanup_lock(recent.paths):
+        cleanup_capacity.calibrate(recent.paths.home, apply=True)
+    available = 900
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- A valid calibration changes at the external holder boundary; the actual final recovery admission and charge logic must read it again.
+        cleanup, "references", recalibrated_references
+    )
+    report = cleanup.reap(recent.paths, apply=True, capacity_recovery=True)
+    assert entry.path.is_dir()
+    assert not report[0].attempted
+    assert "free-space target" in report[0].reason
+    assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
+    assert not (cleanup.state_directory(recent.paths) / "cleanup-attempts.json").exists()
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="Baseline calibration is an ordinary-user CLI action")
+def test_baseline_cli_preview_and_apply_preserve_private_removal_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = RuntimePaths(tmp_path)
+    state = cleanup.state_directory(paths)
+    private_write(state / "cleanup-attempts.json", "[]\n")
+    private_write(state / "cleanup-attempts-initialized", "1\n")
+    cursor = cleanup_state.ReviewCursor(version=1, modified=100.0, path=paths.code / "held")
+    private_write(state / "cleanup-cursor.json", cursor.model_dump_json())
+    before = {
+        name: (state / name).read_bytes()
+        for name in ("cleanup-attempts.json", "cleanup-attempts-initialized", "cleanup-cursor.json")
+    }
+
+    def volume_capacity(_path: Path) -> os.statvfs_result:
+        return os.statvfs_result((4096, 4096, 1000, 700, 700, 1000, 900, 900, 0, 255), {"f_fsid": 123})
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Supply native volume metadata for the isolated CLI; no actual host calibration or cleanup can occur.
+        os, "statvfs", volume_capacity
+    )
+    runner = CliRunner()
+    preview = runner.invoke(cleanup.app, ["baseline", "calibrate"])
+    assert preview.exit_code == 0
+    payload = RootModel[dict[str, JsonValue]].model_validate_json(preview.stdout).root
+    assert payload["applied"] is False
+    assert not (state / cleanup_capacity.BASELINE_FILE).exists()
+    assert not (state / cleanup_capacity.INITIALIZED_FILE).exists()
+    applied = runner.invoke(cleanup.app, ["baseline", "calibrate", "--apply"])
+    assert applied.exit_code == 0
+    current = runner.invoke(cleanup.app, ["baseline", "status"])
+    assert current.exit_code == 0
+    payload = RootModel[dict[str, JsonValue]].model_validate_json(current.stdout).root
+    thresholds = payload["thresholds"]
+    assert isinstance(thresholds, dict)
+    assert thresholds["mode"] == "calibrated"
+    assert thresholds["baseline_allocated"] == 300 * 4096
+    assert {name: (state / name).read_bytes() for name in before} == before
