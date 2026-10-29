@@ -148,3 +148,95 @@ def test_root_workers_compile_on_actual_system_python312() -> None:
             [located.stdout.strip(), "-I", "-c", compiler, str(source)], capture_output=True, text=True, check=False
         )
         assert result.returncode == 0, result.stderr
+
+
+def test_first_boot_installs_github_cli_from_its_signed_repository(tmp_path: Path) -> None:
+    paths = bootstrap.HostPaths(tmp_path)
+    commands: list[tuple[str, ...]] = []
+    github_key = paths.path("/etc/apt/keyrings/githubcli-archive-keyring.gpg")
+    github_source = paths.path("/etc/apt/sources.list.d/github-cli.list")
+    github_key.parent.mkdir(parents=True, mode=0o700)
+
+    def record(
+        arguments: Sequence[str], *, capture: bool = False, input_text: str | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(tuple(arguments))
+        if arguments[0] == "/usr/bin/curl" and "-o" in arguments:
+            assert capture is False
+            assert input_text is None
+            assert arguments[-1] == "https://cli.github.com/packages/githubcli-archive-keyring.gpg"
+            candidate = Path(arguments[arguments.index("-o") + 1])
+            assert candidate.parent == github_key.parent
+            assert candidate != github_key
+            assert candidate.stat().st_mode & 0o777 == 0o600
+            candidate.write_bytes(b"fixture binary keyring\x00")
+        elif arguments[0] == "/usr/bin/gpg":
+            assert input_text == "fixture armored Google key"
+            Path(arguments[-1]).write_bytes(b"fixture Google keyring")
+        elif tuple(arguments) == (*bootstrap.APT, "install", "-y", "google-cloud-cli", "gh"):
+            assert github_key.read_bytes() == b"fixture binary keyring\x00"
+            assert github_key.stat().st_mode & 0o777 == 0o644
+            assert github_key.parent.stat().st_mode & 0o777 == 0o755
+            assert github_source.read_text(encoding="utf-8") == (
+                "deb [signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] "
+                "https://cli.github.com/packages stable main\n"
+            )
+            assert commands[-2] == (*bootstrap.APT, "update", "--error-on=any")
+        return subprocess.CompletedProcess(arguments, 0, "fixture armored Google key" if capture else "", "")
+
+    bootstrap.install_packages(paths, record)
+    assert commands[-1] == (*bootstrap.APT, "install", "-y", "google-cloud-cli", "gh")
+    assert github_source.stat().st_mode & 0o777 == 0o644
+
+
+def test_repository_update_failure_stops_before_installing_the_old_github_cli(tmp_path: Path) -> None:
+    paths = bootstrap.HostPaths(tmp_path)
+    commands: list[tuple[str, ...]] = []
+
+    def unavailable_repository(
+        arguments: Sequence[str], *, capture: bool = False, input_text: str | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(tuple(arguments))
+        if arguments[0] == "/usr/bin/curl" and "-o" in arguments:
+            Path(arguments[arguments.index("-o") + 1]).write_bytes(b"fixture GitHub keyring")
+        elif arguments[0] == "/usr/bin/gpg":
+            assert input_text == "fixture armored Google key"
+            Path(arguments[-1]).write_bytes(b"fixture Google keyring")
+        elif "--error-on=any" in arguments:
+            assert paths.path("/etc/apt/sources.list.d/github-cli.list").is_file()
+            raise subprocess.CalledProcessError(100, arguments)
+        return subprocess.CompletedProcess(arguments, 0, "fixture armored Google key" if capture else "", "")
+
+    with pytest.raises(subprocess.CalledProcessError):
+        bootstrap.install_packages(paths, unavailable_repository)
+    assert commands[0] == (*bootstrap.APT, "update")
+    assert commands[-1] == (*bootstrap.APT, "update", "--error-on=any")
+    assert [command for command in commands if "install" in command] == [
+        (*bootstrap.APT, "install", "-y", *bootstrap.PACKAGES)
+    ]
+
+
+def test_github_key_download_failure_preserves_the_previous_repository_key(tmp_path: Path) -> None:
+    paths = bootstrap.HostPaths(tmp_path)
+    key = paths.path("/etc/apt/keyrings/githubcli-archive-keyring.gpg")
+    key.parent.mkdir(parents=True)
+    key.write_bytes(b"previous usable key")
+    source = paths.path("/etc/apt/sources.list.d/github-cli.list")
+    source.parent.mkdir(parents=True)
+    source.write_text(bootstrap.GITHUB_REPOSITORY, encoding="utf-8")
+
+    def interrupted_download(
+        arguments: Sequence[str], *, capture: bool = False, input_text: str | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        assert arguments[0] == "/usr/bin/curl"
+        assert capture is False
+        assert input_text is None
+        candidate = Path(arguments[arguments.index("-o") + 1])
+        candidate.write_bytes(b"interrupted download")
+        raise subprocess.CalledProcessError(22, arguments)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        bootstrap.configure_github_repository(paths, interrupted_download)
+    assert key.read_bytes() == b"previous usable key"
+    assert source.read_text(encoding="utf-8") == bootstrap.GITHUB_REPOSITORY
+    assert sorted(path.name for path in key.parent.iterdir()) == [key.name]
