@@ -1,0 +1,73 @@
+---
+import "@sarj/design/styles.css";
+import "../styles/engineering.css";
+import "../styles/wiki-project.css";
+
+import { Code } from "@astrojs/starlight/components";
+
+import NUNITO_LICENSE from "../assets/wiki/nunito-ofl.txt?url&no-inline";
+import EngineeringHeader from "../components/engineering-header.astro";
+import EngineeringTheme from "../components/engineering-theme.astro";
+import { SITE_ORIGIN, siteHref } from "../lib/paths";
+import { WIKI_CHECK, WIKI_DESCRIPTION, WIKI_DEVELOP, WIKI_FEATURES, WIKI_KEYS, WIKI_MIGRATE, WIKI_SETUP } from "../lib/wiki-project";
+
+const CANONICAL = `${SITE_ORIGIN}/projects/wiki/`;
+---
+
+<!doctype html>
+<html data-theme="light" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width,initial-scale=1" name="viewport" />
+    <meta content="light dark" name="color-scheme" />
+    <meta content={WIKI_DESCRIPTION} name="description" />
+    <meta content="Sarj Wiki · Sarj Engineering" property="og:title" />
+    <meta content={WIKI_DESCRIPTION} property="og:description" />
+    <meta content={CANONICAL} property="og:url" />
+    <meta content="website" property="og:type" />
+    <link href={CANONICAL} rel="canonical" />
+    <link href={siteHref("/favicon.ico")} rel="icon" />
+    <title>Sarj Wiki · Sarj Engineering</title>
+    <EngineeringTheme />
+  </head>
+  <body class="wiki-project">
+    <a class="engineering-skip" href="#main-content">Skip to Wiki</a>
+    <EngineeringHeader />
+    <main id="main-content" tabindex="-1">
+      <nav aria-label="Breadcrumb" class="wiki-breadcrumb"><a href="/">Engineering</a><span aria-hidden="true">/</span><span aria-current="page">Wiki</span></nav>
+      <header class="wiki-intro">
+        <p class="wiki-eyebrow">Open source · MIT license</p>
+        <h1>Sarj Wiki</h1>
+        <p class="wiki-summary">Your Google Drive documents,<br class="wiki-wide-break" /> in one focused workspace.</p>
+        <p class="wiki-lede">Browse shared drives, find a page, and keep team knowledge close at hand.</p>
+        <div class="wiki-actions"><a class="wiki-primary" href="https://wiki.sarj.ai/demo">Try the demo <span aria-hidden="true">↗</span></a><a href="https://github.com/sarj-ai/wiki">Browse the source <span aria-hidden="true">↗</span></a><a href="https://wiki.sarj.ai/">Open Sarj Wiki <span aria-hidden="true">↗</span></a></div>
+        <p class="wiki-demo-note">No sign-in needed. Explore a read-only workspace with real Word, PowerPoint, Excel, and HTML samples. Compare a messy AI-pasted draft with the same document clearly formatted.</p>
+      </header>
+      <nav aria-label="On this page" class="wiki-jump-links"><a href="#features">Features</a><a href="#start">Run locally</a><a href="#checks">Check a change</a></nav>
+      <section aria-labelledby="features">
+        <h2 id="features">A workspace around your documents</h2>
+        <div class="wiki-features">{WIKI_FEATURES.map((feature) => <div><h3>{feature.title}</h3><p>{feature.description}</p></div>)}</div>
+        <p class="wiki-note">The full hosted workspace requires an authorized Google account. Self-host with your own Google OAuth application and infrastructure.</p>
+      </section>
+      <section aria-labelledby="start">
+        <h2 id="start">Run it locally</h2>
+        <p>Install <a href="https://mise.jdx.dev/">mise</a> and PostgreSQL. The repository pins Node.js, npm, Python tooling, and Terraform.</p>
+        <div aria-label="Clone and install commands" role="group"><Code code={WIKI_SETUP} lang="bash" /></div>
+        <p>Create an empty PostgreSQL database matching <code>DATABASE_URL</code>. Set the allowed Google domain and your own OAuth client credentials in <code>backend/.env</code>; the example lists the supported settings.</p>
+        <p>Generate the signing and encryption keys, then copy their values into <code>backend/.env</code>:</p>
+        <div aria-label="Generate local signing and encryption keys" role="group"><Code code={WIKI_KEYS} lang="bash" /></div>
+        <p>Apply the database migrations:</p>
+        <div aria-label="Database migration command" role="group"><Code code={WIKI_MIGRATE} lang="bash" /></div>
+        <p>Start these commands in separate terminals from the repository root:</p>
+        <div aria-label="Backend and frontend development commands" role="group"><Code code={WIKI_DEVELOP} lang="bash" /></div>
+        <p>Open <a href="http://localhost:3000/">localhost:3000</a>. Configure Google OAuth to return to <code>http://localhost:8000/auth/callback</code>.</p>
+      </section>
+      <section aria-labelledby="checks">
+        <h2 id="checks">Check a change</h2>
+        <div aria-label="Verification commands" role="group"><Code code={WIKI_CHECK} lang="bash" /></div>
+        <p>The checks cover source standards, types, tests, the production frontend build, API schema consistency, and offline Terraform validation. Deployment configuration is in <code>terraform/</code> and <code>.github/workflows/</code>.</p>
+      </section>
+    </main>
+    <footer class="wiki-footer"><a href="https://github.com/sarj-ai/wiki/blob/main/LICENSE">MIT license</a><a href="https://github.com/sarj-ai/wiki/issues">Report an issue</a><a href={NUNITO_LICENSE}>Nunito font license</a></footer>
+  </body>
+</html>

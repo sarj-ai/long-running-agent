@@ -36,6 +36,17 @@ const DESCRIPTION_ID = `${TITLE_ID}-description`;
         <div class="engineering-preview-command">structure · ownership · delivery</div>
       </div>
     )}
+    {PROJECT.id === "wiki" && (
+      <div class="engineering-repository-preview engineering-preview-panel">
+        <div class="engineering-preview-label"><span class="engineering-file-symbol">◇</span> workspace</div>
+        <div class="engineering-repository-tree">
+          <span class="engineering-file-symbol">◇</span><span>Product notes</span>
+          <span class="engineering-file-symbol">◇</span><span>Engineering</span>
+          <span class="engineering-file-symbol">◇</span><span>Team handbook</span>
+        </div>
+        <div class="engineering-preview-command">Docs · Sheets · Slides</div>
+      </div>
+    )}
     {PROJECT.id === "lra" && (
       <div class="engineering-terminal-preview engineering-preview-panel">
         <div class="engineering-preview-label"><span aria-hidden="true">›_</span> terminal</div>

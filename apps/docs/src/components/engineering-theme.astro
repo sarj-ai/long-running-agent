@@ -1,0 +1,45 @@
+<script is:inline>
+      (() => {
+        const ROOT = document.documentElement;
+        const KEY = "starlight-theme";
+        const MEDIA = window.matchMedia("(prefers-color-scheme: dark)");
+        function preference(value) {
+          try {
+            if (value) localStorage.setItem(KEY, value);
+            return localStorage.getItem(KEY);
+          } catch {
+            return null;
+          }
+        }
+        let selected = preference();
+        function synchronize() {
+          const dark = selected === "dark" || (selected !== "light" && MEDIA.matches);
+          ROOT.dataset.theme = dark ? "dark" : "light";
+          const button = document.querySelector("[data-engineering-theme-toggle]");
+          if (button instanceof HTMLButtonElement) {
+            button.setAttribute("aria-pressed", String(dark));
+            button.setAttribute("title", dark ? "Switch to light theme" : "Switch to dark theme");
+          }
+        }
+        synchronize();
+        document.addEventListener("DOMContentLoaded", () => {
+          const button = document.querySelector("[data-engineering-theme-toggle]");
+          if (button instanceof HTMLButtonElement) {
+            button.disabled = false;
+            button.addEventListener("click", () => {
+              selected = ROOT.dataset.theme === "dark" ? "light" : "dark";
+              preference(selected);
+              synchronize();
+            });
+          }
+          synchronize();
+        }, { once: true });
+        MEDIA.addEventListener("change", synchronize);
+        window.addEventListener("storage", (event) => {
+          if (event.key === KEY || event.key === null) {
+            selected = event.newValue;
+            synchronize();
+          }
+        });
+      })();
+    </script>
