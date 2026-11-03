@@ -70,7 +70,7 @@ async function verifyWiki(mode: VerificationMode): Promise<void> {
     assert.ok(document.inlineElements.has(element), "Owned Wiki script or style missing or changed");
     assert.ok(policy.includes(`'sha256-${hash("sha256", body, "base64")}'`), "Owned Wiki inline hash missing");
   }
-  assert.match(document.markup, /<h1\b[^>]*>\s*Sarj Wiki\s*<\/h1>/u, "Wiki heading missing");
+  assert.match(document.markup, /<h1\b[^>]*>\s*Wiki\s*<\/h1>/u, "Wiki heading missing");
   assert.ok(document.markup.includes(`href="${SITE_URL.origin}/projects/wiki/"`), "Wiki canonical URL differs");
   for (const href of ["https://wiki.sarj.ai/demo", "https://github.com/sarj-ai/wiki", "https://wiki.sarj.ai/", "https://github.com/sarj-ai/wiki/blob/main/LICENSE"]) {
     assert.ok(document.markup.includes(`href="${href}"`), "Wiki project destination missing");
