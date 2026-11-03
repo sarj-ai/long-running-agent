@@ -1,24 +1,43 @@
-export const WIKI_DESCRIPTION = "A focused, open source workspace for Google Drive documents, search, and knowledge sharing.";
+export const WIKI_DESCRIPTION = "Find, read, and polish Google Drive documents.";
 
-export const WIKI_FEATURES = [
-  { title: "Find your way", description: "Navigate shared drives and folders, search documents, and return to recent pages." },
-  { title: "Keep context", description: "Read documents alongside the workspace tree, organize folders, and share short document links." },
-  { title: "Work with agents", description: "Connect through the MCP endpoint with explicit OAuth consent and manage connections from the workspace." },
-  { title: "Make it yours", description: "A Next.js interface, a FastAPI backend, PostgreSQL, and Terraform deployment configuration." },
-] as const;
+export function setupWikiTabs(): void {
+  const tabList = document.querySelector("[data-wiki-tabs]");
+  if (!(tabList instanceof HTMLElement)) return;
+  const tabs = [...tabList.querySelectorAll("button")];
+  if (tabs.length === 0) return;
+  for (const [index, tab] of tabs.entries()) {
+    tab.addEventListener("click", () => activateTab(tab, tabs));
+    tab.addEventListener("keydown", (event) => moveTab(event, tabs, index));
+  }
+  const desktop = window.matchMedia("(min-width: 48rem)");
+  const orient = (): void => { tabList.ariaOrientation = desktop.matches ? "vertical" : "horizontal"; };
+  orient();
+  desktop.addEventListener("change", orient);
+}
 
-export const WIKI_SETUP = `git clone https://github.com/sarj-ai/wiki.git
-cd wiki
-mise install
-mise exec -- uv run scripts/wiki.py setup
-cp backend/.env.example backend/.env`;
+function moveTab(event: KeyboardEvent, tabs: readonly HTMLButtonElement[], index: number): void {
+  let next: number;
+  switch (event.key) {
+    case "ArrowUp":
+    case "ArrowLeft": next = index - 1; break;
+    case "ArrowDown":
+    case "ArrowRight": next = index + 1; break;
+    case "Home": next = 0; break;
+    case "End": next = tabs.length - 1; break;
+    default: return;
+  }
+  const active = tabs[(next + tabs.length) % tabs.length];
+  event.preventDefault();
+  activateTab(active, tabs);
+  active.focus();
+}
 
-export const WIKI_KEYS = `mise exec -- uv --directory backend run python -c 'import secrets; from cryptography.fernet import Fernet; print("SECRET_KEY=" + secrets.token_urlsafe(48)); print("FERNET_KEY=" + Fernet.generate_key().decode())'`;
-
-export const WIKI_MIGRATE = "mise exec -- uv --directory backend run alembic upgrade head";
-
-export const WIKI_DEVELOP = `mise exec -- uv --directory backend run uvicorn app.main:app --reload
-mise exec -- npm --prefix frontend run dev`;
-
-export const WIKI_CHECK = `mise exec -- uv run scripts/wiki.py check
-mise exec -- uv run scripts/wiki.py audit`;
+function activateTab(active: HTMLButtonElement, tabs: readonly HTMLButtonElement[]): void {
+  for (const tab of tabs) {
+    const selected = tab === active;
+    tab.ariaSelected = String(selected);
+    tab.tabIndex = selected ? 0 : -1;
+    const panel = document.getElementById(tab.getAttribute("aria-controls") ?? "");
+    if (panel) panel.hidden = !selected;
+  }
+}
