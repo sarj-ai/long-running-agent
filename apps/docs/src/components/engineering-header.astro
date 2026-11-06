@@ -1,12 +1,13 @@
 ---
-import { siteHref } from "../lib/paths";
+import LOGO_DARK from "../../public/sarj-logo-dark.webp?url&no-inline";
+import LOGO_LIGHT from "../../public/sarj-logo-light.webp?url&no-inline";
 ---
 
 <header aria-label="Sarj Engineering" class="engineering-header">
   <div class="engineering-header-inner">
     <a aria-label="Sarj Engineering home" class="engineering-brand" href="/">
-      <img alt="Sarj" class="engineering-logo engineering-logo-light" decoding="async" height="28" src={siteHref("/sarj-logo-light.webp")} width="49" />
-      <img alt="" aria-hidden="true" class="engineering-logo engineering-logo-dark" decoding="async" height="28" src={siteHref("/sarj-logo-dark.webp")} width="49" />
+      <img alt="Sarj" class="engineering-logo engineering-logo-light" decoding="async" height="28" src={LOGO_LIGHT} width="49" />
+      <img alt="" aria-hidden="true" class="engineering-logo engineering-logo-dark" decoding="async" height="28" src={LOGO_DARK} width="49" />
     </a>
     <nav aria-label="Engineering links" class="engineering-header-actions">
       <button aria-label="Dark theme" aria-pressed="false" class="engineering-theme-toggle" data-engineering-theme-toggle disabled title="Change color theme" type="button">
