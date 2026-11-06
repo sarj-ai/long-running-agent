@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 import errno
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -171,9 +171,42 @@ def test_missing_named_receipt_keeps_concurrently_published_registration(
     assert read_registration(path, root) == saved
 
 
+def test_failed_probe_keeps_concurrently_published_live_registration(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = connection_directory(home)
+    identifier = "a" * 32
+    saved = HostRegistration(connection=identifier, socket=str(root / (identifier + ".sock")), label="Old Mac")
+    receipt = root / (identifier + ".json")
+    receipt.write_text(saved.model_dump_json(), encoding="utf-8")
+    receipt.chmod(0o600)
+    cleanup = host_module.forget_dead_connection
+
+    with ExitStack() as replacement:
+
+        def publish_then_cleanup(path: Path, directory: Path) -> None:
+            assert path == receipt
+            assert directory == root
+            replacement.enter_context(live_socket(home, identifier))
+            receipt.unlink()
+            replacement.enter_context(registered(identifier, "Current Mac", home=home))
+            cleanup(path, directory)
+
+        monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Publish after the real failed socket probe at the discovery/cleanup boundary; injection would bypass that interleaving.
+            host_module, "forget_dead_connection", publish_then_cleanup
+        )
+        with pytest.raises(RuntimeError, match="No Mac terminal connection"):
+            choose_connection(identifier, home=home)
+        current = host_module.saved_registration(receipt, root)
+        assert current is not None
+        assert current.label == "Current Mac"
+        assert choose_connection(identifier, home=home).label == "Current Mac"
+
+
+@pytest.mark.parametrize("operation", ["discovery", "cleanup"])
 @pytest.mark.parametrize("failure", ["timeout", "missing", "refused", "malformed-reply", "rejected"])
 def test_explicit_connection_keeps_inconclusive_receipts(
-    home: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+    home: Path, monkeypatch: pytest.MonkeyPatch, failure: str, operation: str
 ) -> None:
     root = connection_directory(home)
     identifier = "a" * 32
@@ -200,8 +233,11 @@ def test_explicit_connection_keeps_inconclusive_receipts(
     monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Deliver socket outcomes at the production exchange lookup; injecting another path would bypass the cleanup boundary under test.
         host_module, "exchange", probe
     )
-    with pytest.raises(RuntimeError, match="No Mac terminal connection"):
-        choose_connection(identifier, home=home)
+    if operation == "cleanup":
+        host_module.forget_dead_connection(path, root)
+    else:
+        with pytest.raises(RuntimeError, match="No Mac terminal connection"):
+            choose_connection(identifier, home=home)
     assert path.exists() is (failure not in {"missing", "refused"})
 
 
