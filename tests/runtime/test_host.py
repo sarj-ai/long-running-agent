@@ -89,7 +89,36 @@ def test_multiple_computers_require_explicit_selection(home: Path) -> None:
         assert choose_connection(second, home=home).label == "Mac Two"
 
 
-def test_stale_and_symlink_receipts_do_not_choose_a_different_socket(home: Path) -> None:
+def test_explicit_connection_does_not_probe_unrelated_receipts(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = connection_directory(home)
+    selected = "f" * 32
+    probes: list[str] = []
+    for identifier in ("a" * 32, "b" * 32, selected):
+        saved = HostRegistration(connection=identifier, socket=str(root / (identifier + ".sock")), label="Mac")
+        path = root / (identifier + ".json")
+        path.write_text(saved.model_dump_json())
+        path.chmod(0o600)
+
+    def probe(registration: HostRegistration, request: HostRequest, *, timeout: float) -> HostReply:
+        assert request.action == "status"
+        assert timeout == pytest.approx(0.3, rel=0, abs=0)
+        probes.append(registration.connection)
+        if registration.connection != selected:
+            raise TimeoutError
+        return HostReply(ok=True, message="Connected")
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Observe every production exchange lookup; injecting only the selected probe could miss unrelated ambient calls.
+        host_module, "exchange", probe
+    )
+    assert choose_connection(selected, home=home).connection == selected
+    with pytest.raises(RuntimeError, match="No Mac terminal connection"):
+        choose_connection("e" * 32, home=home)
+    assert probes == [selected]
+    assert len(list(root.glob("*.json"))) == 3
+
+
+@pytest.mark.parametrize("connection", [None, "a" * 32, "b" * 32])
+def test_stale_and_symlink_receipts_do_not_choose_a_different_socket(home: Path, connection: str | None) -> None:
     root = connection_directory(home)
     receipt = HostRegistration(connection="a" * 32, socket=str(root / ("a" * 32 + ".sock")), label="Old Mac")
     path = root / (receipt.connection + ".json")
@@ -97,7 +126,83 @@ def test_stale_and_symlink_receipts_do_not_choose_a_different_socket(home: Path)
     path.chmod(0o600)
     (root / ("b" * 32 + ".json")).symlink_to(path)
     with pytest.raises(RuntimeError, match="No Mac terminal connection"):
-        choose_connection(home=home)
+        choose_connection(connection, home=home)
+
+
+@pytest.mark.parametrize("connection", ["../" + "a" * 32, "a" * 31, "g" * 32])
+def test_explicit_connection_rejects_invalid_identifiers(home: Path, connection: str) -> None:
+    with pytest.raises(ValueError, match="Invalid host connection identifier"):
+        choose_connection(connection, home=home)
+
+
+def test_missing_named_receipt_keeps_concurrently_published_registration(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = connection_directory(home)
+    identifier = "a" * 32
+    saved = HostRegistration(connection=identifier, socket=str(root / (identifier + ".sock")), label="Mac")
+    path = root / (identifier + ".json")
+    read_registration = host_module.saved_registration
+    probes: list[str] = []
+
+    def publish_after_missing(path: Path, root: Path) -> HostRegistration | None:
+        try:
+            return read_registration(path, root)
+        except FileNotFoundError:
+            path.write_text(saved.model_dump_json(), encoding="utf-8")
+            path.chmod(0o600)
+            raise
+
+    def probe(registration: HostRegistration, request: HostRequest, *, timeout: float) -> HostReply:
+        assert request.action == "status"
+        assert timeout == pytest.approx(0.3, rel=0, abs=0)
+        probes.append(registration.connection)
+        return HostReply(ok=True, message="Connected")
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Publish after the real failed read at the shared discovery/cleanup lookup; injection would replace the read whose handler races publication.
+        host_module, "saved_registration", publish_after_missing
+    )
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Observe the real transport lookup after the missing read; an injected probe could miss an accidental ambient exchange.
+        host_module, "exchange", probe
+    )
+    with pytest.raises(RuntimeError, match="No Mac terminal connection"):
+        choose_connection(identifier, home=home)
+    assert probes == []
+    assert read_registration(path, root) == saved
+
+
+@pytest.mark.parametrize("failure", ["timeout", "missing", "refused", "malformed-reply", "rejected"])
+def test_explicit_connection_keeps_inconclusive_receipts(
+    home: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    root = connection_directory(home)
+    identifier = "a" * 32
+    saved = HostRegistration(connection=identifier, socket=str(root / (identifier + ".sock")), label="Mac")
+    path = root / (identifier + ".json")
+    path.write_text(saved.model_dump_json())
+    path.chmod(0o600)
+
+    def probe(registration: HostRegistration, request: HostRequest, *, timeout: float) -> HostReply:
+        assert registration == saved
+        assert request.action == "status"
+        assert timeout == pytest.approx(0.3, rel=0, abs=0)
+        if failure == "timeout":
+            raise TimeoutError
+        if failure == "missing":
+            raise FileNotFoundError(errno.ENOENT, "Synthetic missing channel")
+        if failure == "refused":
+            raise ConnectionRefusedError(errno.ECONNREFUSED, "Synthetic refused channel")
+        if failure == "malformed-reply":
+            message = "Synthetic malformed reply"
+            raise ValueError(message)
+        return HostReply(ok=False, message="Unavailable")
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Deliver socket outcomes at the production exchange lookup; injecting another path would bypass the cleanup boundary under test.
+        host_module, "exchange", probe
+    )
+    with pytest.raises(RuntimeError, match="No Mac terminal connection"):
+        choose_connection(identifier, home=home)
+    assert path.exists() is (failure not in {"missing", "refused"})
 
 
 def test_host_connection_directory_rejects_public_permissions_and_symlink(home: Path) -> None:

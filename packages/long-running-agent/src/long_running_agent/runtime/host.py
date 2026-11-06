@@ -157,9 +157,14 @@ def saved_registration(path: Path, root: Path) -> HostRegistration | None:
     return registration
 
 
-def live_connections(*, home: Path | None = None) -> list[HostRegistration]:
-    root = connection_directory(home)
-    candidates = sorted(root.glob("*.json"))
+def live_connections(*, home: Path | None = None, connection: str | None = None) -> list[HostRegistration]:
+    if connection is None:
+        root = connection_directory(home)
+        candidates = sorted(root.glob("*.json"))
+    else:
+        path = connection_path(connection, home=home).with_suffix(".json")
+        root = path.parent
+        candidates = [path]
     if len(candidates) > MAX_SAVED_CONNECTIONS:
         message = "Too many saved host connections; inspect the private connection directory"
         raise RuntimeError(message)
@@ -167,6 +172,9 @@ def live_connections(*, home: Path | None = None) -> list[HostRegistration]:
     for path in candidates:
         try:
             registration = saved_registration(path, root)
+        except OSError, ValueError:
+            continue
+        try:
             if registration is not None and exchange(registration, HostRequest(action="status"), timeout=0.3).ok:
                 result.append(registration)
         except OSError as error:
@@ -194,9 +202,7 @@ def forget_dead_connection(path: Path, root: Path) -> None:
 
 
 def choose_connection(connection: str | None = None, *, home: Path | None = None) -> HostRegistration:
-    candidates = live_connections(home=home)
-    if connection is not None:
-        candidates = [candidate for candidate in candidates if candidate.connection == connection]
+    candidates = live_connections(home=home, connection=connection)
     if not candidates:
         message = "No Mac terminal connection is available. Reconnect from your Mac with sarj-connect terminal."
         raise RuntimeError(message)
