@@ -192,11 +192,17 @@ def live_connections(*, home: Path | None = None, connection: str | None = None)
 def forget_dead_connection(path: Path, root: Path) -> None:
     # Only a missing/refused local SSH listener is conclusive. Timeouts and
     # malformed files retain their receipt; no browser or Zellij session ends.
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause] -- One cleanup boundary preserves receipts after read, probe or unlink failures.
         info = path.lstat()
         registration = saved_registration(path, root)
-        if registration is not None and path.lstat().st_ino == info.st_ino:
-            path.unlink()
+        if registration is None:
+            return
+        # The original failed probe may predate this receipt's publication.
+        try:
+            exchange(registration, HostRequest(action="status"), timeout=0.3)
+        except OSError as error:
+            if error.errno in {errno.ENOENT, errno.ECONNREFUSED} and path.lstat().st_ino == info.st_ino:
+                path.unlink()
     except OSError, ValueError:
         return
 
