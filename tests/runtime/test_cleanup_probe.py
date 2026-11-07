@@ -652,8 +652,16 @@ def native_process(
         }
         child.stdin.write(json.dumps(payload).encode() + b"\n")
         child.stdin.flush()
-        assert select.select([child.stdout], [], [], 3)[0]
-        assert os.read(child.stdout.fileno(), 6) == b"ready\n"
+        deadline = time.monotonic() + 3
+        ready = b""
+        while len(ready) < 6:
+            remaining = deadline - time.monotonic()
+            assert remaining > 0
+            assert select.select([child.stdout], [], [], remaining)[0]
+            received = os.read(child.stdout.fileno(), 6 - len(ready))
+            assert received
+            ready += received
+        assert ready == b"ready\n"
         yield child
     finally:
         stop_child(child)
