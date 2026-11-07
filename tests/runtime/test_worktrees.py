@@ -63,9 +63,23 @@ def test_provider_binary_cache_is_pruned_while_real_neighbor_and_module_worktree
     repository = home / "repository"
     repository.mkdir(parents=True)
     git(repository, "init", "-q")
-    git(repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "fixture")
+    git(
+        repository,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "--allow-empty",
+        "-qm",
+        "fixture",
+    )
     temporary = tmp_path / "volatile"
-    generated = temporary / "test-fixture/.terraform/providers/registry.terraform.io/hashicorp/google/7.46.1/linux_amd64"
+    generated = (
+        temporary / "test-fixture/.terraform/providers/registry.terraform.io/hashicorp/google/7.46.1/linux_amd64"
+    )
     generated.mkdir(parents=True)
     (generated / "terraform-provider-google").write_bytes(b"generated binary fixture")
     neighbors = [temporary / "test-fixture/source", temporary / "test-fixture/.terraform/modules/source"]
@@ -180,12 +194,19 @@ def test_actual_generated_boot_rules_recreate_exact_alias_and_preserve_data(tmp_
     alias.symlink_to(virtual_target, target_is_directory=True)
     configuration = tmp_path / "etc/tmpfiles.d/regression.conf"
     configuration.parent.mkdir(parents=True)
-    configuration.write_text(
-        "D /tmp 1777 - - -\n" + worktrees.configuration({str(virtual_source): str(virtual_target)})
-    )
+    configuration.write_text("D /tmp 1777 - - -\n")
     command = ["systemd-tmpfiles", f"--root={tmp_path}", "--boot"]
     run([*command, "--remove"], capture_output=True, timeout=15)
     assert not alias.is_symlink()
+    configuration.write_text(
+        "D /tmp 1777 - - -\n" + worktrees.configuration({str(virtual_source): str(virtual_target)})
+    )
+    run([*command, "--create"], capture_output=True, timeout=15)
+    assert alias.readlink() == virtual_target
+    assert hashlib.sha256(payload.read_bytes()).hexdigest() == before
+
+    # Exercise cleanup with the generated alias rule installed as well.
+    run([*command, "--remove"], capture_output=True, timeout=15)
     run([*command, "--create"], capture_output=True, timeout=15)
     assert alias.readlink() == virtual_target
     assert hashlib.sha256(payload.read_bytes()).hexdigest() == before

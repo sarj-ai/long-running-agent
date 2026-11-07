@@ -35,5 +35,5 @@ def test_privileged_maintenance_refuses_an_unsafe_parent_before_inspecting_or_ex
 
 
 def test_privileged_worker_validation_accepts_a_regular_root_owned_system_path() -> None:
-    executable = Path("/usr/bin/true")
+    executable = Path("/usr/bin/true").resolve(strict=True)
     assert maintenance.validated_worker(executable) == executable
