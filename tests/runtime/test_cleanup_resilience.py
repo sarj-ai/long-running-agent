@@ -10,6 +10,7 @@ import shutil
 import socket
 import sqlite3
 import sys
+from tempfile import TemporaryDirectory
 from threading import Event
 import time
 
@@ -291,11 +292,14 @@ def test_status_verifies_process_birth_and_boot_instead_of_pid_alone(paths: Runt
 
 @pytest.mark.parametrize("abstract", [False, True])
 def test_watchdog_notifications_require_supervisor_progress_and_identity(
-    tmp_path: Path, seed: int, abstract: bool, monkeypatch: pytest.MonkeyPatch
+    seed: int, abstract: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    endpoint = f"@lra-cleanup-fixture-{os.getpid()}-{seed}" if abstract else str(tmp_path / "notify.sock")
-    address = "\0" + endpoint[1:] if abstract else endpoint
-    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as receiver:
+    with (
+        TemporaryDirectory(prefix="lra-notify-", dir="/tmp") as directory,
+        socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as receiver,
+    ):
+        endpoint = f"@lra-cleanup-fixture-{os.getpid()}-{seed}" if abstract else str(Path(directory) / "notify.sock")
+        address = "\0" + endpoint[1:] if abstract else endpoint
         receiver.bind(address)
         receiver.settimeout(0.05)
         monkeypatch.setenv("NOTIFY_SOCKET", endpoint)
