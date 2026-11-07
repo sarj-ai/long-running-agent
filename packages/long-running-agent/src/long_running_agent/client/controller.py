@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import platform
-import re
 import shlex
 import time
 from typing import TYPE_CHECKING, Final
@@ -14,7 +13,7 @@ from long_running_agent.client.cloud import Cloud, PowerAction, Runner
 from long_running_agent.client.connection import launch_master
 from long_running_agent.client.host import HostBridge
 from long_running_agent.client.ssh_config import install
-from long_running_agent.client.terminal import TerminalState
+from long_running_agent.client.terminal import TerminalState, validate_session_name
 from long_running_agent.config import REMOTE_RUNTIME, Settings, load_settings
 from long_running_agent.process import CommandError, Completed, ProcessTimeout, run
 
@@ -26,7 +25,6 @@ TIMEOUT_STATUS = 124
 SSH_CONNECTION_CLOSED = 255
 WAKE_ACTIONS: Final[dict[str, PowerAction]] = {"TERMINATED": "start", "SUSPENDED": "resume"}
 TRANSITIONAL = frozenset({"PROVISIONING", "STAGING", "REPAIRING", "RESUMING", "STOPPING", "SUSPENDING"})
-CONNECTION_ATTEMPTS = 3
 
 
 class Client:
@@ -39,12 +37,13 @@ class Client:
         sleeper: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         master_launcher: Callable[[Sequence[str]], int] = launch_master,
+        cloud_factory: type[Cloud] = Cloud,
     ) -> None:
         self.settings, self.runner = settings or load_settings(), runner
         self.home = Path.home() if home is None else home
         self.sleeper, self.clock = sleeper, clock
         self.master_launcher = master_launcher
-        self.cloud = Cloud(self.settings, runner=runner, sleeper=sleeper, clock=clock)
+        self.cloud = cloud_factory(self.settings, runner=runner, sleeper=sleeper, clock=clock)
 
     def ssh(
         self,
@@ -82,7 +81,7 @@ class Client:
                 message = f"Unexpected VM state: {state}; no power operation attempted"
                 raise RuntimeError(message)
             self.sleeper(min(2, max(0, deadline - self.clock())))
-        message = "VM wake exceeded five minutes; check the VM in Google Cloud before trying again"
+        message = "VM wake exceeded five minutes; check the VM in its cloud console before trying again"
         raise TimeoutError(message)
 
     def _request_wake(self, action: PowerAction, deadline: float) -> bool:
@@ -126,7 +125,9 @@ class Client:
             # channels are not terminated as they would be with `-O exit`.
             self.ssh(["-O", "stop", alias], timeout=4, capture_output=True, check=False)
         self.wake()
-        for attempt in range(CONNECTION_ATTEMPTS):
+        delays = self.cloud.connection_retry_delays
+        attempts = len(delays) + 1
+        for attempt in range(attempts):
             try:
                 code = self.master_launcher(["ssh", "-Nf", "-o", "ConnectTimeout=20", "-o", "BatchMode=yes", alias])
                 if code == 0:
@@ -134,9 +135,9 @@ class Client:
             except (ProcessTimeout, CommandError) as error:
                 if isinstance(error, CommandError) and error.returncode != TIMEOUT_STATUS:
                     raise
-            if attempt + 1 < CONNECTION_ATTEMPTS:
-                self.sleeper(1 + attempt)
-        message = "SSH connection failed after three bounded attempts; inspect network and gcloud login"
+            if attempt < len(delays):
+                self.sleeper(delays[attempt])
+        message = f"SSH connection failed after {attempts} bounded attempts; inspect network and cloud login"
         raise RuntimeError(message)
 
     def remote(
@@ -160,8 +161,8 @@ class Client:
     def summary(self, reconnect: Sequence[str] = ("vm",)) -> str:
         settings = self.settings
         return (
-            f"\nVM: {settings.instance}\nProject: {settings.project} | Zone: {settings.zone}\n"
-            f"Account: {settings.account or 'active gcloud account'}\n"
+            f"\nVM: {settings.instance}\n{self.cloud.location()}\n"
+            f"Account: {settings.account or self.cloud.account_label}\n"
             f"Reconnect: {shlex.join(reconnect)}\n"
         )
 
@@ -169,7 +170,7 @@ class Client:
         try:
             return browser.connect(self, no_open=no_open, url=url)
         finally:
-            Console(stderr=True).print(self.summary(("sarj-connect", "browser")), markup=False)
+            Console(stderr=True).print(self.summary((*self.cloud.connect_prefix, "browser")), markup=False)
 
     def shell(self, command: Sequence[str], *, tty: bool = False, reconnect: Sequence[str] = ("vm",)) -> int:
         try:
@@ -192,15 +193,15 @@ class Client:
             Console(stderr=True).print(self.summary(reconnect), markup=False)
 
     def terminal(self, session: str = "sarj-home", *, host_bridge: bool = True) -> int:
-        if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", session) is None:
-            message = "Use a Zellij session name of 1–64 letters, numbers, dots, underscores or hyphens, starting with a letter or number."
-            raise ValueError(message)
+        validate_session_name(session)
         if host_bridge and platform.system() == "Darwin":
             try:
                 with TerminalState(), HostBridge(self, route_factory=browser.start_route) as bridge:
                     return bridge.terminal(session)
             finally:
-                Console(stderr=True).print(self.summary(("sarj-connect", "terminal", session)), markup=False)
+                Console(stderr=True).print(
+                    self.summary((*self.cloud.connect_prefix, "terminal", session)), markup=False
+                )
         command = [
             "/bin/sh",
             "-c",
@@ -210,7 +211,7 @@ class Client:
             "--create",
             session,
         ]
-        reconnect = ["sarj-connect", "terminal", session]
+        reconnect = [*self.cloud.connect_prefix, "terminal", session]
         return self.shell(command, tty=True, reconnect=reconnect)
 
     def configure_ssh(self) -> Path:
@@ -220,22 +221,8 @@ class Client:
             self.runner(
                 ["ssh-keygen", "-q", "-t", "ed25519", "-f", str(key), "-N", "", "-C", "lra-oslogin"], timeout=30
             )
-        result = self.cloud.execute(
-            [
-                "compute",
-                "ssh",
-                self.settings.instance,
-                "--zone=" + self.settings.zone,
-                "--tunnel-through-iap",
-                f"--ssh-key-file={key}",
-                "--quiet",
-                "--command=id -un",
-            ],
-            capture_output=True,
-            timeout=90,
-        )
-        username = result.stdout.strip()
-        path = install(self.settings, username, home=self.home)
+        username = self.cloud.ssh_username(key)
+        path = install(self.settings, username, home=self.home, proxy_command=self.cloud.ssh_proxy())
         self.runner(["ssh", "-G", "-T", self.settings.ssh_alias], capture_output=True, timeout=10)
         return path
 

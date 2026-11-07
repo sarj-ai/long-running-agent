@@ -50,6 +50,7 @@ def load_settings(
     path: Path | None = None,
     *,
     overrides: Mapping[str, object] | None = None,
+    model: type[Settings] = Settings,
 ) -> Settings:
     selected = (path or settings_path()).expanduser()
     if path is not None and not selected.is_file():
@@ -63,4 +64,4 @@ def load_settings(
             values.pop(retired, None)
     if overrides:
         values.update({key: value for key, value in overrides.items() if value is not None})
-    return Settings.model_validate(values)
+    return model.model_validate(values)

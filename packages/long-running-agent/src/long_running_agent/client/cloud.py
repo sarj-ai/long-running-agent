@@ -3,7 +3,7 @@ from __future__ import annotations
 import shlex
 from subprocess import CompletedProcess  # ruff: ignore[suspicious-subprocess-import] -- Construct data records only; child execution uses the common process boundary.
 import time
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, ClassVar, Literal, Protocol
 
 from long_running_agent.process import CommandError, Completed, ProcessTimeout, environment_snapshot, run
 
@@ -68,6 +68,11 @@ def sanitized_environment(environment: Mapping[str, str]) -> dict[str, str]:
 
 
 class Cloud:
+    connect_prefix: ClassVar[tuple[str, ...]] = ("sarj-connect",)
+    account_label: ClassVar[str] = "active gcloud account"
+    inventory_prefixes: ClassVar[tuple[tuple[str, ...], ...]] = INVENTORY_PREFIXES
+    connection_retry_delays: ClassVar[tuple[float, ...]] = (1, 2)
+
     def __init__(
         self,
         settings: Settings,
@@ -92,7 +97,7 @@ class Cloud:
         timeout: float = 75,
         check: bool = True,
     ) -> Completed:
-        inventory = any(tuple(arguments[: len(prefix)]) == prefix for prefix in INVENTORY_PREFIXES)
+        inventory = any(tuple(arguments[: len(prefix)]) == prefix for prefix in self.inventory_prefixes)
         attempts = 3 if inventory else 1
         deadline = self.clock() + timeout
         for attempt in range(attempts):
@@ -178,3 +183,26 @@ class Cloud:
         if asynchronous:
             arguments.append("--async")
         self.execute(arguments, timeout=min(timeout, 75 if asynchronous else 300))
+
+    def location(self) -> str:
+        return f"Project: {self.settings.project} | Zone: {self.settings.zone}"
+
+    def ssh_proxy(self) -> list[str] | None:
+        return None
+
+    def ssh_username(self, key: Path) -> str:
+        result = self.execute(
+            [
+                "compute",
+                "ssh",
+                self.settings.instance,
+                "--zone=" + self.settings.zone,
+                "--tunnel-through-iap",
+                f"--ssh-key-file={key}",
+                "--quiet",
+                "--command=id -un",
+            ],
+            capture_output=True,
+            timeout=90,
+        )
+        return result.stdout.strip()

@@ -8,6 +8,7 @@ import typer
 
 from long_running_agent import infra
 from long_running_agent.client import app as client
+from long_running_agent.client.azure import connect as azure_connect
 from long_running_agent.config import load_settings
 from long_running_agent.runtime import codex
 from long_running_agent.runtime.app import app as runtime_app
@@ -35,6 +36,8 @@ def configure(
     instance: Annotated[str | None, typer.Option("--instance", hidden=True)] = None,
     zone: Annotated[str | None, typer.Option("--zone", hidden=True)] = None,
 ) -> None:
+    if ctx.invoked_subcommand == "azure":
+        return
     ctx.obj = load_settings(overrides={"account": account, "project": project, "instance": instance, "zone": zone})
 
 
@@ -47,6 +50,7 @@ connect_app = typer.Typer(
 connect_app.callback()(configure)
 connect_app.command("terminal")(client.terminal)
 connect_app.command("browser")(client.browser)
+connect_app.command("azure", help="Open your Azure terminal or browser.")(azure_connect)
 
 
 def invoke(application: typer.Typer, name: str, arguments: list[str] | None = None) -> None:

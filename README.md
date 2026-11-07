@@ -14,6 +14,7 @@ uv tool install --editable ./packages/long-running-agent
 | --- | --- |
 | `sarj-connect terminal` | Open your persistent terminal. Reconnect to return to the same windows. |
 | `sarj-connect browser` | Open your VM browser with its saved tabs and sign-ins. |
+| `sarj-connect azure` | Open your Azure terminal or browser. |
 
 On the VM, `lra codex switch` changes accounts and reopens saved conversations.
 Use `lra codex retry enable` to recover temporary model-capacity failures automatically.

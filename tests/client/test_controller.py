@@ -151,6 +151,22 @@ def test_child_credential_overrides_removed_without_mutating_parent() -> None:
     assert source["GOOGLE_APPLICATION_CREDENTIALS"] == "/private/key"
 
 
+def test_google_ssh_retries_keep_the_original_three_attempt_limit() -> None:
+    runner = ScriptedRunner([(1, "", ""), (0, "RUNNING", "")])
+    clock = Clock()
+    launches: list[list[str]] = []
+
+    def launch(arguments: Sequence[str]) -> int:
+        launches.append(list(arguments))
+        return 255
+
+    with pytest.raises(RuntimeError, match="3 bounded attempts"):
+        Client(Settings(), runner=runner, sleeper=clock.sleep, clock=clock, master_launcher=launch).ensure_connection()
+
+    assert len(launches) == 3
+    assert clock.now == 3
+
+
 def test_transient_inventory_timeout_uses_bounded_retry_without_replaying_mutation() -> None:
     runner = ScriptedRunner([subprocess.TimeoutExpired("gcloud", 1), (0, "RUNNING", "")])
     clock = Clock()
