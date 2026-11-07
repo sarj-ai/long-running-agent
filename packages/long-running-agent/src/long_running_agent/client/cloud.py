@@ -71,6 +71,7 @@ class Cloud:
     connect_prefix: ClassVar[tuple[str, ...]] = ("sarj-connect",)
     account_label: ClassVar[str] = "active gcloud account"
     inventory_prefixes: ClassVar[tuple[tuple[str, ...], ...]] = INVENTORY_PREFIXES
+    connection_retry_delays: ClassVar[tuple[float, ...]] = (1, 2)
 
     def __init__(
         self,

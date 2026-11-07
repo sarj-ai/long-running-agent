@@ -25,7 +25,6 @@ TIMEOUT_STATUS = 124
 SSH_CONNECTION_CLOSED = 255
 WAKE_ACTIONS: Final[dict[str, PowerAction]] = {"TERMINATED": "start", "SUSPENDED": "resume"}
 TRANSITIONAL = frozenset({"PROVISIONING", "STAGING", "REPAIRING", "RESUMING", "STOPPING", "SUSPENDING"})
-CONNECTION_ATTEMPTS = 3
 
 
 class Client:
@@ -126,7 +125,9 @@ class Client:
             # channels are not terminated as they would be with `-O exit`.
             self.ssh(["-O", "stop", alias], timeout=4, capture_output=True, check=False)
         self.wake()
-        for attempt in range(CONNECTION_ATTEMPTS):
+        delays = self.cloud.connection_retry_delays
+        attempts = len(delays) + 1
+        for attempt in range(attempts):
             try:
                 code = self.master_launcher(["ssh", "-Nf", "-o", "ConnectTimeout=20", "-o", "BatchMode=yes", alias])
                 if code == 0:
@@ -134,9 +135,9 @@ class Client:
             except (ProcessTimeout, CommandError) as error:
                 if isinstance(error, CommandError) and error.returncode != TIMEOUT_STATUS:
                     raise
-            if attempt + 1 < CONNECTION_ATTEMPTS:
-                self.sleeper(1 + attempt)
-        message = "SSH connection failed after three bounded attempts; inspect network and cloud login"
+            if attempt < len(delays):
+                self.sleeper(delays[attempt])
+        message = f"SSH connection failed after {attempts} bounded attempts; inspect network and cloud login"
         raise RuntimeError(message)
 
     def remote(

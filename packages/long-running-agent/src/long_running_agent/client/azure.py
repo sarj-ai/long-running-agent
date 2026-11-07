@@ -48,6 +48,7 @@ class AzureCloud(Cloud):
     connect_prefix: ClassVar[tuple[str, ...]] = ("sarj-connect", "azure")
     account_label: ClassVar[str] = "active Azure CLI account"
     inventory_prefixes: ClassVar[tuple[tuple[str, ...], ...]] = (("rest", "--method", "get"), ("account", "show"))
+    connection_retry_delays: ClassVar[tuple[float, ...]] = (2, 4, 8, 16, 30)
 
     def azure_settings(self) -> AzureSettings:
         return AzureSettings.model_validate(self.settings.model_dump())

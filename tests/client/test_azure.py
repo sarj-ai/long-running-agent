@@ -140,6 +140,25 @@ def test_failed_azure_power_mutation_is_not_retried() -> None:
     assert len(runner.commands) == 1
 
 
+def test_running_azure_vm_waits_for_cloudflare_after_guest_boot() -> None:
+    runner = _AzureRunner([(1, "", ""), (0, "PowerState/running", "")])
+    delays: list[float] = []
+    launches: list[list[str]] = []
+    results = iter([255, 255, 255, 255, 0])
+
+    def launch(arguments: Sequence[str]) -> int:
+        launches.append(list(arguments))
+        return next(results)
+
+    Client(
+        _settings(), runner=runner, cloud_factory=AzureCloud, sleeper=delays.append, master_launcher=launch
+    ).ensure_connection()
+
+    assert len(launches) == 5
+    assert delays == [2, 4, 8, 16]
+    assert not any(command[1:3] == ["vm", "start"] for command in runner.commands)
+
+
 def test_expired_azure_login_never_echoes_tokens_or_changes_identity() -> None:
     private = "private-access-value"
     runner = _AzureRunner([(1, private, "AADSTS700082 " + private)])
