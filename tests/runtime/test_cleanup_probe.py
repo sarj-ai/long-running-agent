@@ -360,8 +360,10 @@ def test_confirmed_native_exit_can_be_skipped() -> None:
         "{home}/code",
         "/tmp",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only rejection value; never creates a file.
         "/var/tmp",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only rejection value; never creates a file.
+        "/dev/shm",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only rejection value; never creates a file.
         "/tmp-other/private",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only prefix rejection; no file creation.
         "/var/tmp-other/private",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only prefix rejection; no file creation.
+        "/dev/shm-other/private",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only prefix rejection; no file creation.
         "{home}/code/../escape",
         "{home}/code/alias/../tree",
         "{home}/code/double//slash",
@@ -369,7 +371,9 @@ def test_confirmed_native_exit_can_be_skipped() -> None:
         "{home}/code/line\nbreak",
         "/tmp/../home/other/private",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only traversal rejection; no file creation.
         "/var/tmp/alias/../private",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only traversal rejection; no file creation.
+        "/dev/shm/../tmp/private",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only traversal rejection; no file creation.
         "/tmp/double//slash",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only normalization rejection; no file creation.
+        "/dev/shm/double//slash",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only normalization rejection; no file creation.
         "/var/tmp/control\0path",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only control-character rejection; no file creation.
         "/tmp/line\nbreak",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only control-character rejection; no file creation.
         "relative",
@@ -394,6 +398,10 @@ def test_candidate_scope_is_strictly_lexical_and_uses_only_explicit_inspection_r
         pytest.param(
             "/var/tmp/closed-pytest-allocation",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only accepted value; never creates a file.
             id="durable-temporary-child",
+        ),
+        pytest.param(
+            "/dev/shm/closed-pytest-allocation",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only accepted value; never creates a file.
+            id="shared-memory-child",
         ),
     ],
 )
@@ -526,6 +534,10 @@ def test_real_socket_peer_uid_and_sanitized_response_contract(process: ProcessFi
         pytest.param(
             Path("/var/tmp"),  # ruff: ignore[hardcoded-temp-file] -- Only names absent protocol candidates; never creates files here.
             id="missing-var-tmp-paths",
+        ),
+        pytest.param(
+            Path("/dev/shm"),  # ruff: ignore[hardcoded-temp-file] -- Only names absent protocol candidates; never creates files here.
+            id="missing-shared-memory-paths",
         ),
     ],
 )
