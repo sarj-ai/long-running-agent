@@ -312,7 +312,7 @@ def identity(target: codex_panes.PaneTarget) -> str:
 
 
 def current_target(target: codex_panes.PaneTarget, *, proc: Path) -> codex_panes.PaneTarget:
-    observed = codex_panes.process_states(proc).get(target.process.pid)
+    observed = codex_panes.process_state(proc / str(target.process.pid))
     if observed is None or observed != target.process or observed.state in {"T", "t"}:
         message = "Codex process identity or foreground changed before recovery"
         raise RecoveryError(message)
@@ -407,11 +407,11 @@ class RecoverySweep:
         raw = self.io.screen(target)
         self.report.checked += 1
         key = identity(target)
-        observed = codex_events.completion(target, proc=self.proc)
         if capacity_error(raw) is None:
-            if successful_idle(raw) and observed.state == "success":
+            if successful_idle(raw) and codex_events.completion(target, proc=self.proc).state == "success":
                 self.state.attempts.pop(key, None)
             return
+        observed = codex_events.completion(target, proc=self.proc)
         if observed.state != "capacity":
             self.report.blocked += 1
             return

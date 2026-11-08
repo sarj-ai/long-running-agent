@@ -242,22 +242,31 @@ def session_panes(
     raise PaneError(message)
 
 
+def process_state(directory: Path) -> Process | None:
+    try:
+        uid = directory.stat().st_uid
+        fields = bounded_bytes(directory / "stat").rsplit(b")", 1)[1].split()
+        if fields[0] != b"Z":
+            return Process(
+                int(directory.name),
+                fields[19].decode(),
+                int(fields[1]),
+                int(fields[2]),
+                int(fields[5]),
+                uid,
+                fields[0].decode(),
+            )
+    except FileNotFoundError, ProcessLookupError:
+        pass
+    return None
+
+
 def process_states(proc: Path) -> dict[int, Process]:
-    result: dict[int, Process] = {}
-    for directory in proc.iterdir():
-        if not directory.name.isdecimal():
-            continue
-        try:
-            uid = directory.stat().st_uid
-            fields = bounded_bytes(directory / "stat").rsplit(b")", 1)[1].split()
-            if fields[0] != b"Z":
-                pid = int(directory.name)
-                result[pid] = Process(
-                    pid, fields[19].decode(), int(fields[1]), int(fields[2]), int(fields[5]), uid, fields[0].decode()
-                )
-        except FileNotFoundError, ProcessLookupError:
-            continue
-    return result
+    return {
+        process.pid: process
+        for directory in proc.iterdir()
+        if directory.name.isdecimal() and (process := process_state(directory)) is not None
+    }
 
 
 @dataclass(frozen=True)

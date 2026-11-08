@@ -21,6 +21,50 @@ import pytest
 from tests.runtime.test_codex_panes import fixture_process
 
 
+@pytest.mark.parametrize(("index", "value"), [(0, "Z"), (0, "T"), (0, "t"), (5, "101"), (19, "5678")])
+def test_target_revalidation_rejects_changed_process_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, index: int, value: str
+) -> None:
+    fixture = fixture_process(tmp_path, monkeypatch)
+    target = codex_panes.plan_panes(proc=fixture.proc).targets[0]
+    fields = (fixture.process / "stat").read_text().rsplit(")", 1)[1].split()
+    fields[index] = value
+    (fixture.process / "stat").write_text("100 (codex) " + " ".join(fields))
+    with pytest.raises(recovery.RecoveryError, match="identity or foreground"):
+        recovery.current_target(target, proc=fixture.proc)
+
+
+def test_target_revalidation_rejects_exited_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fixture = fixture_process(tmp_path, monkeypatch)
+    target = codex_panes.plan_panes(proc=fixture.proc).targets[0]
+    (fixture.process / "stat").unlink()
+    with pytest.raises(recovery.RecoveryError, match="identity or foreground"):
+        recovery.current_target(target, proc=fixture.proc)
+
+
+@pytest.mark.parametrize("screen", ["• Working\n›\n", "› unfinished draft\n", "Sign in to continue\n›\n"])
+def test_busy_pane_does_not_read_native_rollout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, screen: str) -> None:
+    fixture = fixture_process(tmp_path, monkeypatch)
+    target = codex_panes.plan_panes(proc=fixture.proc).targets[0]
+
+    def unexpected_read(_target: codex_panes.PaneTarget, *, proc: Path) -> codex_events.Completion:
+        raise AssertionError(proc)
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Intercept the real global lookup; injection would bypass the behavior tested.
+        codex_events, "completion", unexpected_read
+    )
+    worker = recovery.RecoverySweep(
+        recovery.directory(tmp_path),
+        proc=fixture.proc,
+        io=recovery.PaneIO(screen=lambda _target: screen),
+        now=1000,
+        apply=True,
+    )
+    worker.inspect(target)
+    assert worker.report.checked == 1
+    assert not worker.state.attempts
+
+
 ERRORS = (
     "■ Selected model is at capacity. Please try a different model.",
     "■ The selected model is currently at capacity. Please try again later.",
