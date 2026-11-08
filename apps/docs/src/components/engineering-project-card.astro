@@ -54,6 +54,17 @@ const DESCRIPTION_ID = `${TITLE_ID}-description`;
         <svg class="engineering-browser-preview" fill="none" height="70" stroke="currentColor" stroke-width="1" viewBox="0 0 116 70" width="116"><rect height="68" width="114" x="1" y="1" /><path d="M1 16h114M10 9h3m4 0h3m4 0h3M14 30h52m-52 9h72m-72 9h43" /></svg>
       </div>
     )}
+    {PROJECT.id === "workspace-sync" && (
+      <div class="engineering-repository-preview engineering-preview-panel">
+        <div class="engineering-preview-label"><span class="engineering-file-symbol">◇</span> workspace-sync</div>
+        <div class="engineering-repository-tree">
+          <span class="engineering-file-symbol">◇</span><span>Google Directory authority</span>
+          <span class="engineering-tree-junction">↓</span><span>Reviewed identity plan</span>
+          <span class="engineering-file-symbol">◇</span><span>Verified provider access</span>
+        </div>
+        <div class="engineering-preview-command">plan · guard · reconcile · verify</div>
+      </div>
+    )}
   </div>
   <div class="engineering-card-body">
     <h3 id={TITLE_ID}><span class="engineering-card-title">{PROJECT.name}</span></h3>

@@ -23,4 +23,10 @@ export const ENGINEERING_PROJECTS = [
     name: "Wiki",
     description: "A focused workspace for Google Drive documents.",
   },
+  {
+    id: "workspace-sync",
+    path: "/projects/workspace-sync/",
+    name: "Workspace Sync",
+    description: "Google Workspace authority and guarded identity reconciliation.",
+  },
 ] as const;
