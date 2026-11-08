@@ -71,13 +71,12 @@ def fixture_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, source: 
 
     zellij = executable.with_name("zellij")
     zellij.write_text(
-        f"#!{sys.executable}\n"
-        "import pathlib,sys\n"
-        "if sys.argv[1:]==['list-sessions','--no-formatting']:\n"
-        " print('fixture [Created 1s ago]')\n"
-        "elif sys.argv[1:]==['--session','fixture','action','list-panes','--json']:\n"
-        " print(pathlib.Path(__file__).with_name('zellij-panes.json').read_text())\n"
-        "else: sys.exit(1)\n"
+        "#!/bin/sh\n"
+        'case "$#:$*" in\n'
+        " '2:list-sessions --no-formatting') printf '%s\\n' 'fixture [Created 1s ago]' ;;\n"
+        ' "5:--session fixture action list-panes --json") /bin/cat "${0%/*}/zellij-panes.json" && printf "\\n" ;;\n'
+        " *) exit 1 ;;\n"
+        "esac\n"
     )
     zellij.chmod(0o700)
     (executable.parent / "zellij-panes.json").write_text(
