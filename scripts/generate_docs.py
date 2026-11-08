@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Final, Protocol, TypeGuard
 
 import hcl2
 from long_running_agent import cli
+from long_running_agent.client.azure import AzureSettings
 from long_running_agent.config import Settings
 from long_running_agent.runtime import host
 from pydantic import JsonValue, RootModel
@@ -247,13 +248,13 @@ def profile_path(source: ast.Module) -> str:
     return "~/" + relative
 
 
-def settings_reference() -> Document:
+def settings_reference(model: type[Settings] = Settings, *, profile_name: str = "config.toml") -> Document:
     source = tree("long_running_agent.config")
-    schema = DocumentModel.model_validate(Settings.model_json_schema()).root
+    schema = DocumentModel.model_validate(model.model_json_schema()).root
     properties = dictionary(schema["properties"])
     return {
         "schema": schema,
-        "profilePath": profile_path(source),
+        "profilePath": Path(profile_path(source)).with_name(profile_name).as_posix(),
         "example": "\n".join(
             name + " = " + json.dumps(array(dictionary(detail)["examples"])[0]) for name, detail in properties.items()
         ),
@@ -355,6 +356,7 @@ def reference(root: Path = ROOT) -> Document:
         },
         "entrypoints": entrypoints,
         "settings": settings,
+        "azureSettings": settings_reference(AzureSettings, profile_name="azure.toml"),
         "terraform": terraform_reference(root),
     }
 

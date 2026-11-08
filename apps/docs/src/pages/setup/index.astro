@@ -12,7 +12,7 @@ import { REFERENCE } from "../../lib/reference";
     <p>You need access to an LRA VM with the matching connection runtime, <a href="https://docs.astral.sh/uv/">uv</a>, and the <a href="https://cloud.google.com/sdk/docs/install">Google Cloud CLI</a>. Your administrator prepares the VM.</p>
     <h2>Install</h2>
     <Code code={`git clone https://github.com/sarj-ai/long-running-agent.git\ncd long-running-agent\n${REFERENCE.package.install.join("\n")}`} lang="bash" />
-    <h2 id="vm-details">VM details</h2>
+    <h2 id="vm-details">Google VM details</h2>
     <p>Set this once in <code>{REFERENCE.settings.profilePath}</code>. Your administrator provides the VM details.</p>
     <Code code={REFERENCE.settings.example} lang="toml" />
     <h2>Connect your account</h2>
@@ -21,5 +21,11 @@ import { REFERENCE } from "../../lib/reference";
     <h2>Reconnect</h2>
     <p>Close or detach the terminal to leave work running. Run <code>sarj-connect terminal</code> to return.</p>
     <p>If Google asks you to sign in again, run <code>gcloud auth login you@example.com --force</code>, then reconnect.</p>
+    <h2>Azure VM</h2>
+    <p>Install the <a href="https://learn.microsoft.com/cli/azure/install-azure-cli">Azure CLI</a> and <a href="https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/">cloudflared</a>. Your administrator provides a VM and an authenticated Cloudflare SSH hostname.</p>
+    <p>Save your Azure details in <code>{REFERENCE.azureSettings.profilePath}</code>. Terminal and browser commands use the Google profile by default; add <code>--azure</code> to select Azure.</p>
+    <Code code={REFERENCE.azureSettings.example} lang="toml" />
+    <Code code={"az login\nsarj-connect terminal --azure\nsarj-connect browser --azure"} lang="bash" />
+    <p>The first connection enrolls your SSH public key and opens Cloudflare Access sign-in. Reconnect to return to the same terminal windows and browser profile.</p>
   </article>
 </ReferencePage>

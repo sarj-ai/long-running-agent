@@ -93,6 +93,8 @@ def test_reference_only_publishes_daily_commands_and_keeps_existing_aliases(tmp_
     paths = {tuple(command.path): command for entry in entries.values() for command in commands(entry.command)}
     for name in ("vm", "sarj-vm", "sarj-connect"):
         assert {command.path[-1] for command in entries[name].command.commands} == {"terminal", "browser"}
+    for mode in ("terminal", "browser"):
+        assert any("--azure" in parameter.options for parameter in paths["sarj-connect", mode].parameters)
     assert {command.path[-1] for command in paths["lra", "vm"].commands} == {"terminal", "browser"}
     assert '"api":' not in (tmp_path / REFERENCE).read_text(encoding="utf-8")
     assert reference.settings["profilePath"] == "~/.config/long-running-agent/config.toml"

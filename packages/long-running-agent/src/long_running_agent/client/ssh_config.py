@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from long_running_agent.config import Settings
 
 
@@ -40,7 +42,9 @@ def managed_configuration(old: str, block: str, alias: str) -> str:
     return prefix + block + "\n" + suffix
 
 
-def render(settings: Settings, username: str, *, python: Path | None = None) -> str:
+def render(
+    settings: Settings, username: str, *, python: Path | None = None, proxy_command: Sequence[str] | None = None
+) -> str:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", username):
         message = "OS Login returned an invalid user name"
         raise ValueError(message)
@@ -61,7 +65,11 @@ def render(settings: Settings, username: str, *, python: Path | None = None) -> 
     if settings.account:
         command.extend(("--account", settings.account))
     command.extend(("vm", "tunnel"))
-    proxy = shlex.join([item.replace("%", "%%") for item in command]) + " %p"
+    proxy = (
+        shlex.join([item.replace("%", "%%") for item in command]) + " %p"
+        if proxy_command is None
+        else shlex.join([item.replace("%", "%%") for item in proxy_command])
+    )
     alias = settings.ssh_alias
     known_hosts = "sarj_codex_known_hosts" if alias == "sarj-codex" else f"{alias}_known_hosts"
     return f"""# BEGIN LONG RUNNING AGENT {alias}
@@ -85,11 +93,20 @@ Host *
 # END LONG RUNNING AGENT {alias}"""
 
 
-def install(settings: Settings, username: str, *, home: Path | None = None, python: Path | None = None) -> Path:
+def install(
+    settings: Settings,
+    username: str,
+    *,
+    home: Path | None = None,
+    python: Path | None = None,
+    proxy_command: Sequence[str] | None = None,
+) -> Path:
     directory = (home or Path.home()) / ".ssh"
     path = directory / "config"
     old = path.read_text() if path.exists() else ""
-    new = managed_configuration(old, render(settings, username, python=python), settings.ssh_alias)
+    new = managed_configuration(
+        old, render(settings, username, python=python, proxy_command=proxy_command), settings.ssh_alias
+    )
     if new == old:
         return path
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)

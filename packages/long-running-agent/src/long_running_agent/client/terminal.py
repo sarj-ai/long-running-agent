@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import select
 import signal
 import termios
@@ -25,6 +26,12 @@ REMOTE_MODES = (9, 1000, 1001, 1002, 1003, 1004, 1005, 1006, 1015, 1016, 2004)
 RESTORE_MODES = (
     b"".join(f"\x1b[?{mode}l".encode() for mode in REMOTE_MODES) + b"\x1b[?1049l\x1b[?1047l\x1b[?47l\x1b[?25h"
 )
+
+
+def validate_session_name(session: str) -> None:
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", session) is None:
+        message = "Use a Zellij session name of 1–64 letters, numbers, dots, underscores or hyphens, starting with a letter or number."
+        raise ValueError(message)
 
 
 def _interrupted(signum: int, _frame: FrameType | None) -> None:

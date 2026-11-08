@@ -39,7 +39,14 @@ interface Entrypoint {
   target: string;
 }
 
+interface SettingsProjection {
+  example: string;
+  profilePath: string;
+  schema: Record<string, unknown>;
+}
+
 interface Projection {
+  azureSettings: SettingsProjection;
   entrypoints: Entrypoint[];
   package: {
     name: string;
@@ -54,11 +61,7 @@ interface Projection {
     install: string[];
   };
   schemaVersion: number;
-  settings: {
-    schema: Record<string, unknown>;
-    profilePath: string;
-    example: string;
-  };
+  settings: SettingsProjection;
   terraform: {
     roots: {
       name: string;
