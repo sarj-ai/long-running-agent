@@ -45,7 +45,6 @@ class AzureSettings(Settings):
 
 
 class AzureCloud(Cloud):
-    connect_prefix: ClassVar[tuple[str, ...]] = ("sarj-connect", "azure")
     account_label: ClassVar[str] = "active Azure CLI account"
     inventory_prefixes: ClassVar[tuple[tuple[str, ...], ...]] = (("rest", "--method", "get"), ("account", "show"))
     connection_retry_delays: ClassVar[tuple[float, ...]] = (2, 4, 8, 16, 30)
@@ -59,7 +58,9 @@ class AzureCloud(Cloud):
     def _error(self, result: Completed) -> RuntimeError:
         stderr = (result.stderr or "").lower()
         if any(marker in stderr for marker in ("az login", "aadsts", "refresh token has expired")):
-            return RuntimeError("Azure sign-in needs refreshing.\nRun: az login\nThen run sarj-connect azure again.")
+            return RuntimeError(
+                "Azure sign-in needs refreshing.\nRun: az login\nThen run sarj-connect terminal --azure again."
+            )
         return CommandError("az", result.returncode)
 
     def verify_account(self, *, timeout: float = 30) -> None:
@@ -124,6 +125,9 @@ class AzureCloud(Cloud):
     def location(self) -> str:
         return f"Subscription: {self.settings.project} | Resource group: {self.settings.zone}"
 
+    def connect_command(self, mode: Literal["terminal", "browser"]) -> tuple[str, ...]:
+        return ("sarj-connect", mode, "--azure")
+
     def ssh_proxy(self) -> list[str]:
         return ["cloudflared", "access", "ssh", "--hostname", self.azure_settings().hostname]
 
@@ -163,6 +167,22 @@ class AzureCloud(Cloud):
         return settings.username
 
 
+def prepare_client() -> Client:
+    settings = load_settings(settings_path().with_name("azure.toml"), model=AzureSettings)
+    cloud = AzureCloud(settings)
+    controller = Client(settings, cloud_factory=AzureCloud)
+    cloud.authenticate_tunnel()
+    config = Path.home() / ".ssh/config"
+    old = config.read_text() if config.exists() else ""
+    marker = f"# BEGIN LONG RUNNING AGENT {settings.ssh_alias}\n"
+    if not settings.ssh_key.exists() or marker not in old:
+        controller.wake()
+        controller.configure_ssh()
+    else:
+        install(settings, cloud.azure_settings().username, proxy_command=cloud.ssh_proxy())
+    return controller
+
+
 def connect(
     mode: Annotated[
         Literal["terminal", "browser"], typer.Argument(help="Open the Azure terminal or browser.")
@@ -178,18 +198,7 @@ def connect(
         validate_session_name(target or "sarj-home")
     elif target is not None:
         website_url(target)
-    settings = load_settings(settings_path().with_name("azure.toml"), model=AzureSettings)
-    cloud = AzureCloud(settings)
-    controller = Client(settings, cloud_factory=AzureCloud)
-    cloud.authenticate_tunnel()
-    config = Path.home() / ".ssh/config"
-    old = config.read_text() if config.exists() else ""
-    marker = f"# BEGIN LONG RUNNING AGENT {settings.ssh_alias}\n"
-    if not settings.ssh_key.exists() or marker not in old:
-        controller.wake()
-        controller.configure_ssh()
-    else:
-        install(settings, cloud.azure_settings().username, proxy_command=cloud.ssh_proxy())
+    controller = prepare_client()
     code = (
         controller.browser(no_open=no_open, url=target)
         if mode == "browser"

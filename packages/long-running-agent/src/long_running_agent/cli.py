@@ -38,7 +38,11 @@ def configure(
 ) -> None:
     if ctx.invoked_subcommand == "azure":
         return
-    ctx.obj = load_settings(overrides={"account": account, "project": project, "instance": instance, "zone": zone})
+    overrides = {"account": account, "project": project, "instance": instance, "zone": zone}
+    if ctx.invoked_subcommand in {"vm", "terminal", "browser"}:
+        ctx.obj = lambda: load_settings(overrides=overrides)
+    else:
+        ctx.obj = load_settings(overrides=overrides)
 
 
 connect_app = typer.Typer(
@@ -50,7 +54,7 @@ connect_app = typer.Typer(
 connect_app.callback()(configure)
 connect_app.command("terminal")(client.terminal)
 connect_app.command("browser")(client.browser)
-connect_app.command("azure", help="Open your Azure terminal or browser.")(azure_connect)
+connect_app.command("azure", hidden=True)(azure_connect)
 
 
 def invoke(application: typer.Typer, name: str, arguments: list[str] | None = None) -> None:

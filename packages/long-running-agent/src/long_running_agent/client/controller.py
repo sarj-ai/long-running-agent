@@ -170,7 +170,7 @@ class Client:
         try:
             return browser.connect(self, no_open=no_open, url=url)
         finally:
-            Console(stderr=True).print(self.summary((*self.cloud.connect_prefix, "browser")), markup=False)
+            Console(stderr=True).print(self.summary(self.cloud.connect_command("browser")), markup=False)
 
     def shell(self, command: Sequence[str], *, tty: bool = False, reconnect: Sequence[str] = ("vm",)) -> int:
         try:
@@ -200,7 +200,7 @@ class Client:
                     return bridge.terminal(session)
             finally:
                 Console(stderr=True).print(
-                    self.summary((*self.cloud.connect_prefix, "terminal", session)), markup=False
+                    self.summary((*self.cloud.connect_command("terminal"), session)), markup=False
                 )
         command = [
             "/bin/sh",
@@ -211,7 +211,7 @@ class Client:
             "--create",
             session,
         ]
-        reconnect = [*self.cloud.connect_prefix, "terminal", session]
+        reconnect = [*self.cloud.connect_command("terminal"), session]
         return self.shell(command, tty=True, reconnect=reconnect)
 
     def configure_ssh(self) -> Path:

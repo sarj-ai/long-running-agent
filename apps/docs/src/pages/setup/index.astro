@@ -23,9 +23,9 @@ import { REFERENCE } from "../../lib/reference";
     <p>If Google asks you to sign in again, run <code>gcloud auth login you@example.com --force</code>, then reconnect.</p>
     <h2>Azure VM</h2>
     <p>Install the <a href="https://learn.microsoft.com/cli/azure/install-azure-cli">Azure CLI</a> and <a href="https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/">cloudflared</a>. Your administrator provides a VM and an authenticated Cloudflare SSH hostname.</p>
-    <p>Save your Azure details in <code>{REFERENCE.azureSettings.profilePath}</code>. The Google profile remains available.</p>
+    <p>Save your Azure details in <code>{REFERENCE.azureSettings.profilePath}</code>. Terminal and browser commands use the Google profile by default; add <code>--azure</code> to select Azure.</p>
     <Code code={REFERENCE.azureSettings.example} lang="toml" />
-    <Code code={"az login\nsarj-connect azure\nsarj-connect azure browser"} lang="bash" />
+    <Code code={"az login\nsarj-connect terminal --azure\nsarj-connect browser --azure"} lang="bash" />
     <p>The first connection enrolls your SSH public key and opens Cloudflare Access sign-in. Reconnect to return to the same terminal windows and browser profile.</p>
   </article>
 </ReferencePage>

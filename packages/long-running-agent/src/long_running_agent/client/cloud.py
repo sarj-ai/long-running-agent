@@ -68,7 +68,6 @@ def sanitized_environment(environment: Mapping[str, str]) -> dict[str, str]:
 
 
 class Cloud:
-    connect_prefix: ClassVar[tuple[str, ...]] = ("sarj-connect",)
     account_label: ClassVar[str] = "active gcloud account"
     inventory_prefixes: ClassVar[tuple[tuple[str, ...], ...]] = INVENTORY_PREFIXES
     connection_retry_delays: ClassVar[tuple[float, ...]] = (1, 2)
@@ -186,6 +185,9 @@ class Cloud:
 
     def location(self) -> str:
         return f"Project: {self.settings.project} | Zone: {self.settings.zone}"
+
+    def connect_command(self, mode: Literal["terminal", "browser"]) -> tuple[str, ...]:
+        return ("sarj-connect", mode)
 
     def ssh_proxy(self) -> list[str] | None:
         return None
