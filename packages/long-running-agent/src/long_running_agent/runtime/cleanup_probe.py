@@ -246,7 +246,12 @@ def request(payload: bytes, home: Path) -> Request:
     if len(selected) > MAX_CANDIDATES:
         raise InspectionError
     candidates: dict[Path, None] = {}
-    roots = (home / "code", Path("/tmp"), Path("/var/tmp"))  # ruff: ignore[hardcoded-temp-file] -- Fixed read-only query roots; this parser creates no files and grants no deletion authority.
+    roots = (
+        home / "code",
+        Path("/tmp"),  # ruff: ignore[hardcoded-temp-file] -- Fixed read-only query root; creates no files and grants no deletion authority.
+        Path("/var/tmp"),  # ruff: ignore[hardcoded-temp-file] -- Fixed read-only query root; creates no files and grants no deletion authority.
+        Path("/dev/shm"),  # ruff: ignore[hardcoded-temp-file] -- Fixed read-only query root; creates no files and grants no deletion authority.
+    )
     for item in selected:
         candidate = candidate_path(item, roots)
         if candidate in candidates:
