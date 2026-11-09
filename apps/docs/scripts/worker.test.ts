@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { ENGINEERING_PROJECTS } from "../src/lib/engineering-projects.ts";
 import worker from "../src/worker.ts";
 
 const LEGACY_URLS = [
@@ -42,7 +43,7 @@ for (const [path, destination] of LEGACY_URLS) {
   });
 }
 
-for (const name of ["code-standards", "repo-standards", "lra", "wiki"]) {
+for (const { id: name } of ENGINEERING_PROJECTS) {
   await test(`${name} project root retains query strings when adding its trailing slash`, async () => {
     const response = await worker.fetch(new Request(`https://engineering.sarj.ai/projects/${name}?from=hub`), {
       ASSETS: { fetch: () => Promise.reject(new Error("Project roots must redirect")) },
