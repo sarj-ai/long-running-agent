@@ -8,7 +8,9 @@ export function setupWikiTabs(): void {
   if (tabs.length === 0) return;
   for (const [index, tab] of tabs.entries()) {
     tab.addEventListener("click", () => activateTab(tab, tabs));
-    tab.addEventListener("keydown", (event) => moveTab(event, tabs, index));
+    tab.addEventListener("keydown", (event) =>
+      moveTab(event, tabs, index, tabList.ariaOrientation === "vertical"),
+    );
   }
   const desktop = window.matchMedia("(min-width: 48rem)");
   const orient = (): void => {
@@ -22,15 +24,14 @@ function moveTab(
   event: KeyboardEvent,
   tabs: readonly HTMLButtonElement[],
   index: number,
+  vertical: boolean,
 ): void {
   let next: number;
   switch (event.key) {
-    case "ArrowUp":
-    case "ArrowLeft":
+    case vertical ? "ArrowUp" : "ArrowLeft":
       next = index - 1;
       break;
-    case "ArrowDown":
-    case "ArrowRight":
+    case vertical ? "ArrowDown" : "ArrowRight":
       next = index + 1;
       break;
     case "Home":
