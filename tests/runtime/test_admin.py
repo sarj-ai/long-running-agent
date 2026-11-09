@@ -8,12 +8,13 @@ import pwd
 import shutil
 import subprocess
 import sys
-from typing import Final
+from typing import Annotated, Final
 
 from long_running_agent.runtime import admin_worker as worker
 from long_running_agent.runtime.admin import RegistrationInput
 from pydantic import ValidationError
 import pytest
+import typer
 
 
 WORKER: Final = Path(worker.__file__).resolve()
@@ -62,7 +63,7 @@ def test_legacy_browser_rejects_another_uid_listener() -> None:
     ],
     ids=["boolean-port", "duplicate-port", "ephemeral-port", "negative-display"],
 )
-def test_browser_rejects_boolean_duplicate_and_ephemeral_ports(invalid: object) -> None:
+def test_browser_rejects_boolean_duplicate_and_ephemeral_ports(invalid: dict[str, int]) -> None:
     with pytest.raises(RuntimeError, match=r"integer|Browser ports|Invalid X"):
         worker.validate_browser(invalid)
 
@@ -120,8 +121,14 @@ def test_retired_listener_keeps_cross_user_isolation_until_its_registration_is_r
         assert f"tcp {direction} {{ 9222, 5902, 7900, 24000 }} meta skuid != {{ 0, 1001 }}" in rules
 
 
-@pytest.mark.parametrize("value", [None, [], True, {1: "private-invalid-field"}])
-def test_registry_boundary_rejects_nonobjects_and_nontext_keys_without_echoing_values(value: object) -> None:
+@pytest.mark.parametrize(
+    "value",
+    [None, [], True, {1: "private-invalid-field"}],
+    ids=["null", "array", "boolean", "nontext-key"],
+)
+def test_registry_boundary_rejects_nonobjects_and_nontext_keys_without_echoing_values(
+    value: dict[int, str] | list[str] | bool | None,
+) -> None:
     with pytest.raises(RuntimeError, match=r"Expected a registry object|Expected text registry keys") as caught:
         worker.object_fields(value)
     assert "private-invalid-field" not in str(caught.value)
@@ -193,6 +200,70 @@ def test_public_registration_rejects_invalid_fields(values: dict[str, object]) -
         RegistrationInput.model_validate(values)
 
 
+def test_registration_request_round_trip_preserves_identity_and_resource_controls() -> None:
+    request = RegistrationInput(
+        username="user1001",
+        uid=1001,
+        legacy_browser=True,
+        allow_privileged=True,
+        memory_high="3G",
+        tasks_max="2048",
+        cpu_weight=250,
+    )
+    assert worker.request_arguments(worker.decode_object(request.request())) == worker.WorkerArguments(
+        action="register",
+        username="user1001",
+        uid=1001,
+        legacy_browser=True,
+        allow_privileged=True,
+        memory_high="3G",
+        tasks_max="2048",
+        cpu_weight=250,
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"action": "register-self", "username": "root"},
+        {"action": "connection", "allow_privileged": True},
+        {"action": "register", "username": "user1001", "uid": True},
+        {"action": "register", "username": "user1001", "legacy_browser": 1},
+        {"action": "unsupported-private-value"},
+    ],
+    ids=["self-identity", "readonly-privilege", "boolean-uid", "integer-boolean", "unknown-action"],
+)
+def test_isolated_admin_transport_rejects_forged_requests_before_dispatch(
+    payload: dict[str, str | bool | int],
+) -> None:
+    result = subprocess.run(
+        [sys.executable, "-I", str(WORKER), "/dev/stdin"],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "Expected" in result.stderr or "Unsupported isolated worker request" in result.stderr
+    assert "unsupported-private-value" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [[], ["relative.json"], ["/dev/stdin", "extra"]],
+    ids=["missing-request", "relative-request", "extra-argument"],
+)
+def test_admin_transport_requires_one_absolute_request_path(arguments: list[str]) -> None:
+    result = subprocess.run(
+        [sys.executable, "-I", str(WORKER), *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "Unsupported isolated worker request" in result.stderr
+
+
 def test_worker_is_standalone_python312_compatible() -> None:
     ast.parse(WORKER.read_text(encoding="utf-8"), feature_version=(3, 12))
 
@@ -205,17 +276,18 @@ def test_register_self_accepts_no_identity_or_permission_arguments() -> None:
         check=False,
     )
     assert result.returncode != 0
-    assert "unrecognized arguments" in result.stderr
+    assert "Unsupported isolated worker request" in result.stderr
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="requires an ordinary process")
 @pytest.mark.parametrize(
-    "arguments", [["register-self"], ["register", "nobody"]], ids=["self-registration", "named-registration"]
+    "arguments", [["register-self"], ["/dev/stdin"]], ids=["self-registration", "named-registration"]
 )
 def test_forged_sudo_environment_cannot_cross_the_root_guard(arguments: list[str]) -> None:
     result = subprocess.run(
         [sys.executable, "-I", str(WORKER), *arguments],
         env={"SUDO_UID": "1001", "SUDO_USER": "user1001"},
+        input='{"action":"register","username":"nobody"}',
         capture_output=True,
         text=True,
         check=False,
@@ -338,5 +410,10 @@ except OSError:sys.exit(1)
             child.wait(timeout=5)
 
 
-if __name__ == "__main__" and sys.argv[1:] == ["--namespace-worker"]:
-    namespace_worker()
+def namespace_main(*, run_namespace: Annotated[bool, typer.Option("--namespace-worker")] = False) -> None:
+    if run_namespace:
+        namespace_worker()
+
+
+if __name__ == "__main__":
+    typer.run(namespace_main)

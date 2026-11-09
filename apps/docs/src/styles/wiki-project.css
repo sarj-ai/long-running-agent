@@ -9,51 +9,211 @@ html:has(.wiki-project) {
   --engineering-gutter: clamp(0rem, 5vw - 1rem, 5rem);
   scroll-padding-block-start: 6rem;
 }
-html[data-theme="light"]:has(.wiki-project) { color-scheme: light; }
-html[data-theme="dark"]:has(.wiki-project) { color-scheme: dark; }
-.wiki-project, .wiki-project *, .wiki-project *::before, .wiki-project *::after { box-sizing: border-box; }
-.wiki-project { margin: 0; min-block-size: 100svh; color: var(--sl-color-white); background: var(--sl-color-black); font: 450 1rem/1.5 var(--sl-font); -webkit-font-smoothing: antialiased; }
-.wiki-project a { color: var(--sl-color-accent-high); text-underline-offset: .2em; }
-.wiki-project :focus-visible { outline: 2px solid var(--sl-color-accent); outline-offset: 4px; }
-.wiki-project main { max-inline-size: 80rem; margin-inline: auto; padding: 2rem clamp(1rem, 4vw, 2.5rem) 4rem; }
-.wiki-layout { display: grid; grid-template-columns: 10rem minmax(0, 1fr); align-items: start; gap: clamp(1.5rem, 4vw, 3rem); }
-.wiki-sidebar { position: sticky; inset-block-start: 6rem; }
-.wiki-sidebar [role="tablist"] { display: grid; gap: .25rem; }
-.wiki-sidebar button { display: flex; align-items: center; min-block-size: 44px; inline-size: 100%; padding: .5rem .75rem; border: 1px solid transparent; border-radius: .35rem; color: var(--sl-color-gray-2); background: transparent; font: inherit; font-size: .9375rem; text-align: start; cursor: pointer; }
-.wiki-sidebar button:hover { color: var(--sl-color-white); }
-.wiki-sidebar button[aria-selected="true"] { color: var(--sl-color-white); background: var(--sl-color-gray-6); font-weight: 650; }
-.wiki-content { min-inline-size: 0; }
-.wiki-intro { margin-block-end: 1.5rem; }
-.wiki-project h1 { margin: 0 0 .75rem; font-size: clamp(2.25rem, 6vw, 3rem); line-height: 1.15; letter-spacing: -.045em; }
-.wiki-summary { max-inline-size: 38rem; margin: 0; color: var(--sl-color-gray-2); font-size: clamp(1.0625rem, 2vw, 1.125rem); text-wrap: balance; }
-.wiki-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-block-start: 1rem; }
-.wiki-actions a { display: inline-flex; align-items: center; justify-content: center; gap: .75rem; min-block-size: 44px; padding: .55rem 1rem; border: 1px solid var(--sarj-color-rule); border-radius: .35rem; font-weight: 650; text-decoration: none; }
-.wiki-actions .wiki-primary { color: var(--sl-color-black); background: var(--sl-color-white); border-color: var(--sl-color-white); }
-.wiki-actions a:hover { text-decoration: underline; }
-.wiki-panel { margin: 0; scroll-margin-block-start: 6rem; }
-.wiki-panel[hidden] { display: none; }
-.wiki-screenshot { display: block; overflow: hidden; border: 1px solid var(--sarj-color-rule); border-radius: .5rem; }
-.wiki-screenshot img { display: block; inline-size: 100%; block-size: auto; }
-.wiki-details { max-inline-size: 42rem; }
-.wiki-details ul { margin: 0; padding-inline-start: 1.25rem; }
-.wiki-details li + li { margin-block-start: .5rem; }
-.wiki-details p { margin-block: 1.5rem; color: var(--sl-color-gray-2); }
-.wiki-links { display: flex; flex-wrap: wrap; gap: .25rem 1.5rem; border-block-start: 1px solid var(--sarj-color-rule); padding-block-start: .75rem; font-size: .875rem; }
-.wiki-links a { display: inline-flex; align-items: center; min-block-size: 44px; }
+html[data-theme="light"]:has(.wiki-project) {
+  color-scheme: light;
+}
+html[data-theme="dark"]:has(.wiki-project) {
+  color-scheme: dark;
+}
+.wiki-project,
+.wiki-project *,
+.wiki-project *::before,
+.wiki-project *::after {
+  box-sizing: border-box;
+}
+.wiki-project {
+  margin: 0;
+  min-block-size: 100svh;
+  color: var(--sl-color-white);
+  background: var(--sl-color-black);
+  font: 450 1rem/1.5 var(--sl-font);
+  -webkit-font-smoothing: antialiased;
+}
+.wiki-project a {
+  color: var(--sl-color-accent-high);
+  text-underline-offset: 0.2em;
+}
+.wiki-project :focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 4px;
+}
+.wiki-project main {
+  max-inline-size: 80rem;
+  margin-inline: auto;
+  padding: 2rem clamp(1rem, 4vw, 2.5rem) 4rem;
+}
+.wiki-layout {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(1.5rem, 4vw, 3rem);
+}
+.wiki-sidebar {
+  position: sticky;
+  inset-block-start: 6rem;
+}
+.wiki-sidebar [role="tablist"] {
+  display: grid;
+  gap: 0.25rem;
+}
+.wiki-sidebar button {
+  display: flex;
+  align-items: center;
+  min-block-size: 44px;
+  inline-size: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  color: var(--sl-color-gray-2);
+  background: transparent;
+  font: inherit;
+  font-size: 0.9375rem;
+  text-align: start;
+  cursor: pointer;
+}
+.wiki-sidebar button:hover {
+  color: var(--sl-color-white);
+}
+.wiki-sidebar button[aria-selected="true"] {
+  color: var(--sl-color-white);
+  background: var(--sl-color-gray-6);
+  font-weight: 650;
+}
+.wiki-content {
+  min-inline-size: 0;
+}
+.wiki-intro {
+  margin-block-end: 1.5rem;
+}
+.wiki-project h1 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(2.25rem, 6vw, 3rem);
+  line-height: 1.15;
+  letter-spacing: -0.045em;
+}
+.wiki-summary {
+  max-inline-size: 38rem;
+  margin: 0;
+  color: var(--sl-color-gray-2);
+  font-size: clamp(1.0625rem, 2vw, 1.125rem);
+  text-wrap: balance;
+}
+.wiki-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block-start: 1rem;
+}
+.wiki-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-block-size: 44px;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--sarj-color-rule);
+  border-radius: 0.35rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+.wiki-actions .wiki-primary {
+  color: var(--sl-color-black);
+  background: var(--sl-color-white);
+  border-color: var(--sl-color-white);
+}
+.wiki-actions a:hover {
+  text-decoration: underline;
+}
+.wiki-panel {
+  margin: 0;
+  scroll-margin-block-start: 6rem;
+}
+.wiki-panel[hidden] {
+  display: none;
+}
+.wiki-screenshot {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--sarj-color-rule);
+  border-radius: 0.5rem;
+}
+.wiki-screenshot img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+.wiki-details {
+  max-inline-size: 42rem;
+}
+.wiki-details ul {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}
+.wiki-details li + li {
+  margin-block-start: 0.5rem;
+}
+.wiki-details p {
+  margin-block: 1.5rem;
+  color: var(--sl-color-gray-2);
+}
+.wiki-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+  border-block-start: 1px solid var(--sarj-color-rule);
+  padding-block-start: 0.75rem;
+  font-size: 0.875rem;
+}
+.wiki-links a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
+}
 @media (width < 48rem) {
-  .wiki-project main { padding-block-start: 1rem; }
-  .wiki-layout { grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
-  .wiki-sidebar { position: static; }
-  .wiki-sidebar [role="tablist"] { display: flex; }
-  .wiki-sidebar button { justify-content: center; }
+  .wiki-project main {
+    padding-block-start: 1rem;
+  }
+  .wiki-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.75rem;
+  }
+  .wiki-sidebar {
+    position: static;
+  }
+  .wiki-sidebar [role="tablist"] {
+    display: flex;
+  }
+  .wiki-sidebar button {
+    justify-content: center;
+  }
 }
 @media (forced-colors: active) {
-  .wiki-project, .engineering-header { color: CanvasText; background: Canvas; }
-  .wiki-sidebar button[aria-selected="true"], .wiki-actions .wiki-primary { forced-color-adjust: none; color: HighlightText; background: Highlight; border-color: Highlight; }
-  .wiki-project .engineering-brand .engineering-logo { display: none; }
-  .wiki-project .engineering-brand::after { content: "Sarj"; color: LinkText; font-weight: 700; }
-  .wiki-project :focus-visible { outline-color: Highlight; }
+  .wiki-project,
+  .engineering-header {
+    color: CanvasText;
+    background: Canvas;
+  }
+  .wiki-sidebar button[aria-selected="true"],
+  .wiki-actions .wiki-primary {
+    forced-color-adjust: none;
+    color: HighlightText;
+    background: Highlight;
+    border-color: Highlight;
+  }
+  .wiki-project .engineering-brand .engineering-logo {
+    display: none;
+  }
+  .wiki-project .engineering-brand::after {
+    content: "Sarj";
+    color: LinkText;
+    font-weight: 700;
+  }
+  .wiki-project :focus-visible {
+    outline-color: Highlight;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  html:has(.wiki-project) { scroll-behavior: auto; }
+  html:has(.wiki-project) {
+    scroll-behavior: auto;
+  }
 }

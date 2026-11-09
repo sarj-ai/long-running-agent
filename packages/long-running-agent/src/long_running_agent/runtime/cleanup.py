@@ -324,11 +324,11 @@ class InventoryLimitError(RuntimeError):
 
 
 class InspectionDeferredError(Exception):
-    """An unfinished review must not advance the persistent ordering hint."""
+    pass
 
 
 class LiveInspectionFailedError(Exception):
-    """Global uncertainty stops the sweep without losing earlier actual outcomes."""
+    pass
 
 
 class ReferenceInspectionError(RuntimeError):
@@ -343,12 +343,11 @@ def reference_failure_kind(error: OSError | RuntimeError | ValueError | sqlite3.
         return "metadata-changed"
     if isinstance(error, cleanup_activity.DatabaseBusyError):
         return "database-busy"
-    if (
-        isinstance(error, sqlite3.Error)
-        and hasattr(error, "sqlite_errorcode")
-        and error.sqlite_errorcode & 0xFF in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}
-    ):
-        return "database-busy"
+    match error:
+        case sqlite3.Error(sqlite_errorcode=code) if code & 0xFF in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+            return "database-busy"
+        case _:
+            pass
     if isinstance(error, CommandError):
         return "timeout" if error.returncode == COMMAND_TIMEOUT_STATUS else "command-failed"
     if isinstance(error, OSError):

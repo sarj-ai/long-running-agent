@@ -28,6 +28,7 @@ from .settings import RuntimePaths, private_write, systemd_value, user_environme
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from types import FrameType
 
 
 SERVICE: Final = "lra-codex-recovery.service"
@@ -520,7 +521,7 @@ def once(*, apply: bool = False) -> None:
 def stopping() -> Generator[Event]:
     stopped = Event()
 
-    def stop(_signal: int, _frame: object) -> None:
+    def stop(_signal: int, _frame: FrameType | None) -> None:
         stopped.set()
 
     previous = {number: signal.signal(number, stop) for number in (signal.SIGTERM, signal.SIGINT)}

@@ -55,35 +55,71 @@ const MAX_LINES = 32;
 const MAX_TABS = 9;
 const MAX_NAME_LENGTH = 30;
 const TASK_DURATION_MS = 2200;
-const CONNECT_COMMANDS: ReadonlySet<string> = new Set(["sarj-connect terminal", "vm", "vm terminal", "sarj-vm", "sarj-vm terminal"]);
+const CONNECT_COMMANDS: ReadonlySet<string> = new Set([
+  "sarj-connect terminal",
+  "vm",
+  "vm terminal",
+  "sarj-vm",
+  "sarj-vm terminal",
+]);
 
 function printable(text: string): string {
-  return text.replaceAll(/\s+/gu, " ").replaceAll(/\p{Cc}/gu, "").trim();
+  return text
+    .replaceAll(/\s+/gu, " ")
+    .replaceAll(/\p{Cc}/gu, "")
+    .trim();
 }
 
 function shortName(text: string): string {
-  const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(printable(text));
-  return Array.from(segments, ({ segment }) => segment).slice(0, MAX_NAME_LENGTH).join("");
+  const segments = new Intl.Segmenter(undefined, {
+    granularity: "grapheme",
+  }).segment(printable(text));
+  return Array.from(segments, ({ segment }) => segment)
+    .slice(0, MAX_NAME_LENGTH)
+    .join("");
 }
 
-function makePane(id: PaneId, mode: Pane["mode"] = "shell", lines: Line[] = []): Pane {
+function makePane(
+  id: PaneId,
+  mode: Pane["mode"] = "shell",
+  lines: Line[] = [],
+): Pane {
   return { id, mode, lines, busy: false, name: "Pane #1" };
 }
 
 function makeTab(id: TabId, name: string, pane: Pane): Tab {
-  return { id, name, panes: [pane], activePane: pane.id, split: "vertical", fullscreen: false, path: `~/demo/${id}` };
+  return {
+    id,
+    name,
+    panes: [pane],
+    activePane: pane.id,
+    split: "vertical",
+    fullscreen: false,
+    path: `~/demo/${id}`,
+  };
 }
 
 function initialTabs(): Partial<Record<TabId, Tab>> {
   return {
-    docs: makeTab("docs", "docs", makePane("docs-1", "codex", [
-      { kind: "command", text: "› Simplify the README" },
-      { kind: "success", text: "Updated README.md with a shorter quickstart.\nOne connection command and two examples." },
-    ])),
-    tests: makeTab("tests", "tests", makePane("tests-1", "codex", [
-      { kind: "command", text: "› Run the tests" },
-      { kind: "success", text: "12 passed in 0.42s. Everything is green." },
-    ])),
+    docs: makeTab(
+      "docs",
+      "docs",
+      makePane("docs-1", "codex", [
+        { kind: "command", text: "› Simplify the README" },
+        {
+          kind: "success",
+          text: "Updated README.md with a shorter quickstart.\nOne connection command and two examples.",
+        },
+      ]),
+    ),
+    tests: makeTab(
+      "tests",
+      "tests",
+      makePane("tests-1", "codex", [
+        { kind: "command", text: "› Run the tests" },
+        { kind: "success", text: "12 passed in 0.42s. Everything is green." },
+      ]),
+    ),
     shell: makeTab("shell", "shell", makePane("shell-1")),
   };
 }
@@ -94,8 +130,10 @@ function append(lines: Line[], ...entries: Line[]): void {
 }
 
 function response(task: string): string {
-  if (/\b(?:test|tests|check|verify)\b/iu.test(task)) return "Ran the demo tests.\n12 passed in 0.42s.";
-  if (/\b(?:explain|summarize|summary|what)\b/iu.test(task)) return "This sample project has a docs site and its tests.\nEach Codex conversation runs in its own terminal pane.";
+  if (/\b(?:test|tests|check|verify)\b/iu.test(task))
+    return "Ran the demo tests.\n12 passed in 0.42s.";
+  if (/\b(?:explain|summarize|summary|what)\b/iu.test(task))
+    return "This sample project has a docs site and its tests.\nEach Codex conversation runs in its own terminal pane.";
   return "Updated the demo README.\nThe shorter quickstart is ready to review.";
 }
 
@@ -109,7 +147,11 @@ export class TerminalDemo implements DemoActions {
   readonly #onChange: () => void;
   readonly #timers = new Map<PaneId, ReturnType<typeof setTimeout>>();
   #order: TabId[] = ["docs", "tests", "shell"];
-  #tabIds = new Map<TabId, number>([["docs", 0], ["tests", 1], ["shell", 2]]);
+  #tabIds = new Map<TabId, number>([
+    ["docs", 0],
+    ["tests", 1],
+    ["shell", 2],
+  ]);
   #tabHistory: TabId[] = [];
   #nextId = 4;
   #disposed = false;
@@ -134,7 +176,9 @@ export class TerminalDemo implements DemoActions {
   }
 
   get currentPane(): Pane {
-    const pane = this.currentTab.panes.find((candidate) => candidate.id === this.currentTab.activePane);
+    const pane = this.currentTab.panes.find(
+      (candidate) => candidate.id === this.currentTab.activePane,
+    );
     if (!pane) throw new Error("The selected demo pane no longer exists.");
     return pane;
   }
@@ -156,7 +200,10 @@ export class TerminalDemo implements DemoActions {
     if (this.#disposed || (this.attached && this.currentPane.busy)) return;
     const lines = this.attached ? this.currentPane.lines : this.localLines;
     if (text.length > MAX_INPUT_LENGTH) {
-      append(lines, { kind: "output", text: "Keep your command to 300 characters or fewer." });
+      append(lines, {
+        kind: "output",
+        text: "Keep your command to 300 characters or fewer.",
+      });
       this.#announce("Command is too long.");
       return;
     }
@@ -169,13 +216,24 @@ export class TerminalDemo implements DemoActions {
   }
 
   selectTab(id: TabId): void {
-    if (this.#disposed || !this.attached || !Object.hasOwn(this.tabs, id) || this.active === id) return;
+    if (
+      this.#disposed ||
+      !this.attached ||
+      !Object.hasOwn(this.tabs, id) ||
+      this.active === id
+    )
+      return;
     this.#focusTab(id);
     this.#announce(`${this.currentTab.name} tab selected.`);
   }
 
   selectPane(id: PaneId): void {
-    if (this.#disposed || !this.attached || !this.currentTab.panes.some((pane) => pane.id === id)) return;
+    if (
+      this.#disposed ||
+      !this.attached ||
+      !this.currentTab.panes.some((pane) => pane.id === id)
+    )
+      return;
     this.currentTab.activePane = id;
     this.#announce(`${this.currentPane.name} pane selected.`);
   }
@@ -188,7 +246,11 @@ export class TerminalDemo implements DemoActions {
     }
     const number = Math.max(-1, ...this.#tabIds.values()) + 1;
     const id = `tab-${String(number + 1)}`;
-    const tab = makeTab(id, `Tab #${String(number + 1)}`, makePane(`pane-${String(this.#nextId++)}`));
+    const tab = makeTab(
+      id,
+      `Tab #${String(number + 1)}`,
+      makePane(`pane-${String(this.#nextId++)}`),
+    );
     tab.path = "~/demo";
     this.tabs[id] = tab;
     this.#order.push(id);
@@ -205,14 +267,21 @@ export class TerminalDemo implements DemoActions {
     this.#tabIds.delete(this.active);
     this.#order.splice(index, 1);
     const previous = this.#tabHistory.pop();
-    const next = previous && Object.hasOwn(this.tabs, previous) ? previous : this.#order.at(0);
+    const next =
+      previous && Object.hasOwn(this.tabs, previous)
+        ? previous
+        : this.#order.at(0);
     if (next) {
       this.active = next;
       this.#announce("Tab closed.");
       return;
     }
     const id = "tab-1";
-    const fresh = makeTab(id, "Tab #1", makePane(`pane-${String(this.#nextId++)}`));
+    const fresh = makeTab(
+      id,
+      "Tab #1",
+      makePane(`pane-${String(this.#nextId++)}`),
+    );
     fresh.path = "~/demo";
     this.tabs[id] = fresh;
     this.#order = [id];
@@ -221,7 +290,10 @@ export class TerminalDemo implements DemoActions {
     this.active = id;
     this.attached = false;
     this.#sessionEnded = true;
-    append(this.localLines, { kind: "output", text: "Session ended. Run sarj-connect terminal to start a new one." });
+    append(this.localLines, {
+      kind: "output",
+      text: "Session ended. Run sarj-connect terminal to start a new one.",
+    });
     this.#announce("The last tab closed. Session ended.");
   }
 
@@ -261,7 +333,10 @@ export class TerminalDemo implements DemoActions {
     const tab = this.currentTab;
     const horizontal = direction === "left" || direction === "right";
     const forward = direction === "right" || direction === "down";
-    if (tab.panes.length > 1 && (horizontal ? tab.split === "vertical" : tab.split === "horizontal")) {
+    if (
+      tab.panes.length > 1 &&
+      (horizontal ? tab.split === "vertical" : tab.split === "horizontal")
+    ) {
       const index = tab.panes.findIndex((pane) => pane.id === tab.activePane);
       const target = index + (forward ? 1 : -1);
       const next = target < 0 ? undefined : tab.panes.at(target);
@@ -276,7 +351,11 @@ export class TerminalDemo implements DemoActions {
   toggleFullscreen(): void {
     if (this.#disposed || !this.attached) return;
     this.currentTab.fullscreen = !this.currentTab.fullscreen;
-    this.#announce(this.currentTab.fullscreen ? "Pane fullscreen." : "Pane fullscreen closed.");
+    this.#announce(
+      this.currentTab.fullscreen
+        ? "Pane fullscreen."
+        : "Pane fullscreen closed.",
+    );
   }
 
   renameTab(name: string): void {
@@ -295,7 +374,10 @@ export class TerminalDemo implements DemoActions {
     if (this.#disposed || !this.attached) return;
     this.attached = false;
     this.#tabHistory = [];
-    append(this.localLines, { kind: "output", text: "[detached from sarj-home]" });
+    append(this.localLines, {
+      kind: "output",
+      text: "[detached from sarj-home]",
+    });
     this.#announce("Detached. Your tabs are still running.");
   }
 
@@ -303,7 +385,10 @@ export class TerminalDemo implements DemoActions {
     if (this.#disposed || !this.attached || !this.currentPane.busy) return;
     const pane = this.currentPane;
     this.#stopPane(pane);
-    append(pane.lines, { kind: "output", text: "■ Conversation interrupted — tell the model what to do differently." });
+    append(pane.lines, {
+      kind: "output",
+      text: "■ Conversation interrupted — tell the model what to do differently.",
+    });
     this.#announce(`${this.currentTab.name}: task interrupted.`);
   }
 
@@ -316,7 +401,11 @@ export class TerminalDemo implements DemoActions {
     this.localLines = [];
     this.tabs = initialTabs();
     this.#order = ["docs", "tests", "shell"];
-    this.#tabIds = new Map([["docs", 0], ["tests", 1], ["shell", 2]]);
+    this.#tabIds = new Map([
+      ["docs", 0],
+      ["tests", 1],
+      ["shell", 2],
+    ]);
     this.#tabHistory = [];
     this.#nextId = 4;
     this.#sessionEnded = false;
@@ -331,17 +420,33 @@ export class TerminalDemo implements DemoActions {
   #localCommand(command: string): void {
     if (CONNECT_COMMANDS.has(command)) {
       this.attached = true;
-      const message = this.#sessionEnded ? "Connected to a new session." : (this.connectedBefore ? "Reconnected to sarj-home." : "Connected to sarj-home.");
+      const message = this.#sessionEnded
+        ? "Connected to a new session."
+        : this.connectedBefore
+          ? "Reconnected to sarj-home."
+          : "Connected to sarj-home.";
       append(this.localLines, { kind: "success", text: message });
       this.connectedBefore = true;
       this.#sessionEnded = false;
       this.#announce(message);
       return;
     }
-    if (/^(?:sarj-connect|sarj-vm|vm) browser(?: |$)/u.test(command)) append(this.localLines, { kind: "output", text: "The browser command opens your VM browser. This sample session demonstrates terminal tabs." });
+    if (/^(?:sarj-connect|sarj-vm|vm) browser(?: |$)/u.test(command))
+      append(this.localLines, {
+        kind: "output",
+        text: "The browser command opens your VM browser. This sample session demonstrates terminal tabs.",
+      });
     else if (command === "clear") this.localLines = [];
-    else if (command === "help") append(this.localLines, { kind: "output", text: "sarj-connect terminal — connect to the sample session" });
-    else append(this.localLines, { kind: "output", text: `zsh: command not found: ${command.split(" ", 1)[0]}` });
+    else if (command === "help")
+      append(this.localLines, {
+        kind: "output",
+        text: "sarj-connect terminal — connect to the sample session",
+      });
+    else
+      append(this.localLines, {
+        kind: "output",
+        text: `zsh: command not found: ${command.split(" ", 1)[0]}`,
+      });
     this.#announce("Local command complete.");
   }
 
@@ -364,12 +469,20 @@ export class TerminalDemo implements DemoActions {
         this.closePane();
         return;
       case "help":
-        append(pane.lines, { kind: "output", text: "codex  ls  pwd  clear  exit\nAlt + 1 / 2 / 3 selects a tab. Alt + d detaches." });
+        append(pane.lines, {
+          kind: "output",
+          text: "codex  ls  pwd  clear  exit\nAlt + 1 / 2 / 3 selects a tab. Alt + d detaches.",
+        });
         break;
       default:
-        append(pane.lines, { kind: "output", text: `zsh: command not found: ${command.split(" ", 1)[0]}` });
+        append(pane.lines, {
+          kind: "output",
+          text: `zsh: command not found: ${command.split(" ", 1)[0]}`,
+        });
     }
-    this.#announce(`${this.currentTab.name}: ${command === "codex" ? "Codex ready." : "command complete."}`);
+    this.#announce(
+      `${this.currentTab.name}: ${command === "codex" ? "Codex ready." : "command complete."}`,
+    );
   }
 
   #codexCommand(command: string): void {
@@ -382,10 +495,17 @@ export class TerminalDemo implements DemoActions {
         pane.lines = [];
         break;
       case "/help":
-        append(pane.lines, { kind: "output", text: "/clear   clear this conversation\n/exit    return to the shell\nCtrl + C interrupts the current task." });
+        append(pane.lines, {
+          kind: "output",
+          text: "/clear   clear this conversation\n/exit    return to the shell\nCtrl + C interrupts the current task.",
+        });
         break;
       default:
-        if (command.startsWith("/")) append(pane.lines, { kind: "output", text: "Unrecognized command. Type /help for available commands." });
+        if (command.startsWith("/"))
+          append(pane.lines, {
+            kind: "output",
+            text: "Unrecognized command. Type /help for available commands.",
+          });
         else {
           pane.busy = true;
           const name = this.currentTab.name;
@@ -419,7 +539,8 @@ export class TerminalDemo implements DemoActions {
   #focusAdjacentTab(direction: "left" | "right"): void {
     const index = this.#order.indexOf(this.active);
     const offset = direction === "right" ? 1 : -1;
-    const id = this.#order[(index + offset + this.#order.length) % this.#order.length];
+    const id =
+      this.#order[(index + offset + this.#order.length) % this.#order.length];
     if (!id || id === this.active) return;
     this.#focusTab(id);
     const destination = this.currentTab;
@@ -433,7 +554,8 @@ export class TerminalDemo implements DemoActions {
   #clearTimers(): void {
     for (const timer of this.#timers.values()) clearTimeout(timer);
     this.#timers.clear();
-    for (const tab of this.orderedTabs) for (const pane of tab.panes) pane.busy = false;
+    for (const tab of this.orderedTabs)
+      for (const pane of tab.panes) pane.busy = false;
   }
 
   #announce(message: string): void {

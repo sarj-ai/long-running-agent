@@ -1,7 +1,9 @@
 const MAX_INPUT = 300;
 const MAX_HISTORY = 20;
 const MAX_DRAFTS = 80;
-const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, {
+  granularity: "grapheme",
+});
 
 interface Draft {
   cursor: number;
@@ -81,9 +83,16 @@ export class TerminalInput implements InputActions {
         if (oldest !== undefined) this.#drafts.delete(oldest);
       }
       const text = bounded(printable(suggested));
-      this.#drafts.set(key, { text, cursor: characters(text).length, draft: text, history: [], historyIndex: 0 });
+      this.#drafts.set(key, {
+        text,
+        cursor: characters(text).length,
+        draft: text,
+        history: [],
+        historyIndex: 0,
+      });
     }
-    if (changed && key === "local" && !this.current.text.trim()) this.replace("sarj-connect terminal");
+    if (changed && key === "local" && !this.current.text.trim())
+      this.replace("sarj-connect terminal");
   }
 
   replace(text: string): void {
@@ -99,14 +108,23 @@ export class TerminalInput implements InputActions {
     const clean = printable(text.replaceAll(/\r?\n|\r/gu, " "));
     const head = this.beforeCursor;
     const tail = this.afterCursor;
-    const inserted = bounded(clean, Math.max(0, MAX_INPUT - current.text.length));
+    const inserted = bounded(
+      clean,
+      Math.max(0, MAX_INPUT - current.text.length),
+    );
     current.text = `${head}${inserted}${tail}`;
     current.cursor = characters(`${head}${inserted}`).length;
     this.#edited();
   }
 
   move(offset: number): void {
-    this.current.cursor = Math.max(0, Math.min(characters(this.current.text).length, this.current.cursor + offset));
+    this.current.cursor = Math.max(
+      0,
+      Math.min(
+        characters(this.current.text).length,
+        this.current.cursor + offset,
+      ),
+    );
   }
 
   home(): void {
@@ -153,9 +171,16 @@ export class TerminalInput implements InputActions {
   history(offset: -1 | 1): void {
     const current = this.current;
     if (current.history.length === 0) return;
-    if (current.historyIndex === current.history.length) current.draft = current.text;
-    current.historyIndex = Math.max(0, Math.min(current.history.length, current.historyIndex + offset));
-    current.text = current.historyIndex === current.history.length ? current.draft : (current.history[current.historyIndex] ?? "");
+    if (current.historyIndex === current.history.length)
+      current.draft = current.text;
+    current.historyIndex = Math.max(
+      0,
+      Math.min(current.history.length, current.historyIndex + offset),
+    );
+    current.text =
+      current.historyIndex === current.history.length
+        ? current.draft
+        : (current.history[current.historyIndex] ?? "");
     current.cursor = characters(current.text).length;
   }
 
@@ -164,7 +189,10 @@ export class TerminalInput implements InputActions {
     const text = current.text.trim();
     if (text && current.history.at(-1) !== text) {
       current.history.push(text);
-      current.history.splice(0, Math.max(0, current.history.length - MAX_HISTORY));
+      current.history.splice(
+        0,
+        Math.max(0, current.history.length - MAX_HISTORY),
+      );
     }
     this.clear();
     return text;

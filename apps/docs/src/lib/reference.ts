@@ -106,7 +106,9 @@ export function commandHref(command: Command): string {
 
 function commandPath(command: Command): string {
   const [entrypoint, ...rest] = command.path;
-  const canonical = REFERENCE.entrypoints.find((item) => item.name === entrypoint)?.aliasOf;
+  const canonical = REFERENCE.entrypoints.find(
+    (item) => item.name === entrypoint,
+  )?.aliasOf;
   return `/cli/${[canonical ?? entrypoint, ...rest].map(encodeURIComponent).join("/")}/`;
 }
 

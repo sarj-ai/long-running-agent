@@ -25,31 +25,54 @@ for (const url of SETTINGS_URLS) {
   for (const query of ["", "?from=settings&value=a%2Fb&value=two+words"]) {
     await test(`${url}${query} redirects directly to the canonical VM details section`, async () => {
       const response = await worker.fetch(new Request(`${url}${query}`), {
-        ASSETS: { fetch: () => Promise.reject(new Error("Settings requests must redirect")) },
+        ASSETS: {
+          fetch: () =>
+            Promise.reject(new Error("Settings requests must redirect")),
+        },
       });
       assert.equal(response.status, 301);
-      assert.equal(response.headers.get("location"), `https://engineering.sarj.ai/projects/lra/setup/${query}#vm-details`);
+      assert.equal(
+        response.headers.get("location"),
+        `https://engineering.sarj.ai/projects/lra/setup/${query}#vm-details`,
+      );
     });
   }
 }
 
 for (const [path, destination] of LEGACY_URLS) {
   await test(`legacy URL ${path} preserves its path and query without repeating the project prefix`, async () => {
-    const response = await worker.fetch(new Request(`https://lra.sarj.ai${path}`), {
-      ASSETS: { fetch: () => Promise.reject(new Error("Legacy requests must redirect")) },
-    });
+    const response = await worker.fetch(
+      new Request(`https://lra.sarj.ai${path}`),
+      {
+        ASSETS: {
+          fetch: () =>
+            Promise.reject(new Error("Legacy requests must redirect")),
+        },
+      },
+    );
     assert.equal(response.status, 301);
-    assert.equal(response.headers.get("location"), `https://engineering.sarj.ai${destination}`);
+    assert.equal(
+      response.headers.get("location"),
+      `https://engineering.sarj.ai${destination}`,
+    );
   });
 }
 
 for (const { id: name } of ENGINEERING_PROJECTS) {
   await test(`${name} project root retains query strings when adding its trailing slash`, async () => {
-    const response = await worker.fetch(new Request(`https://engineering.sarj.ai/projects/${name}?from=hub`), {
-      ASSETS: { fetch: () => Promise.reject(new Error("Project roots must redirect")) },
-    });
+    const response = await worker.fetch(
+      new Request(`https://engineering.sarj.ai/projects/${name}?from=hub`),
+      {
+        ASSETS: {
+          fetch: () => Promise.reject(new Error("Project roots must redirect")),
+        },
+      },
+    );
     assert.equal(response.status, 308);
-    assert.equal(response.headers.get("location"), `https://engineering.sarj.ai/projects/${name}/?from=hub`);
+    assert.equal(
+      response.headers.get("location"),
+      `https://engineering.sarj.ai/projects/${name}/?from=hub`,
+    );
   });
 }
 

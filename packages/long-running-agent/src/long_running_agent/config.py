@@ -49,7 +49,7 @@ def settings_path(home: Path | None = None) -> Path:
 def load_settings(
     path: Path | None = None,
     *,
-    overrides: Mapping[str, object] | None = None,
+    overrides: Mapping[str, str | None] | None = None,
 ) -> Settings:
     selected = (path or settings_path()).expanduser()
     if path is not None and not selected.is_file():

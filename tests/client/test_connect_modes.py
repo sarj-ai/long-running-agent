@@ -5,7 +5,7 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
-from long_running_agent.cli import app, connect_app, vm_arguments
+from long_running_agent.cli import app, connect_app, vm_app
 from long_running_agent.client.controller import Client
 from long_running_agent.config import Settings
 from pydantic import RootModel
@@ -73,7 +73,12 @@ def test_invalid_terminal_session_fails_before_connection(session: str) -> None:
         NoConnection(Settings()).terminal(session)
 
 
-def test_vm_entrypoint_preserves_caller_arguments_after_disconnect(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "arguments",
+    [[], ["terminal", "--no-host"], ["terminal", "project-work", "--no-host"]],
+    ids=["default-terminal", "explicit-terminal", "selected-session"],
+)
+def test_vm_entrypoint_preserves_caller_arguments_after_disconnect(tmp_path: Path, arguments: list[str]) -> None:
     ssh = tmp_path / "ssh"
     ssh.write_text(f"#!{sys.executable}\nimport sys\nsys.exit(255 if '-tt' in sys.argv else 0)\n")
     ssh.chmod(0o700)
@@ -86,7 +91,7 @@ def test_vm_entrypoint_preserves_caller_arguments_after_disconnect(tmp_path: Pat
         "assert sys.argv == original\n"
     )
     result = subprocess.run(
-        [sys.executable, "-c", program, "terminal", "--no-host"],
+        [sys.executable, "-c", program, *arguments],
         env={"PATH": str(tmp_path), "HOME": str(tmp_path)},
         capture_output=True,
         text=True,
@@ -106,11 +111,10 @@ def test_connect_help_lists_connection_modes_and_existing_vm_aliases_stay_availa
     assert "browser" in help_text
     assert "--account" not in help_text
     assert "--config" not in help_text
-    assert vm_arguments([]) == ["vm", "terminal"]
-    assert vm_arguments(["terminal"]) == ["vm", "terminal"]
+    assert runner.invoke(vm_app, ["terminal", "--help"]).exit_code == 0
     assert runner.invoke(connect_app, ["ui"]).exit_code == 2
-    assert vm_arguments(["browser"]) == ["vm", "browser"]
-    assert vm_arguments(["missing-mode"]) == ["vm", "missing-mode"]
+    assert runner.invoke(vm_app, ["browser", "--help"]).exit_code == 0
+    assert runner.invoke(vm_app, ["missing-mode"]).exit_code == 2
     assert runner.invoke(connect_app, ["missing-mode"]).exit_code == 2
 
 

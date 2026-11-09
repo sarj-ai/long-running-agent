@@ -3,10 +3,12 @@ import { test, type TestContext } from "node:test";
 
 import { TerminalDemo } from "./terminal-demo.ts";
 
-function fixture(context: TestContext): TerminalDemo {
+function terminalModelFixture(context: TestContext): TerminalDemo {
   context.mock.timers.enable({ apis: ["setTimeout"] });
-  const demo = new TerminalDemo(() => { /* No UI renderer in model tests. */ });
-  context.after(() => { demo.dispose(); });
+  const demo = new TerminalDemo(() => undefined);
+  context.after(() => {
+    demo.dispose();
+  });
   return demo;
 }
 
@@ -15,18 +17,30 @@ function connect(demo: TerminalDemo): void {
 }
 
 await test("initial session has three distinct sample tabs and two ready Codex conversations", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   assert.equal(demo.attached, false);
-  assert.deepEqual(demo.orderedTabs.map((tab) => tab.name), ["docs", "tests", "shell"]);
-  assert.deepEqual(demo.orderedTabs.map((tab) => tab.panes[0]?.mode), ["codex", "codex", "shell"]);
+  assert.deepEqual(
+    demo.orderedTabs.map((tab) => tab.name),
+    ["docs", "tests", "shell"],
+  );
+  assert.deepEqual(
+    demo.orderedTabs.map((tab) => tab.panes[0]?.mode),
+    ["codex", "codex", "shell"],
+  );
   assert.equal(demo.currentPane.lines.length, 2);
   assert.equal(demo.suggestedInput, "sarj-connect terminal");
 });
 
 await test("all connection aliases attach to the same existing session", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   const baseline = structuredClone(demo.orderedTabs);
-  for (const command of ["sarj-connect terminal", "vm", "vm terminal", "sarj-vm", "sarj-vm terminal"]) {
+  for (const command of [
+    "sarj-connect terminal",
+    "vm",
+    "vm terminal",
+    "sarj-vm",
+    "sarj-vm terminal",
+  ]) {
     demo.submit(command);
     assert.equal(demo.attached, true);
     assert.equal(demo.suggestedInput, "");
@@ -36,10 +50,14 @@ await test("all connection aliases attach to the same existing session", (contex
 });
 
 await test("sample conversations never start background tasks automatically", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   let callbacks = 0;
-  const other = new TerminalDemo(() => { callbacks += 1; });
-  context.after(() => { other.dispose(); });
+  const other = new TerminalDemo(() => {
+    callbacks += 1;
+  });
+  context.after(() => {
+    other.dispose();
+  });
   connect(demo);
   const before = structuredClone(demo.orderedTabs);
   context.mock.timers.runAll();
@@ -49,7 +67,7 @@ await test("sample conversations never start background tasks automatically", (c
 });
 
 await test("plain shell starts Codex explicitly and slash exit returns to that shell", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   demo.selectTab("shell");
   assert.equal(demo.suggestedInput, "");
@@ -65,8 +83,14 @@ await test("plain shell starts Codex explicitly and slash exit returns to that s
 });
 
 await test("command chaining and local Codex remain inert unknown commands", (context) => {
-  const demo = fixture(context);
-  for (const command of ["codex", "vm; echo hacked", "sarj-connect terminal && codex", "$(vm)", "sarj-connect info"]) {
+  const demo = terminalModelFixture(context);
+  for (const command of [
+    "codex",
+    "vm; echo hacked",
+    "sarj-connect terminal && codex",
+    "$(vm)",
+    "sarj-connect info",
+  ]) {
     demo.submit(command);
     assert.equal(demo.attached, false);
     assert.match(demo.localLines.at(-1)?.text ?? "", /command not found/u);
@@ -77,7 +101,7 @@ await test("command chaining and local Codex remain inert unknown commands", (co
 });
 
 await test("empty input is ignored and the exact 300 character limit is enforced", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   demo.submit(" \t\n ");
   assert.equal(demo.localLines.length, 0);
   demo.submit("x".repeat(300));
@@ -86,11 +110,14 @@ await test("empty input is ignored and the exact 300 character limit is enforced
   demo.submit("x".repeat(301));
   assert.equal(demo.localLines.length, before + 1);
   assert.match(demo.localLines.at(-1)?.text ?? "", /300 characters/u);
-  assert.equal(demo.localLines.some((line) => line.text.includes("x".repeat(301))), false);
+  assert.equal(
+    demo.localLines.some((line) => line.text.includes("x".repeat(301))),
+    false,
+  );
 });
 
 await test("submitted terminal control sequences cannot survive in echoed user text", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   demo.submit("say \u{1B}]52;c;clipboard\u{7} \u{9B}2J hello\nworld");
   const command = demo.currentPane.lines.at(-1)?.text ?? "";
@@ -101,7 +128,7 @@ await test("submitted terminal control sequences cannot survive in echoed user t
 });
 
 await test("HTML and shell syntax stay literal text in a fake Codex prompt", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   const prompt = "<img src=x onerror=alert(1)> $(curl example.com)";
   demo.submit(prompt);
@@ -111,8 +138,9 @@ await test("HTML and shell syntax stay literal text in a fake Codex prompt", (co
 });
 
 await test("local and pane transcripts stay bounded after repeated commands", (context) => {
-  const demo = fixture(context);
-  for (let index = 0; index < 50; index += 1) demo.submit(`unknown ${String(index)}`);
+  const demo = terminalModelFixture(context);
+  for (let index = 0; index < 50; index += 1)
+    demo.submit(`unknown ${String(index)}`);
   assert.equal(demo.localLines.length, 32);
   connect(demo);
   demo.selectTab("shell");
@@ -122,7 +150,7 @@ await test("local and pane transcripts stay bounded after repeated commands", (c
 });
 
 await test("background completion keeps selection and the other transcript unchanged", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   demo.submit("Simplify the README");
   const docs = demo.currentPane;
@@ -137,7 +165,7 @@ await test("background completion keeps selection and the other transcript uncha
 });
 
 await test("detach and reconnect preserve active tab and pending task deadlines", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   demo.selectTab("tests");
   demo.submit("Run the tests");
@@ -156,7 +184,7 @@ await test("detach and reconnect preserve active tab and pending task deadlines"
 });
 
 await test("cancel stops only the active pane while another pane keeps working", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   demo.submit("Simplify the README");
   const original = demo.currentPane;
@@ -172,7 +200,7 @@ await test("cancel stops only the active pane while another pane keeps working",
 });
 
 await test("reset clears every pending pane task and restores the sample session", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   demo.submit("Simplify the README");
   demo.selectTab("tests");
@@ -183,26 +211,34 @@ await test("reset clears every pending pane task and restores the sample session
   const before = structuredClone(demo.orderedTabs);
   context.mock.timers.runAll();
   assert.deepEqual(demo.orderedTabs, before);
-  assert.deepEqual(demo.orderedTabs.map((tab) => tab.name), ["docs", "tests", "shell"]);
+  assert.deepEqual(
+    demo.orderedTabs.map((tab) => tab.name),
+    ["docs", "tests", "shell"],
+  );
   assert.equal(demo.attached, false);
   assert.equal(demo.connectedBefore, false);
   assert.equal(demo.currentTab.panes.length, 1);
 });
 
 await test("dispose clears timers and makes later actions inert", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   demo.submit("Simplify the README");
   demo.dispose();
   const before = structuredClone(demo.orderedTabs);
   context.mock.timers.runAll();
-  demo.newTab(); demo.closeTab(); demo.reset(); demo.detach(); demo.splitPane("vertical"); demo.renameTab("Changed");
+  demo.newTab();
+  demo.closeTab();
+  demo.reset();
+  demo.detach();
+  demo.splitPane("vertical");
+  demo.renameTab("Changed");
   assert.deepEqual(demo.orderedTabs, before);
   assert.equal(demo.currentPane.busy, false);
 });
 
 await test("slash help and clear are scoped to Codex and unknown slashes start no task", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   demo.submit("/help");
   assert.match(demo.currentPane.lines.at(-1)?.text ?? "", /Ctrl \+ C/u);
@@ -218,7 +254,7 @@ await test("slash help and clear are scoped to Codex and unknown slashes start n
 });
 
 await test("shell commands use tab cwd and clear and exit match the focused pane", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   demo.selectTab("shell");
   demo.submit("pwd");
@@ -233,12 +269,15 @@ await test("shell commands use tab cwd and clear and exit match the focused pane
 });
 
 await test("new tabs allocate above current IDs and safely reuse a closed latest tab ID", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   for (let index = 0; index < 8; index += 1) demo.newTab();
   assert.equal(demo.orderedTabs.length, 9);
   assert.equal(new Set(demo.orderedTabs.map((tab) => tab.id)).size, 9);
-  assert.deepEqual(demo.orderedTabs.slice(0, 3).map((tab) => tab.id), ["docs", "tests", "shell"]);
+  assert.deepEqual(
+    demo.orderedTabs.slice(0, 3).map((tab) => tab.id),
+    ["docs", "tests", "shell"],
+  );
   const old = demo.active;
   const oldPane = demo.currentPane.id;
   demo.closeTab();
@@ -250,7 +289,7 @@ await test("new tabs allocate above current IDs and safely reuse a closed latest
 });
 
 await test("closing a tab returns to the previous visited tab or first remaining tab", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   demo.selectTab("shell");
   demo.selectTab("tests");
@@ -278,9 +317,12 @@ await test("closing a tab returns to the previous visited tab or first remaining
 });
 
 await test("closing the final tab ends the session and reconnect creates a fresh empty shell", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
-  for (const id of ["docs", "tests", "shell"]) { demo.selectTab(id); demo.closeTab(); }
+  for (const id of ["docs", "tests", "shell"]) {
+    demo.selectTab(id);
+    demo.closeTab();
+  }
   assert.equal(demo.attached, false);
   assert.equal(demo.orderedTabs.length, 1);
   assert.equal(demo.currentPane.mode, "shell");
@@ -292,7 +334,7 @@ await test("closing the final tab ends the session and reconnect creates a fresh
 });
 
 await test("split creates a focused empty shell, records its axis and bounds pane count", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   const original = demo.currentPane;
   demo.splitPane("horizontal");
@@ -300,14 +342,17 @@ await test("split creates a focused empty shell, records its axis and bounds pan
   assert.equal(demo.currentTab.panes.length, 2);
   assert.notEqual(demo.currentPane.id, original.id);
   assert.equal(demo.currentPane.mode, "shell");
-  assert.deepEqual(demo.currentTab.panes.map((pane) => pane.name), ["Pane #1", "Pane #2"]);
+  assert.deepEqual(
+    demo.currentTab.panes.map((pane) => pane.name),
+    ["Pane #1", "Pane #2"],
+  );
   demo.splitPane("vertical");
   assert.equal(demo.currentTab.panes.length, 2);
   assert.equal(demo.currentTab.split, "horizontal");
 });
 
 await test("left and right focus panes first then move between adjacent tabs with wrap", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   const first = demo.currentPane.id;
   demo.splitPane("vertical");
@@ -333,7 +378,7 @@ await test("left and right focus panes first then move between adjacent tabs wit
 });
 
 await test("up and down focus only along horizontal splits and never select another tab", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   const first = demo.currentPane.id;
   demo.moveFocus("up");
@@ -350,7 +395,7 @@ await test("up and down focus only along horizontal splits and never select anot
 });
 
 await test("closing one pane cancels only its task and preserves the other pane conversation", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   demo.submit("Simplify the README");
   const first = demo.currentPane;
@@ -369,7 +414,7 @@ await test("closing one pane cancels only its task and preserves the other pane 
 });
 
 await test("fullscreen is tab-local and survives detach and reconnect", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   connect(demo);
   demo.splitPane("vertical");
   demo.toggleFullscreen();
@@ -387,14 +432,20 @@ await test("fullscreen is tab-local and survives detach and reconnect", (context
 });
 
 await test("renames are printable and bounded while invalid or detached selection is inert", (context) => {
-  const demo = fixture(context);
+  const demo = terminalModelFixture(context);
   demo.selectTab("shell");
   assert.equal(demo.active, "docs");
   connect(demo);
-  demo.renameTab(`\u{1B}]title\u{7} ${  "🦊".repeat(40)}`);
+  demo.renameTab(`\u{1B}]title\u{7} ${"🦊".repeat(40)}`);
   demo.renamePane("\u{1B}[2J Agent\u{7}");
-  assert.equal(/\p{Cc}/u.test(demo.currentTab.name + demo.currentPane.name), false);
-  assert.equal([...new Intl.Segmenter().segment(demo.currentTab.name)].length, 30);
+  assert.equal(
+    /\p{Cc}/u.test(demo.currentTab.name + demo.currentPane.name),
+    false,
+  );
+  assert.equal(
+    [...new Intl.Segmenter().segment(demo.currentTab.name)].length,
+    30,
+  );
   demo.selectTab("missing");
   demo.selectPane("missing");
   assert.equal(demo.active, "docs");
@@ -402,6 +453,11 @@ await test("renames are printable and bounded while invalid or detached selectio
   assert.equal(demo.currentPane.name, "[2J Agent");
   demo.detach();
   const before = structuredClone(demo.orderedTabs);
-  demo.newTab(); demo.closePane(); demo.renamePane("ignored"); demo.renameTab("ignored"); demo.toggleFullscreen(); demo.moveFocus("right");
+  demo.newTab();
+  demo.closePane();
+  demo.renamePane("ignored");
+  demo.renameTab("ignored");
+  demo.toggleFullscreen();
+  demo.moveFocus("right");
   assert.deepEqual(demo.orderedTabs, before);
 });

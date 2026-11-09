@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import tempfile
 from typing import Annotated, Final
@@ -14,8 +15,9 @@ from . import cleanup_inspection
 
 
 app = typer.Typer(help="Register OS Login users and inspect their browser isolation.", no_args_is_help=True)
-WORKER_DIRECTORY: Final = Path("/opt/long-running-agent")
+WORKER_DIRECTORY: Final = admin_worker.REQUEST_DIRECTORY
 WORKERS: Final = ("admin_worker.py", "maintenance_worker.py", "bootstrap.py")
+REQUESTS: Final = ("connection", "check", "firewall-load", "install-self-registration")
 USER_SHIM: Final = '#!/bin/sh\nexec /usr/bin/python3 -I /opt/long-running-agent/admin_worker.py "$@"\n'
 
 
@@ -30,30 +32,35 @@ class RegistrationInput(BaseModel):
     tasks_max: Annotated[str, Field(pattern=r"^(?:[1-9][0-9]*|infinity)$")] | None = None
     cpu_weight: Annotated[int, Field(ge=1, le=10000)] = 100
 
-    def arguments(self) -> list[str]:
-        arguments = ["register", self.username, "--cpu-weight", str(self.cpu_weight)]
-        for option, value in (
-            ("--uid", self.uid),
-            ("--memory-high", self.memory_high),
-            ("--tasks-max", self.tasks_max),
-        ):
-            if value is not None:
-                arguments.extend((option, str(value)))
-        if self.legacy_browser:
-            arguments.append("--legacy-browser")
-        if self.allow_privileged:
-            arguments.append("--allow-privileged")
-        return arguments
+    def request(self) -> str:
+        return json.dumps(
+            {
+                "action": "register",
+                "username": self.username,
+                "uid": self.uid,
+                "legacy_browser": self.legacy_browser,
+                "allow_privileged": self.allow_privileged,
+                "memory_high": self.memory_high,
+                "tasks_max": self.tasks_max,
+                "cpu_weight": self.cpu_weight,
+            }
+        )
 
 
-def invoke(arguments: list[str], *, privileged: bool = True) -> None:
+def invoke(action: str, *, registration: RegistrationInput | None = None, privileged: bool = True) -> None:
     executable = Path(admin_worker.EXECUTABLE)
     admin_worker.root_owned(executable.parent, directory=True)
     admin_worker.root_owned(executable)
-    command = [str(executable), *arguments]
+    request = None if registration is None else registration.request()
+    argument = (
+        "/dev/stdin"
+        if request is not None
+        else ("register-self" if action == "register-self" else str(WORKER_DIRECTORY / f"{action}.json"))
+    )
+    command = [str(executable), argument]
     if privileged:
         command = ["sudo", "--", *command]
-    run(command)
+    run(command, input_text=request)
 
 
 @app.command("register")
@@ -77,37 +84,37 @@ def register(
         tasks_max=tasks_max,
         cpu_weight=cpu_weight,
     )
-    invoke(request.arguments())
+    invoke("register", registration=request)
 
 
 @app.command("register-self")
 def register_self() -> None:
     """Register only the current sudo caller, with ordinary-user policy and no identity options."""
-    invoke(["register-self"])
+    invoke("register-self")
 
 
 @app.command("connection")
 def connection() -> None:
     """Read the current UID's registered browser endpoints without sudo."""
-    invoke(["connection"], privileged=False)
+    invoke("connection", privileged=False)
 
 
 @app.command("check")
 def check() -> None:
     """Check registered accounts, private homes, resource policies, and current firewall receipts."""
-    invoke(["check"])
+    invoke("check")
 
 
 @app.command("firewall-load")
 def firewall_load() -> None:
     """Reload only the dedicated browser UID table, serialized with account registration."""
-    invoke(["firewall-load"])
+    invoke("firewall-load")
 
 
 @app.command("install-self-registration")
 def install_self_registration() -> None:
     """Install the validated exact-command sudo rule and private defaults for future logins."""
-    invoke(["install-self-registration"])
+    invoke("install-self-registration")
 
 
 def guarded_install_destination(path: Path, *, directory: bool = False) -> None:
@@ -133,7 +140,7 @@ def prepare_host_commands(staging: Path) -> list[list[str]]:
             str(staging / name),
             str(WORKER_DIRECTORY / name),
         ]
-        for name in WORKERS
+        for name in (*WORKERS, *(f"{action}.json" for action in REQUESTS))
     )
     return [
         *commands,
@@ -158,24 +165,29 @@ def prepare_host_commands(staging: Path) -> list[list[str]]:
             "/usr/bin/python3",
             "-I",
             str(WORKER_DIRECTORY / "admin_worker.py"),
-            "install-self-registration",
+            str(WORKER_DIRECTORY / "install-self-registration.json"),
         ],
     ]
 
 
 @app.command("prepare-host")
 def prepare_host() -> None:
-    """Install the reviewed root workers and exact self-registration policy; ready hosts skip first-boot setup."""
+    """Install or upgrade the reviewed root workers and request files.
+
+    Run after upgrading LRA on an existing host; existing sessions are not restarted.
+    """
     for parent in (Path("/opt"), Path("/usr/local/sbin")):
         admin_worker.root_owned(parent, directory=True)
     guarded_install_destination(WORKER_DIRECTORY, directory=True)
-    for name in WORKERS:
+    for name in (*WORKERS, *(f"{action}.json" for action in REQUESTS)):
         guarded_install_destination(WORKER_DIRECTORY / name)
     guarded_install_destination(Path(admin_worker.EXECUTABLE))
     with tempfile.TemporaryDirectory(prefix="lra-prepare-host-") as temporary:
         staging = Path(temporary)
         for name in WORKERS:
             (staging / name).write_bytes(Path(__file__).with_name(name).read_bytes())
+        for action in REQUESTS:
+            (staging / f"{action}.json").write_text(json.dumps({"action": action}) + "\n", encoding="utf-8")
         (staging / "lra-user").write_text(USER_SHIM, encoding="utf-8")
         for arguments in prepare_host_commands(staging):
             run(arguments)

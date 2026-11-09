@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import argparse  # ruff: ignore[banned-api] — isolated Python 3.12 root worker cannot import user-installed Typer.
+from dataclasses import dataclass
 from datetime import UTC, datetime
 import fcntl
 import grp
@@ -19,6 +19,9 @@ from typing import TYPE_CHECKING, Final, Never, NotRequired, TypedDict, TypeGuar
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
+
+
+type JsonValue = bool | int | float | str | list[JsonValue] | dict[str, JsonValue] | None
 
 
 class Browser(TypedDict):
@@ -50,7 +53,8 @@ class Connection(Browser):
     uid: int
 
 
-class WorkerArguments(argparse.Namespace):
+@dataclass(frozen=True)
+class WorkerArguments:
     action: str = ""
     username: str = ""
     uid: int | None = None
@@ -74,20 +78,22 @@ USERS: Final = CONFIG / "users"
 RUNTIME: Final = Path("/run/long-running-agent")
 READY: Final = RUNTIME / "browser-guard.json"
 EXECUTABLE: Final = "/usr/local/sbin/lra-user"
+REQUEST_DIRECTORY: Final = Path("/opt/long-running-agent")
 TABLE: Final = "lra_browser"
 LEGACY_BROWSER: Final[Browser] = {"display": 92, "cdp_port": 9222, "vnc_port": 5902, "viewer_port": 7900}
 PRIVILEGED_GROUPS: Final[frozenset[str]] = frozenset(
     {"root", "sudo", "admin", "wheel", "docker", "lxd", "incus-admin", "google-sudoers", "disk", "libvirt"}
 )
 SELF_REGISTRATION_POLICY: Final = "ALL ALL=(root) NOPASSWD: /usr/local/sbin/lra-user register-self\n"
+GUARD_UNIT_PATH: Final = Path("/etc/systemd/system/lra-browser-guard.service")
 GUARD_UNIT: Final = """[Unit]
 Description=Per-user local browser network isolation
 After=local-fs.target nftables.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/local/sbin/lra-user firewall-load
-ExecReload=/usr/local/sbin/lra-user firewall-load
+ExecStart=/usr/local/sbin/lra-user /opt/long-running-agent/firewall-load.json
+ExecReload=/usr/local/sbin/lra-user /opt/long-running-agent/firewall-load.json
 [Install]
 WantedBy=multi-user.target
 """
@@ -148,14 +154,21 @@ def text(value: object) -> str:
     return value
 
 
-def read_root_json(path: Path) -> dict[str, object]:
+def read_root_json(path: Path) -> dict[str, JsonValue]:
     root_owned(path.parent, directory=True)
     root_owned(path)
     return decode_object(path.read_text(encoding="utf-8"))
 
 
-def decode_object(content: str, *, loader: Callable[[str], object] = json.loads) -> dict[str, object]:
-    return object_fields(loader(content))
+def stdlib_json_decoder() -> Callable[[str], JsonValue]:
+    return json.loads
+
+
+def decode_object(content: str) -> dict[str, JsonValue]:
+    value = stdlib_json_decoder()(content)
+    if not isinstance(value, dict):
+        fail("Expected a registry object")
+    return value
 
 
 def atomic_root_write(path: Path, content: str, *, mode: int = 0o644) -> None:
@@ -528,7 +541,7 @@ def register(args: WorkerArguments) -> None:
         atomic_root_write(
             CONFIG / "shared.json", json.dumps({"schema_version": 1, "browser_isolation": "uid-nftables"}) + "\n"
         )
-        atomic_root_write(Path("/etc/systemd/system/lra-browser-guard.service"), GUARD_UNIT)
+        atomic_root_write(GUARD_UNIT_PATH, GUARD_UNIT)
         atomic_root_write(Path("/etc/systemd/system/user@.service.d/long-running-agent.conf"), USER_ORDERING)
         atomic_root_write(
             Path(f"/etc/systemd/system/user-{account.pw_uid}.slice.d/long-running-agent.conf"), slice_policy(limits)
@@ -614,6 +627,12 @@ def install_self_registration() -> None:
         atomic_root_write(
             Path("/etc/sudoers.d/long-running-agent-self-registration"), SELF_REGISTRATION_POLICY, mode=0o440
         )
+    guard = GUARD_UNIT_PATH
+    if guard.exists() or guard.is_symlink():
+        root_owned(guard)
+        if guard.read_text(encoding="utf-8") != GUARD_UNIT:
+            atomic_root_write(guard, GUARD_UNIT)
+            run("/usr/bin/systemctl", "daemon-reload")
     login = Path("/etc/login.defs")
     root_owned(login)
     original = login.read_text(encoding="utf-8")
@@ -691,33 +710,66 @@ def check() -> None:
     )
 
 
-def main(arguments: Sequence[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Manage ordinary OS Login registrations and UID browser isolation.")
-    commands = parser.add_subparsers(dest="action", required=True)
-    registration = commands.add_parser("register", help="Register an already resolved OS Login account")
-    registration.add_argument("username")
-    registration.add_argument("--uid", type=int)
-    registration.add_argument(
-        "--legacy-browser", action="store_true", help="Preserve the existing privileged owner browser ports and limits"
+def require(*, condition: bool) -> None:
+    if not condition:
+        fail("Unsupported isolated worker request")
+
+
+def request_path(value: object) -> Path:
+    name = text(value)
+    require(condition=bool(name))
+    require(condition="\0" not in name)
+    path = Path(name)
+    require(condition=str(path) == name)
+    require(condition=path.is_absolute())
+    return path
+
+
+def boolean(value: object) -> bool:
+    if not isinstance(value, bool):
+        fail("Expected a boolean request field")
+    return value
+
+
+def optional_text(value: object) -> str | None:
+    return None if value is None else text(value)
+
+
+def request_arguments(fields: Mapping[str, object]) -> WorkerArguments:
+    action = text(fields.get("action"))
+    if action != "register":
+        require(condition=action in {"firewall-load", "check", "connection", "install-self-registration"})
+        require(condition=set(fields) == {"action"})
+        return WorkerArguments(action=action)
+    require(
+        condition=set(fields)
+        <= {"action", "username", "uid", "legacy_browser", "allow_privileged", "memory_high", "tasks_max", "cpu_weight"}
     )
-    registration.add_argument(
-        "--allow-privileged",
-        action="store_true",
-        help="Explicitly acknowledge an existing trusted administrator; grants no new privilege",
+    uid = fields.get("uid")
+    return WorkerArguments(
+        action=action,
+        username=text(fields.get("username")),
+        uid=None if uid is None else integer(uid),
+        legacy_browser=boolean(fields.get("legacy_browser", False)),
+        allow_privileged=boolean(fields.get("allow_privileged", False)),
+        memory_high=optional_text(fields.get("memory_high")),
+        tasks_max=optional_text(fields.get("tasks_max")),
+        cpu_weight=integer(fields.get("cpu_weight", 100)),
     )
-    registration.add_argument("--memory-high")
-    registration.add_argument("--tasks-max")
-    registration.add_argument("--cpu-weight", type=int, default=100)
-    commands.add_parser("firewall-load", help="Load only the dedicated UID guard table")
-    commands.add_parser("check", help="Check root registration and active guard receipts")
-    commands.add_parser("connection", help="Read only the current UID browser allocation")
-    commands.add_parser(
-        "register-self", help="Register only the ordinary account identified by sudo; accepts no arguments"
-    )
-    commands.add_parser(
-        "install-self-registration", help="Install the validated exact-command sudoers rule and private login defaults"
-    )
-    args = parser.parse_args(None if arguments is None else list(arguments), namespace=WorkerArguments())
+
+
+def main(arguments: list[str] | None = None) -> None:
+    values = sys.argv[1:] if arguments is None else arguments
+    require(condition=sys.flags.isolated == 1 and len(values) == 1)
+    if values[0] == "register-self":
+        os.umask(0o077)
+        if os.geteuid() != 0:
+            fail("User registration and firewall administration require root")
+        register_self()
+        return
+    path = request_path(values[0])
+    fields = decode_object(path.read_text(encoding="utf-8")) if path == Path("/dev/stdin") else read_root_json(path)
+    args = request_arguments(fields)
     os.umask(0o077)
     if args.action == "connection":
         emit(connection_info())
@@ -727,8 +779,6 @@ def main(arguments: Sequence[str] | None = None) -> None:
     match args.action:
         case "register":
             register(args)
-        case "register-self":
-            register_self()
         case "install-self-registration":
             install_self_registration()
         case "check":
