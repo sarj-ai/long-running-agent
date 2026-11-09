@@ -1,7 +1,22 @@
 {
   "extends": ".basedpyright-strict.json",
-  "include": ["packages/long-running-agent/src", "scripts", "tests"],
+  "include": [
+    "packages/long-running-agent/src",
+    "scripts",
+    "tests"
+  ],
   "pythonVersion": "3.14",
   "venvPath": ".",
-  "venv": ".venv"
+  "venv": ".venv",
+  "executionEnvironments": [
+    {
+      "root": "packages/long-running-agent/src"
+    },
+    {
+      "root": ".",
+      "extraPaths": [
+        "packages/long-running-agent/src"
+      ]
+    }
+  ]
 }

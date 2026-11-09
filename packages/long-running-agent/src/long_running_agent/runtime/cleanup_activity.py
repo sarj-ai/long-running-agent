@@ -44,20 +44,20 @@ THREAD_COLUMNS: Final = {
 
 
 class MetadataChangedError(RuntimeError):
-    """A fresh complete inspection may recover from an atomic metadata replacement."""
+    pass
 
 
 class DatabaseBusyError(RuntimeError):
-    """Native SQLite could not obtain its read lock within the bounded wait."""
+    pass
 
 
 def database_inspection_error(error: sqlite3.Error) -> RuntimeError:
     message = "Codex activity database could not be verified"
-    if hasattr(error, "sqlite_errorcode") and error.sqlite_errorcode & 0xFF in {
-        sqlite3.SQLITE_BUSY,
-        sqlite3.SQLITE_LOCKED,
-    }:
-        return DatabaseBusyError(message)
+    match error:
+        case sqlite3.Error(sqlite_errorcode=code) if code & 0xFF in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+            return DatabaseBusyError(message)
+        case _:
+            pass
     return RuntimeError(message)
 
 
@@ -275,22 +275,21 @@ def profile_homes(home: Path, budget: InventoryBudget) -> set[Path]:
     return homes
 
 
-def configured_sqlite_homes(configuration: dict[str, TomlValue], budget: InventoryBudget) -> Iterator[object]:
+def configured_sqlite_homes(configuration: dict[str, TomlValue], budget: InventoryBudget) -> Iterator[TomlValue]:
     pending: list[TomlValue] = [configuration]
     while pending:
         budget.entry()
         value = pending.pop()
         children: Iterable[TomlValue]
-        if isinstance(value, dict):
-            table: dict[str, TomlValue] = value
-            if "sqlite_home" in table:
-                yield table["sqlite_home"]
-            children = table.values()
-        elif isinstance(value, list):
-            array: list[TomlValue] = value
-            children = array
-        else:
-            continue
+        match value:
+            case dict() as table:
+                if "sqlite_home" in table:
+                    yield table["sqlite_home"]
+                children = table.values()
+            case list() as array:
+                children = array
+            case _:
+                continue
         for child in children:
             budget.entry()
             if isinstance(child, (dict, list)):
@@ -432,7 +431,10 @@ def database_layout(database: Path, home: Path) -> dict[Path, FileIdentity]:
 
 
 def include_workspaces(
-    rows: Iterable[tuple[object, ...]], budget: InventoryBudget, *, begin_step: Callable[[], None]
+    rows: Iterable[tuple[str | int | float | bytes | None, ...]],
+    budget: InventoryBudget,
+    *,
+    begin_step: Callable[[], None],
 ) -> None:
     iterator = iter(rows)
     while True:

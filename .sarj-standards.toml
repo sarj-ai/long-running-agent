@@ -1,5 +1,5 @@
 # Managed by `code-standards setup`; commit this file.
-bundle = "8.129.11"
+bundle = "9.11.0"
 rule_profile = "all"
 schema = 4
 
@@ -12,6 +12,7 @@ disable = [
   "mobile-security",
   "jscpd",
   "knip",
+  "sqlfluff",
 ]
 
 [artifacts]

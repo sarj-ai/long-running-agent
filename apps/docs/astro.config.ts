@@ -2,7 +2,10 @@ import sitemap from "@astrojs/sitemap";
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 
-import cloudflareArtifacts, { ENGINEERING_ROUTE, WIKI_ROUTE } from "./src/integrations/cloudflare-artifacts";
+import cloudflareArtifacts, {
+  ENGINEERING_ROUTE,
+  WIKI_ROUTE,
+} from "./src/integrations/cloudflare-artifacts";
 import { SITE_BASE_PATH, SITE_HOMEPAGE, SITE_ORIGIN } from "./src/lib/paths";
 import { REFERENCE, SIDEBAR } from "./src/lib/reference";
 import { TERMINAL_STYLE_HASHES } from "./src/lib/terminal-style-hashes";
@@ -31,13 +34,19 @@ export default defineConfig({
         "object-src 'none'",
       ],
       scriptDirective: { resources: [{ resource: "'self'", kind: "element" }] },
-      styleDirective: { hashes: [...TERMINAL_STYLE_HASHES], resources: [{ resource: "'unsafe-inline'", kind: "attribute" }] },
+      styleDirective: {
+        hashes: [...TERMINAL_STYLE_HASHES],
+        resources: [{ resource: "'unsafe-inline'", kind: "attribute" }],
+      },
     },
   },
   integrations: [
     sitemap({
       customPages: [`${SITE_ORIGIN}/`, `${SITE_ORIGIN}/projects/wiki/`],
-      filter: (page) => ![ENGINEERING_ROUTE, WIKI_ROUTE].some((route) => page === new URL(route, SITE_HOMEPAGE).href),
+      filter: (page) =>
+        ![ENGINEERING_ROUTE, WIKI_ROUTE].some(
+          (route) => page === new URL(route, SITE_HOMEPAGE).href,
+        ),
     }),
     starlight({
       title: REFERENCE.package.name,
@@ -52,7 +61,9 @@ export default defineConfig({
       disable404Route: true,
       customCss: ["@sarj/design/starlight.css", "./src/styles/global.css"],
       sidebar: SIDEBAR,
-      social: [{ icon: "github", label: "GitHub", href: REFERENCE.package.repository }],
+      social: [
+        { icon: "github", label: "GitHub", href: REFERENCE.package.repository },
+      ],
       pagefind: false,
       tableOfContents: false,
       credits: false,

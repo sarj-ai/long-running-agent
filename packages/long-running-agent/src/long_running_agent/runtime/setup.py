@@ -50,7 +50,8 @@ def ensure_personal_registration(
     *, runner: RegistrationRunner = run, unregistered: Callable[[], bool] = unregistered_account
 ) -> None:
     helper = admin_worker.EXECUTABLE
-    result = runner([helper, "connection"], capture_output=True, check=False, timeout=15)
+    connection_request = str(admin_worker.REQUEST_DIRECTORY / "connection.json")
+    result = runner([helper, connection_request], capture_output=True, check=False, timeout=15)
     if result.returncode == 0:
         return
     message = (
@@ -67,7 +68,7 @@ def ensure_personal_registration(
     try:
         # No identity options, named-user registration, or general sudo fallback.
         runner(["sudo", "-n", helper, "register-self"], capture_output=True, timeout=60)
-        runner([helper, "connection"], capture_output=True, timeout=15)
+        runner([helper, connection_request], capture_output=True, timeout=15)
     except CommandError, OSError:
         raise RuntimeError(message) from None
 

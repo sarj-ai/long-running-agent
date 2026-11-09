@@ -4,6 +4,7 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 import stat
+import tempfile
 
 import typer
 
@@ -28,10 +29,12 @@ def validated_worker(worker: Path) -> Path:
 
 def privileged_action(action: str, *, maintenance_window: bool = False) -> None:
     worker = validated_worker(Path("/opt/long-running-agent/maintenance_worker.py"))
-    command = ["sudo", "--", "/usr/bin/python3", "-I", str(worker), action]
-    if maintenance_window:
-        command.append("--maintenance-window")
-    run(command)
+    request = {"action": action} if action == "policy" else {"action": action, "maintenance_window": maintenance_window}
+    with tempfile.TemporaryDirectory(prefix="lra-maintenance-") as directory:
+        path = Path(directory) / "request.json"
+        path.write_text(json.dumps(request), encoding="utf-8")
+        command = ["sudo", "--", "/usr/bin/python3", "-I", str(worker), str(path)]
+        run(command)
 
 
 @app.command("audit")

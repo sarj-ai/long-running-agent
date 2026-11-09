@@ -6,30 +6,27 @@ from enum import Enum
 import json
 from pathlib import Path
 import tomllib
-from typing import TYPE_CHECKING, Final, Protocol, TypeGuard
+from typing import Final, Protocol, TypeGuard, runtime_checkable
 
 import hcl2
 from long_running_agent import cli
 from long_running_agent.config import Settings
 from long_running_agent.runtime import host
-from pydantic import JsonValue, RootModel
+from pydantic import JsonValue, RootModel, model_validator
 import typer
 from typer.core import TyperArgument, TyperCommand, TyperGroup, TyperOption
 from typer.main import get_command
-
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 type Document = dict[str, JsonValue]
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "packages/long-running-agent"
 SOURCE = PACKAGE / "src/long_running_agent"
-INVOKE_ARGUMENT_OFFSET = 2
+INVOKE_ARGUMENT_COUNT = 2
 APPLICATIONS: Final[dict[str, typer.Typer]] = {
     "long_running_agent.cli:app": cli.app,
     "long_running_agent.cli:connect_app": cli.connect_app,
+    "long_running_agent.cli:vm_app": cli.vm_app,
     "long_running_agent.runtime.host:app": host.app,
 }
 
@@ -50,17 +47,14 @@ class EntrypointAdapter:
     default_command: str | None = None
 
 
+@runtime_checkable
 class DefaultParameter(Protocol):
     @property
     def default(self) -> object: ...
 
 
 class HclDocument(Protocol):
-    def serialize(self, options: hcl2.SerializationOptions) -> object: ...
-
-
-def literal(node: ast.AST, evaluator: Callable[[ast.AST], object] = ast.literal_eval) -> object:
-    return evaluator(node)
+    def serialize(self, options: hcl2.SerializationOptions) -> JsonValue: ...
 
 
 def is_dictionary(value: object) -> TypeGuard[dict[object, object]]:
@@ -71,25 +65,32 @@ def is_sequence(value: object) -> TypeGuard[list[object] | tuple[object, ...]]:
     return isinstance(value, list | tuple)
 
 
+class DocumentationValue(RootModel[JsonValue]):
+    @model_validator(mode="before")
+    @classmethod
+    def normalize(cls, value: object) -> object:
+        if value is None or isinstance(value, str | bool | int | float):
+            return value
+        if isinstance(value, Path):
+            return value.as_posix()
+        if isinstance(value, Enum):
+            return value.name
+        if is_sequence(value):
+            return [cls.model_validate(item).root for item in value]
+        if is_dictionary(value):
+            result: Document = {}
+            for key, item in value.items():
+                if not isinstance(key, str):
+                    message = "Documentation source has a non-text mapping key"
+                    raise TypeError(message)
+                result[key] = cls.model_validate(item).root
+            return result
+        message = "Documentation defaults must be literals or source-described factories"
+        raise TypeError(message)
+
+
 def json_value(value: object) -> JsonValue:
-    if value is None or isinstance(value, str | bool | int | float):
-        return value
-    if isinstance(value, Path):
-        return value.as_posix()
-    if isinstance(value, Enum):
-        return value.name
-    if is_sequence(value):
-        return [json_value(item) for item in value]
-    if is_dictionary(value):
-        result: Document = {}
-        for key, item in value.items():
-            if not isinstance(key, str):
-                message = "Documentation source has a non-text mapping key"
-                raise TypeError(message)
-            result[key] = json_value(item)
-        return result
-    message = "Documentation defaults must be literals or source-described factories"
-    raise TypeError(message)
+    return DocumentationValue.model_validate(value).root
 
 
 def read_toml(path: Path) -> Document:
@@ -137,7 +138,10 @@ def command_object(value: object) -> TyperCommand | TyperGroup:
     return value
 
 
-def parameter_default(parameter: DefaultParameter) -> DefaultValue:
+def parameter_default(parameter: object) -> DefaultValue:
+    if not isinstance(parameter, DefaultParameter):
+        message = "Entrypoint parameter lacks its framework default contract"
+        raise TypeError(message)
     value = parameter.default
     if callable(value):
         return DefaultValue("factory", None)
@@ -195,27 +199,6 @@ def command_reference(command: TyperCommand | TyperGroup, path: list[str]) -> Do
     }
 
 
-def adapted_command(source: ast.Module, arguments: ast.expr, command: TyperCommand | TyperGroup) -> EntrypointAdapter:
-    if not isinstance(arguments, ast.Call) or not isinstance(arguments.func, ast.Name):
-        message = "Entrypoint argument adapter must be source-defined"
-        raise TypeError(message)
-    helper = function(source, arguments.func.id)
-    returned = next(node.value for node in helper.body if isinstance(node, ast.Return))
-    if not isinstance(returned, ast.List) or not isinstance(command, TyperGroup):
-        message = "Entrypoint argument adapter must return a command prefix"
-        raise TypeError(message)
-    prefix = literal(returned.elts[0])
-    if not isinstance(prefix, str):
-        message = "Entrypoint command prefix must be literal text"
-        raise TypeError(message)
-    fallback = next(node for node in ast.walk(returned) if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or))
-    defaults = literal(fallback.values[-1])
-    if not is_sequence(defaults) or not all(isinstance(item, str) for item in defaults):
-        message = "Entrypoint fallback must contain literal command names"
-        raise TypeError(message)
-    return EntrypointAdapter(command_object(command.commands[prefix]), " ".join(str(item) for item in defaults))
-
-
 def adapter(target: str) -> EntrypointAdapter:
     module, name = target.split(":", 1)
     source = tree(module)
@@ -230,8 +213,11 @@ def adapter(target: str) -> EntrypointAdapter:
         message = "Entrypoint must invoke a named source application"
         raise TypeError(message)
     command = command_object(get_command(APPLICATIONS[f"{module}:{application.id}"]))
-    if len(invocation.args) > INVOKE_ARGUMENT_OFFSET:
-        return adapted_command(source, invocation.args[INVOKE_ARGUMENT_OFFSET], command)
+    if len(invocation.args) != INVOKE_ARGUMENT_COUNT:
+        message = "Entrypoint must invoke its named source application directly"
+        raise TypeError(message)
+    if application.id == "vm_app":
+        return EntrypointAdapter(command, "terminal")
     return EntrypointAdapter(command)
 
 

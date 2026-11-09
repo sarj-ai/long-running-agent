@@ -10,10 +10,10 @@
     "binding": "ASSETS",
     "run_worker_first": true,
     "not_found_handling": "404-page",
-    "html_handling": "force-trailing-slash"
+    "html_handling": "force-trailing-slash",
   },
   "routes": [
     { "pattern": "engineering.sarj.ai", "custom_domain": true },
-    { "pattern": "lra.sarj.ai", "custom_domain": true }
-  ]
+    { "pattern": "lra.sarj.ai", "custom_domain": true },
+  ],
 }

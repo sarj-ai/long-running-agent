@@ -12,14 +12,16 @@
     "prebuild": "npm run generate",
     "prelint": "npm run generate",
     "dev": "astro dev --host 127.0.0.1",
-    "check": "astro check && tsc --noEmit",
-    "lint": "eslint .",
+    "check": "astro check && tsrs --noEmit",
+    "lint": "uvx --no-config --isolated --python 3.14 --from sarj-standards-bootstrap code-standards --root ../.. check --trust-repository-code apps/docs",
     "test": "node --test src/lib/*.test.ts scripts/worker.test.ts",
     "build": "astro build",
     "preview": "astro preview --host 127.0.0.1",
     "deploy": "wrangler deploy --strict",
     "verify:artifact": "node scripts/verify-deployment.ts artifact",
-    "verify:deployment": "node scripts/verify-deployment.ts live"
+    "verify:deployment": "node scripts/verify-deployment.ts live",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check"
   },
   "dependencies": {
     "@astrojs/starlight": "0.42.7",
@@ -34,13 +36,11 @@
     "@types/node": "26.6.5",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "wrangler": "4.152.0",
-    "eslint-plugin-astro": "3.2.1",
     "@eslint-community/eslint-plugin-eslint-comments": "4.8.1",
     "@eslint/compat": "2.1.1",
     "@eslint/js": "10.0.1",
-    "@sarj/eslint-plugin": "16.29.0",
+    "@sarj/eslint-plugin": "19.7.0",
     "@shadcn/lint": "0.2.3",
-    "@typescript/native": "npm:typescript@7.0.2",
     "@vitest/eslint-plugin": "1.6.28",
     "eslint": "10.13.0",
     "eslint-node-test": "1.0.1",
@@ -61,7 +61,14 @@
     "react-doctor": "0.9.18",
     "typescript-eslint": "8.72.0",
     "jiti": "2.7.0",
-    "eslint-plugin-regexp": "3.3.1"
+    "eslint-plugin-regexp": "3.3.1",
+    "oxfmt": "0.76.0",
+    "oxlint": "1.91.0",
+    "oxlint-plugin-eslint": "1.91.0",
+    "oxlint-plugin-react-doctor": "0.9.22",
+    "parse5": "8.0.0",
+    "syncpack": "15.3.3",
+    "tsrs": "0.23.0-ts7.1.0-beta"
   },
   "engines": {
     "node": "^22.22.2 || >=24.15.0"

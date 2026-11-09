@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
@@ -18,7 +18,10 @@ import shutil
 import subprocess  # ruff: ignore[suspicious-subprocess-import] -- This isolated root-owned stdlib worker cannot import per-user package code.
 import sys
 import tempfile
-from typing import Final
+from typing import Final, Never, TypeGuard
+
+
+type JsonValue = bool | int | float | str | list[JsonValue] | dict[str, JsonValue] | None
 
 
 APT_POLICY: Final[str] = """// Daily security patches, with reboots reserved for maintenance windows.
@@ -266,33 +269,103 @@ def upgrade_release(*, maintenance_window: bool) -> None:
         raise RuntimeError(message)
 
 
-def main(arguments: Sequence[str] | None = None) -> None:
-    arguments = list(sys.argv[1:] if arguments is None else arguments)
-    if not arguments or arguments[0] in {"--help", "-h"}:
-        emit("Internal root worker. Use lra runtime maintenance --help.")
+def invalid_request(message: str) -> Never:
+    raise ValueError(message)
+
+
+def invalid_type(message: str) -> Never:
+    raise TypeError(message)
+
+
+def require(*, condition: bool) -> None:
+    if not condition:
+        invalid_request("Unsupported isolated maintenance request")
+
+
+def text(value: object) -> str:
+    if not isinstance(value, str):
+        invalid_type("Expected a text maintenance field")
+    return value
+
+
+def request_path(value: object) -> Path:
+    name = text(value)
+    require(condition=bool(name))
+    require(condition="\0" not in name)
+    path = Path(name)
+    require(condition=str(path) == name)
+    require(condition=path.is_absolute())
+    return path
+
+
+def is_dictionary(value: object) -> TypeGuard[dict[object, object]]:
+    return isinstance(value, dict)
+
+
+def boolean(value: object) -> bool:
+    if not isinstance(value, bool):
+        invalid_type("Expected a boolean maintenance field")
+    return value
+
+
+@dataclass(frozen=True)
+class MaintenanceRequest:
+    action: str
+    maintenance_window: bool = False
+    check_release: bool = False
+
+
+def stdlib_json_decoder() -> Callable[[str], JsonValue]:
+    return json.loads
+
+
+def read_request(path: Path) -> MaintenanceRequest:
+    value = stdlib_json_decoder()(path.read_text(encoding="utf-8"))
+    if not is_dictionary(value):
+        invalid_type("Expected a maintenance request object")
+    fields: dict[str, object] = {}
+    for key, item in value.items():
+        fields[text(key)] = item
+    action = text(fields.get("action"))
+    allowed = {
+        "audit": {"action", "check_release"},
+        "plan": {"action"},
+        "policy": {"action"},
+        "patch": {"action", "maintenance_window"},
+        "release": {"action", "maintenance_window"},
+    }
+    require(condition=action in allowed and set(fields) <= allowed[action])
+    return MaintenanceRequest(
+        action=action,
+        maintenance_window=boolean(fields.get("maintenance_window", False)),
+        check_release=boolean(fields.get("check_release", False)),
+    )
+
+
+def main(arguments: list[str] | None = None) -> None:
+    values = sys.argv[1:] if arguments is None else arguments
+    require(condition=sys.flags.isolated == 1 and len(values) == 1)
+    if values[0] == "policy":
+        install_policy()
         return
-    action, *options = arguments
-    if action not in {"audit", "plan", "policy", "patch", "release"} or not set(options).issubset(
-        {"--check-release", "--maintenance-window"}
-    ):
-        message = "Unsupported maintenance worker request"
-        raise ValueError(message)
-    match action:
+    path = request_path(values[0])
+    request = read_request(path)
+    match request.action:
         case "audit":
-            emit(json.dumps(asdict(audit(check_release="--check-release" in options)), indent=2))
+            emit(json.dumps(asdict(audit(check_release=request.check_release)), indent=2))
         case "plan":
             emit(capture(["apt-get", "--simulate", "full-upgrade"]))
         case "policy":
             install_policy()
         case "release":
-            upgrade_release(maintenance_window="--maintenance-window" in options)
+            upgrade_release(maintenance_window=request.maintenance_window)
         case _:
-            patch_packages(maintenance_window="--maintenance-window" in options)
+            patch_packages(maintenance_window=request.maintenance_window)
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (EOFError, OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
+    except (EOFError, OSError, RuntimeError, TypeError, ValueError, subprocess.SubprocessError) as error:
         emit(f"maintenance: {error}", error=True)
         sys.exit(1)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import partial
 import json
 import os
 from pathlib import Path
@@ -13,13 +14,16 @@ import stat
 import struct
 import sys
 import time
-from typing import TYPE_CHECKING, Final, Literal, Protocol, TypeGuard
+from typing import TYPE_CHECKING, Final, Literal, TypeGuard
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Set as AbstractSet
+    from collections.abc import Callable, Collection, Mapping, Set as AbstractSet
     from types import FrameType
     from typing import NoReturn
+
+
+type JsonValue = bool | int | float | str | list[JsonValue] | dict[str, JsonValue] | None
 
 
 USERS: Final = Path("/etc/long-running-agent/users")
@@ -174,16 +178,6 @@ class Request:
     candidates: tuple[Path, ...]
 
 
-class JsonLoader(Protocol):
-    def __call__(
-        self,
-        payload: bytes,
-        /,
-        *,
-        object_pairs_hook: Callable[[list[tuple[str, object]]], dict[str, object]],
-    ) -> object: ...
-
-
 def is_dictionary(value: object) -> TypeGuard[dict[object, object]]:
     return isinstance(value, dict)
 
@@ -203,8 +197,8 @@ def fields(value: object) -> dict[str, object]:
     return result
 
 
-def unique_fields(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
+def unique_fields[T](pairs: list[tuple[str, T]]) -> dict[str, T]:
+    result: dict[str, T] = {}
     for key, value in pairs:
         if key in result:
             raise InspectionError
@@ -212,8 +206,15 @@ def unique_fields(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 
-def decode(payload: bytes, *, loader: JsonLoader = json.loads) -> dict[str, object]:
-    return fields(loader(payload, object_pairs_hook=unique_fields))
+def stdlib_json_decoder() -> Callable[[bytes], JsonValue]:
+    return partial(json.loads, object_pairs_hook=unique_fields)
+
+
+def decode(payload: bytes) -> dict[str, JsonValue]:
+    value = stdlib_json_decoder()(payload)
+    if not isinstance(value, dict):
+        raise InspectionError
+    return value
 
 
 def candidate_path(value: object, roots: tuple[Path, ...]) -> Path:
@@ -267,7 +268,7 @@ def root_owned(path: Path, *, directory: bool) -> None:
         raise InspectionError
 
 
-def registration_home(value: dict[str, object], uid: int, account: pwd.struct_passwd) -> Path:
+def registration_home(value: Mapping[str, object], uid: int, account: pwd.struct_passwd) -> Path:
     home = value.get("home")
     if type(value.get("schema_version")) is not int or value["schema_version"] != 1:
         raise InspectionError

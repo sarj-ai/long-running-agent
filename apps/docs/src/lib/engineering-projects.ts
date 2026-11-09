@@ -27,6 +27,7 @@ export const ENGINEERING_PROJECTS = [
     id: "workspace-sync",
     path: "/projects/workspace-sync/",
     name: "Workspace Sync",
-    description: "Google Workspace authority and guarded identity reconciliation.",
+    description:
+      "Google Workspace authority and guarded identity reconciliation.",
   },
 ] as const;

@@ -182,7 +182,10 @@ def read_volume(home: Path) -> VolumeReading:
     available = values.f_bavail * unit
     free = values.f_bfree * unit
     host = host_identity()
-    filesystem: object = getattr(values, "f_fsid", None)
+    filesystem: object = None
+    match values:
+        case os.statvfs_result(f_fsid=identifier):
+            filesystem = identifier
     key = None
     if host is not None and type(filesystem) is int and filesystem != 0:
         binding = json.dumps((host, os.getuid(), str(resolved), filesystem), ensure_ascii=True)

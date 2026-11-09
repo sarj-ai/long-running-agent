@@ -114,7 +114,7 @@ def test_prepare_host_only_executes_installed_system_python_workers(tmp_path: Pa
             "/usr/bin/python3",
             "-I",
             "/opt/long-running-agent/admin_worker.py",
-            "install-self-registration",
+            "/opt/long-running-agent/install-self-registration.json",
         ],
     ]
     assert USER_SHIM == '#!/bin/sh\nexec /usr/bin/python3 -I /opt/long-running-agent/admin_worker.py "$@"\n'
@@ -122,13 +122,14 @@ def test_prepare_host_only_executes_installed_system_python_workers(tmp_path: Pa
         source = Path(bootstrap.__file__).with_name(name).read_text(encoding="utf-8")
         tree = ast.parse(source, feature_version=(3, 12))
         for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                modules = [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom):
-                assert node.level == 0
-                modules = [node.module or ""]
-            else:
-                continue
+            match node:
+                case ast.Import(names=names):
+                    modules = [alias.name for alias in names]
+                case ast.ImportFrom(module=module, level=level):
+                    assert level == 0
+                    modules = [module or ""]
+                case _:
+                    continue
             assert all(module.partition(".")[0] in sys.stdlib_module_names for module in modules)
 
 

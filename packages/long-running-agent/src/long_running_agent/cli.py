@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from typing import Annotated
 
 from rich.console import Console
@@ -65,12 +64,24 @@ def sarj_connect_main() -> None:
     invoke(connect_app, "sarj-connect")
 
 
-def vm_arguments(arguments: list[str]) -> list[str]:
-    return ["vm", *(arguments or ["terminal"])]
+vm_app = typer.Typer(
+    help=client.app.info.help,
+    add_completion=False,
+    no_args_is_help=False,
+    pretty_exceptions_enable=False,
+)
+vm_app.registered_commands.extend(client.app.registered_commands)
+
+
+@vm_app.callback(invoke_without_command=True)
+def configure_vm(ctx: typer.Context) -> None:
+    configure(ctx)
+    if ctx.invoked_subcommand is None:
+        client.terminal(ctx)
 
 
 def vm_main() -> None:
-    invoke(app, "vm", vm_arguments(sys.argv[1:]))
+    invoke(vm_app, "vm")
 
 
 if __name__ == "__main__":

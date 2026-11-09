@@ -28,7 +28,7 @@ def test_registered_user_is_never_reregistered() -> None:
         pytest.fail("A valid existing registration must not be inspected or changed")
 
     ensure_personal_registration(runner=runner, unregistered=unregistered)
-    assert commands == [["/usr/local/sbin/lra-user", "connection"]]
+    assert commands == [["/usr/local/sbin/lra-user", "/opt/long-running-agent/connection.json"]]
 
 
 def test_only_verified_unregistered_user_gets_exact_self_registration() -> None:
@@ -46,9 +46,9 @@ def test_only_verified_unregistered_user_gets_exact_self_registration() -> None:
 
     ensure_personal_registration(runner=runner, unregistered=lambda: True)
     assert commands == [
-        ["/usr/local/sbin/lra-user", "connection"],
+        ["/usr/local/sbin/lra-user", "/opt/long-running-agent/connection.json"],
         ["sudo", "-n", "/usr/local/sbin/lra-user", "register-self"],
-        ["/usr/local/sbin/lra-user", "connection"],
+        ["/usr/local/sbin/lra-user", "/opt/long-running-agent/connection.json"],
     ]
 
 
