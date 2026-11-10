@@ -36,7 +36,10 @@ export default defineConfig({
       scriptDirective: { resources: [{ resource: "'self'", kind: "element" }] },
       styleDirective: {
         hashes: [...TERMINAL_STYLE_HASHES],
-        resources: [{ resource: "'unsafe-inline'", kind: "attribute" }],
+        resources: [
+          { resource: "'self'", kind: "element" },
+          { resource: "'unsafe-inline'", kind: "attribute" },
+        ],
       },
     },
   },
@@ -52,12 +55,6 @@ export default defineConfig({
       title: REFERENCE.package.name,
       description: REFERENCE.package.description,
       favicon: "/favicon.ico",
-      logo: {
-        alt: "Sarj",
-        dark: "./public/sarj-logo-dark.webp",
-        light: "./public/sarj-logo-light.webp",
-        replacesTitle: true,
-      },
       disable404Route: true,
       customCss: ["@sarj/design/starlight.css", "./src/styles/global.css"],
       sidebar: SIDEBAR,
@@ -68,6 +65,7 @@ export default defineConfig({
       tableOfContents: false,
       credits: false,
       components: {
+        Head: "./src/components/engineering-head.astro",
         Search: "./src/components/disabled-feature.astro",
         TableOfContents: "./src/components/disabled-feature.astro",
         MobileTableOfContents: "./src/components/disabled-feature.astro",

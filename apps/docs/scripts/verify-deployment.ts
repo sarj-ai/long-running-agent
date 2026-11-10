@@ -55,6 +55,11 @@ async function main(): Promise<void> {
   );
   await verifyEngineering(mode);
   await verifyWiki(mode);
+  await Promise.all(
+    ["docs.css", "navigation.js", "sarj-logo.svg"].map((asset) =>
+      assetBytes(mode, new URL(`ui/v1/${asset}`, SITE_URL)),
+    ),
+  );
   if (mode === "artifact") await verifyTerminalStyles();
   process.stdout.write("Deployment verified.\n");
 }
@@ -121,12 +126,7 @@ async function verifyWiki(mode: VerificationMode): Promise<void> {
     /http-equiv="content-security-policy"|\/wiki-project\//u,
     "Unpublished Wiki metadata survived promotion",
   );
-  await verifyEngineeringAssets(
-    mode,
-    ownedDocument.markup,
-    document.markup,
-    true,
-  );
+  await verifyEngineeringAssets(mode, ownedDocument.markup, document.markup);
   if (mode === "artifact") {
     await assert.rejects(
       readFile(new URL("wiki-project/index.html", ARTIFACT_ROOT)),
@@ -368,7 +368,6 @@ async function verifyEngineeringAssets(
   mode: VerificationMode,
   ownedDocument: string,
   document: string,
-  customFonts = false,
 ): Promise<void> {
   const resourcePattern = /<(?:link|script|img|source)\b[^>]*>/gu;
   const resourceElements = new Set(
@@ -401,8 +400,7 @@ async function verifyEngineeringAssets(
       }
     }),
   );
-  if (customFonts) assert.ok(fonts.size > 0, "Self-hosted fonts missing");
-  else assert.equal(fonts.size, 0, "Engineering home must use system fonts");
+  assert.ok(fonts.size > 0, "Self-hosted fonts missing");
   await Promise.all(
     [...fonts].map(async (href) => assetBytes(mode, new URL(href))),
   );
