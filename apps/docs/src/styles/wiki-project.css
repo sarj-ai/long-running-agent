@@ -1,5 +1,6 @@
 html:has(.wiki-project) {
   color-scheme: light dark;
+  --sl-font: ui-sans-serif, system-ui, sans-serif;
   --engineering-page: var(--sl-color-black);
   --engineering-line: var(--sarj-color-rule);
   --engineering-muted: var(--sl-color-gray-2);
