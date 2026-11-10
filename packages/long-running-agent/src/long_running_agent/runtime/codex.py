@@ -7,7 +7,7 @@ import json
 import os
 import selectors
 import time
-from typing import TYPE_CHECKING, Annotated, Final, Protocol
+from typing import TYPE_CHECKING, Annotated, Final, Protocol, assert_never
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, RootModel, ValidationError
 import typer
@@ -205,10 +205,14 @@ class CodexProcess:
                 self.remember_login(response)
             if not isinstance(response, RpcSuccess | RpcFailure) or response.id != request_id:
                 continue
-            if isinstance(response, RpcFailure):
-                message = f"Native Codex rejected {method} (RPC {response.error.code})"
-                raise CodexError(message)
-            return response.result
+            match response:
+                case RpcFailure():
+                    message = f"Native Codex rejected {method} (RPC {response.error.code})"
+                    raise CodexError(message)
+                case RpcSuccess():
+                    return response.result
+                case _:
+                    assert_never(response)
 
     def login_completed(self, login_id: str) -> bool:
         deadline = time.monotonic() + self.login_timeout

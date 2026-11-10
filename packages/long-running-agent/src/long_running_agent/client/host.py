@@ -178,9 +178,6 @@ class HostBridge(AbstractContextManager["HostBridge"]):
                 message="VM Chrome opened on your Mac. Sign in there; its website sessions stay on the VM."
             )
         if request.action == "download":
-            if request.path is None:
-                message = "Select a VM file to download"
-                raise ValueError(message)
             self.command(["/usr/bin/osascript", "-e", DOWNLOAD_PROMPT, self.controller.settings.instance, request.path])
             receipt = transfer.get(
                 self.controller, request.path, self.controller.home / "Downloads", control=self.transfers

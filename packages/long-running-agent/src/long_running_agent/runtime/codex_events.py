@@ -86,6 +86,14 @@ class NativeEventError(ValueError):
     pass
 
 
+def decode_event(line: bytes) -> NativeRecord | NativeToolActivity | None:
+    try:
+        return _decode_envelope(NativeEnvelope.model_validate_json(line))
+    except ValidationError:
+        message = "Malformed native event"
+        raise NativeEventError(message) from None
+
+
 def _decode_envelope(envelope: NativeEnvelope) -> NativeRecord | NativeToolActivity | None:
     if envelope.type == "response_item":
         return NativeToolActivity.model_validate(envelope.model_dump())
@@ -100,14 +108,6 @@ def _decode_envelope(envelope: NativeEnvelope) -> NativeRecord | NativeToolActiv
     return NativeRecord.model_validate(envelope.model_dump())
 
 
-def decode_event(line: bytes) -> NativeRecord | NativeToolActivity | None:
-    try:
-        return _decode_envelope(NativeEnvelope.model_validate_json(line))
-    except ValidationError:
-        message = "Malformed native event"
-        raise NativeEventError(message) from None
-
-
 def latest_completion(data: bytes) -> Completion:
     if not data.endswith(b"\n"):
         return ObservedCompletion("unknown")
@@ -116,12 +116,16 @@ def latest_completion(data: bytes) -> Completion:
             item = decode_event(line)
         except NativeEventError:
             return ObservedCompletion("unknown")
-        if item is None:
-            continue
-        if isinstance(item, NativeToolActivity):
-            # A tool/output item after an old completion proves intervening activity,
-            # never permission to replay an earlier capacity failure.
-            return ObservedCompletion("active")
+        match item:
+            case None:
+                continue
+            case NativeToolActivity():
+                # Tool/output after an old completion never authorizes replay.
+                return ObservedCompletion("active")
+            case NativeRecord():
+                pass
+            case _:
+                assert_never(item)
         event = item.payload
         match event:
             case TurnAborted():

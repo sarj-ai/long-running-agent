@@ -1,5 +1,3 @@
-"""Pure retry decisions. Dispatch is durable before any terminal input is sent."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -65,28 +63,32 @@ def acknowledged(attempt: DispatchingAttempt) -> SentAttempt:
 @dataclass(frozen=True)
 class Wait:
     attempt: WaitingAttempt | SentAttempt
+    kind: Literal["wait"] = "wait"
 
 
 @dataclass(frozen=True)
 class Block:
     attempt: UncertainAttempt
+    kind: Literal["block"] = "block"
 
 
 @dataclass(frozen=True)
 class Cooldown:
     attempt: ExhaustedAttempt
+    kind: Literal["cooldown"] = "cooldown"
 
 
 @dataclass(frozen=True)
 class Dispatch:
     attempt: DispatchingAttempt
+    kind: Literal["dispatch"] = "dispatch"
 
 
 type Decision = Wait | Block | Cooldown | Dispatch
 
 
 def observe_capacity(attempt: Attempt | None, error: str, now: float, *, available: bool) -> Decision:
-    """Only a fresh native failure can clear uncertainty; time alone never does."""
+    # Only a fresh native failure clears uncertainty; time alone never does.
     if attempt is None:
         return Wait(WaitingAttempt(error=error, due=now + INITIAL_DELAY))
     match attempt:

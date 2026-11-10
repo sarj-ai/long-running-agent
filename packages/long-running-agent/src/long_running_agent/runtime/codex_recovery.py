@@ -113,7 +113,7 @@ def migrate_attempt(attempt: LegacyAttempt) -> Attempt:
         case "sent":
             return SentAttempt(error=attempt.error, due=attempt.due, attempts=attempt.attempts)
         case "exhausted":
-            return ExhaustedAttempt(error=attempt.error, due=attempt.due, attempts=attempt.attempts)
+            return ExhaustedAttempt.model_validate(attempt.model_dump())
         case _:
             assert_never(attempt.phase)
 

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 from long_running_agent.process import run
 from long_running_agent.runtime import codex, codex_events, codex_panes, codex_recovery as recovery
+from long_running_agent.runtime.codex_retry_state import DispatchingAttempt
 from long_running_agent.runtime.settings import RuntimePaths, private_write
 import pytest
 
@@ -191,7 +192,7 @@ def test_uncertain_native_input_is_not_replayed_after_daemon_restart(
 
 def test_crash_receipt_is_uncertain_and_budget_survives_restart(tmp_path: Path) -> None:
     root = recovery.directory(tmp_path)
-    state = recovery.Ledger(attempts={"fixture": recovery.DispatchingAttempt(error="f" * 64, attempts=1, due=1234.0)})
+    state = recovery.Ledger(attempts={"fixture": DispatchingAttempt(error="f" * 64, attempts=1, due=1234.0)})
     recovery.save(root, state)
     restored = recovery.ledger(root)
     assert restored.attempts["fixture"].phase == "uncertain"

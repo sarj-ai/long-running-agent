@@ -1231,7 +1231,7 @@ def test_native_discovery_failure_preserves_prior_success_and_records_fixed_reas
     assert after.last_run_at == before.last_run_at
     assert after.consecutive_failures == 1
     assert failure.stage == "repository-discovery"
-    assert failure.kind == "discovery-" + kind
+    assert failure.kind == f"discovery-{kind}"
     assert private_value not in result.output + failure.model_dump_json()
     assert (completed_sweep_state / "cleanup-attempts.json").read_bytes() == budget
 
