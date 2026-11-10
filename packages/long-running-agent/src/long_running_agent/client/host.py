@@ -15,7 +15,14 @@ from rich.console import Console
 
 from long_running_agent.client import transfer
 from long_running_agent.config import REMOTE_RUNTIME
-from long_running_agent.host_connection import HostReply, HostRequest, read_message
+from long_running_agent.host_connection import (
+    HostFailure,
+    HostReply,
+    HostRequest,
+    HostRequestPayload,
+    HostSuccess,
+    read_message,
+)
 from long_running_agent.process import DEVNULL, PIPE, ChildProcess, CommandError, ProcessTimeout, spawn
 
 
@@ -161,24 +168,21 @@ class HostBridge(AbstractContextManager["HostBridge"]):
 
     def handle(self, request: HostRequest) -> HostReply:
         if request.action == "status":
-            return HostReply(ok=True, message="Mac terminal return channel is connected")
+            return HostSuccess(message="Mac terminal return channel is connected")
         if request.action == "browser":
             if self.route is None or self.route.child.poll() is not None:
                 message = "The browser route is unavailable; reconnect using sarj-connect terminal"
                 raise RuntimeError(message)
             self.controller.runner(["/usr/bin/open", self.route.url], capture_output=True, timeout=15)
-            return HostReply(
-                ok=True, message="VM Chrome opened on your Mac. Sign in there; its website sessions stay on the VM."
+            return HostSuccess(
+                message="VM Chrome opened on your Mac. Sign in there; its website sessions stay on the VM."
             )
         if request.action == "download":
-            if request.path is None:
-                message = "Select a VM file to download"
-                raise ValueError(message)
             self.command(["/usr/bin/osascript", "-e", DOWNLOAD_PROMPT, self.controller.settings.instance, request.path])
             receipt = transfer.get(
                 self.controller, request.path, self.controller.home / "Downloads", control=self.transfers
             )
-            return HostReply(ok=True, message="Saved in your Mac Downloads folder", paths=[receipt.path])
+            return HostSuccess(message="Saved in your Mac Downloads folder", paths=[receipt.path])
         choice = self.command(["/usr/bin/osascript", "-e", IMAGE_PROMPT, self.controller.settings.instance])
         match choice:
             case "Choose File":
@@ -192,15 +196,13 @@ class HostBridge(AbstractContextManager["HostBridge"]):
             case _:
                 message = "The image request was cancelled"
                 raise RuntimeError(message)
-        return HostReply(
-            ok=True, message="Image sent to your private VM inbox", paths=[receipt.path for receipt in receipts]
-        )
+        return HostSuccess(message="Image sent to your private VM inbox", paths=[receipt.path for receipt in receipts])
 
     def dispatch(self, request: HostRequest) -> HostReply:
         if request.action == "status":
             return self.handle(request)
         if self.stopping.is_set() or not self.action_lock.acquire(blocking=False):
-            return HostReply(ok=False, message="The Mac is handling another request; try again shortly.")
+            return HostFailure(message="The Mac is handling another request; try again shortly.")
         try:
             return self.handle(request)
         finally:
@@ -253,11 +255,9 @@ class HostBridge(AbstractContextManager["HostBridge"]):
                 channel: socket.socket = self.request  # pyright: ignore[reportAny] -- UnixStreamServer supplies a connected stream socket.
                 channel.settimeout(3)
                 try:
-                    reply = bridge.dispatch(HostRequest.model_validate_json(read_message(channel)))
+                    reply = bridge.dispatch(HostRequestPayload.model_validate_json(read_message(channel)).root)
                 except OSError, ValueError, RuntimeError:
-                    reply = HostReply(
-                        ok=False, message="Request cancelled or unavailable. Check the connecting Mac terminal."
-                    )
+                    reply = HostFailure(message="Request cancelled or unavailable. Check the connecting Mac terminal.")
                 with suppress(OSError):
                     channel.sendall(reply.model_dump_json().encode() + b"\n")
 

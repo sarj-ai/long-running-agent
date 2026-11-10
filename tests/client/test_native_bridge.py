@@ -16,7 +16,7 @@ from long_running_agent.client.browser import await_forward, start_route
 from long_running_agent.client.controller import Client
 from long_running_agent.client.host import HostBridge
 from long_running_agent.config import RUNTIME_DIRECTORY, Settings
-from long_running_agent.host_connection import HostReply
+from long_running_agent.host_connection import HostReplyPayload
 from long_running_agent.process import DEVNULL, PIPE, ChildProcess, Completed, run, spawn
 from pydantic import BaseModel, ConfigDict
 import pytest
@@ -35,10 +35,10 @@ with registered(sys.argv[1], 'Validation Mac'):
     sys.stdin.buffer.read()
 """
 OPEN_BROWSER = """import sys
-from long_running_agent.host_connection import HostRequest, exchange
+from long_running_agent.host_connection import HostCommand, HostReplyPayload, HostRequest, exchange
 from long_running_agent.runtime.host import choose_connection
 selected = choose_connection(sys.argv[1])
-reply = exchange(selected, HostRequest(action='browser'), timeout=10)
+reply = exchange(selected, HostCommand(action='browser'), timeout=10)
 print(reply.model_dump_json())
 """
 CLOSED_CONNECTION = """import sys
@@ -234,9 +234,9 @@ def test_real_ssh_return_channel_browser_forward_and_installed_binary_transfer(
     checksum = hashlib.sha256(expected).hexdigest()
     with HostBridge(native_controller, route_factory=start_route) as bridge, reverse_channel(bridge):
         assert bridge.route is not None
-        reply = HostReply.model_validate_json(
+        reply = HostReplyPayload.model_validate_json(
             remote_python(native_controller, OPEN_BROWSER, [bridge.connection]).stdout
-        )
+        ).root
         assert reply.ok
         assert native_controller.opened == [bridge.route.url]
         uploaded = transfer.send(native_controller, [pixel_png], control=bridge.transfers)

@@ -19,6 +19,8 @@ from long_running_agent.client.browser import BrowserConnection
 from long_running_agent.client.terminal import TerminalState
 from long_running_agent.host_connection import (
     MAX_MESSAGE,
+    DownloadRequest,
+    HostCommand,
     HostRegistration,
     HostReply,
     HostRequest,
@@ -100,7 +102,7 @@ def registered(
         message = "The private SSH return channel is not ready for this user"
         raise RuntimeError(message)
     registration = HostRegistration(connection=connection, socket=str(endpoint), label=label)
-    if not exchange(registration, HostRequest(action="status"), timeout=3).ok:
+    if not exchange(registration, HostCommand(action="status"), timeout=3).ok:
         message = "The connecting computer did not acknowledge its private return channel"
         raise RuntimeError(message)
     receipt = base.with_suffix(".json")
@@ -175,7 +177,7 @@ def live_connections(*, home: Path | None = None, connection: str | None = None)
         except OSError, ValueError:
             continue
         try:
-            if registration is not None and exchange(registration, HostRequest(action="status"), timeout=0.3).ok:
+            if registration is not None and exchange(registration, HostCommand(action="status"), timeout=0.3).ok:
                 result.append(registration)
         except OSError as error:
             if error.errno in {errno.ENOENT, errno.ECONNREFUSED}:
@@ -199,7 +201,7 @@ def forget_dead_connection(path: Path, root: Path) -> None:
             return
         # The original failed probe may predate this receipt's publication.
         try:
-            exchange(registration, HostRequest(action="status"), timeout=0.3)
+            exchange(registration, HostCommand(action="status"), timeout=0.3)
         except OSError as error:
             if error.errno in {errno.ENOENT, errno.ECONNREFUSED} and path.lstat().st_ino == info.st_ino:
                 path.unlink()
@@ -269,7 +271,7 @@ def browser(
     selected = choose_connection(connection)
     if url is not None:
         open_website(url)
-    reply = exchange(selected, HostRequest(action="browser"))
+    reply = exchange(selected, HostCommand(action="browser"))
     if not reply.ok:
         raise RuntimeError(reply.message)
     typer.echo(reply.message)
@@ -278,7 +280,7 @@ def browser(
 @app.command()
 def image(connection: Annotated[str | None, typer.Option()] = None) -> None:
     """Ask your Mac to choose an image or explicitly send its clipboard image."""
-    reply = perform(HostRequest(action="image"), connection)
+    reply = perform(HostCommand(action="image"), connection)
     for path in reply.paths:
         typer.echo(shlex.quote(path))
 
@@ -286,7 +288,7 @@ def image(connection: Annotated[str | None, typer.Option()] = None) -> None:
 @app.command()
 def download(path: str, connection: Annotated[str | None, typer.Option()] = None) -> None:
     """Ask the Mac to save a selected VM file after a native confirmation."""
-    reply = perform(HostRequest(action="download", path=path), connection)
+    reply = perform(DownloadRequest(path=path), connection)
     typer.echo(reply.message)
 
 

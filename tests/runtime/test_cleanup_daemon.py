@@ -690,8 +690,9 @@ def test_filesystem_resize_starts_a_new_growth_baseline() -> None:
     schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=80 * GIB), 160)
     schedule.observe(cleanup_daemon.Space(total=101 * GIB, available=76 * GIB), 220)
     assert not schedule.capacity_recovery
-    assert schedule.growth.started == schedule.growth.previous
-    assert schedule.growth.positive_samples == 0
+    assert isinstance(schedule.growth.state, cleanup_daemon.TrackingGrowth)
+    assert schedule.growth.state.started == schedule.growth.state.previous
+    assert schedule.growth.state.positive_samples == 0
 
 
 def test_capacity_polls_bound_error_backoff_without_postponing_an_earlier_sweep() -> None:
@@ -756,7 +757,7 @@ def test_legacy_heartbeat_migration_resets_forecast_without_resetting_outcome_or
     assert restored.last_run_at == previous.last_run_at
     assert restored.failures == previous.consecutive_failures
     assert not restored.capacity_recovery
-    assert restored.growth.started is restored.growth.previous is None
+    assert isinstance(restored.growth.state, cleanup_daemon.NoGrowthSamples)
     assert (ledger.read_bytes(), marker.read_bytes(), (state / cleanup_daemon.STATUS_FILE).read_bytes()) == before
 
 
@@ -1230,7 +1231,7 @@ def test_native_discovery_failure_preserves_prior_success_and_records_fixed_reas
     assert after.last_run_at == before.last_run_at
     assert after.consecutive_failures == 1
     assert failure.stage == "repository-discovery"
-    assert failure.kind == "discovery-" + kind
+    assert failure.kind == f"discovery-{kind}"
     assert private_value not in result.output + failure.model_dump_json()
     assert (completed_sweep_state / "cleanup-attempts.json").read_bytes() == budget
 
@@ -1295,11 +1296,12 @@ def test_same_size_volume_change_resets_forecast_and_recovery_latch(second_key: 
     schedule.capacity_recovery = True
     schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=76 * GIB), 100)
     schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=76 * GIB - GIB // 2), 160)
-    assert schedule.growth.positive_samples == 1
+    assert isinstance(schedule.growth.state, cleanup_daemon.TrackingGrowth)
+    assert schedule.growth.state.positive_samples == 1
     previous_epoch = schedule.baseline_epoch
     schedule.bind_volume(cleanup_capacity.Policy(second, thresholds))
     assert not schedule.capacity_recovery
-    assert schedule.growth.started is schedule.growth.previous is None
+    assert isinstance(schedule.growth.state, cleanup_daemon.NoGrowthSamples)
     assert schedule.baseline_epoch != previous_epoch
     schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=76 * GIB - GIB // 2), 220)
     assert not schedule.capacity_recovery
@@ -1379,4 +1381,5 @@ def test_unknown_identity_keeps_bootstrap_hysteresis_while_disabling_forecast() 
         schedule.bind_volume(cleanup_capacity.Policy(volume, thresholds))
         schedule.observe(cleanup_daemon.Space(total=100 * GIB, available=available), now, thresholds=thresholds)
         assert schedule.capacity_recovery is recovering
-        assert schedule.growth.positive_samples == 0
+        assert isinstance(schedule.growth.state, cleanup_daemon.TrackingGrowth)
+        assert schedule.growth.state.positive_samples == 0

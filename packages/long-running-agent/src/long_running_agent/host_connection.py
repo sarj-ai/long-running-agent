@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import socket
 import time
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 
 
 MAX_MESSAGE = 16384
@@ -21,28 +21,53 @@ class HostRegistration(BaseModel):
     label: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,79}$")
 
 
-class HostRequest(BaseModel):
+class HostCommand(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True, hide_input_in_errors=True)
     version: Literal[1] = PROTOCOL_VERSION
-    action: Literal["status", "browser", "image", "download"]
-    path: str | None = Field(default=None, min_length=1, max_length=4096)
+    action: Literal["status", "browser", "image"]
+    path: None = None
+
+
+class DownloadRequest(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True, hide_input_in_errors=True)
+    version: Literal[1] = PROTOCOL_VERSION
+    action: Literal["download"] = "download"
+    path: str = Field(min_length=1, max_length=4096)
 
     @model_validator(mode="after")
     def selected_path(self) -> Self:
-        if (self.action == "download") != (self.path is not None):
-            message = "Only a download request accepts a selected VM path"
-            raise ValueError(message)
-        if self.path is not None and any(character in self.path for character in "\0\r\n"):
+        if any(character in self.path for character in "\0\r\n"):
             message = "The selected VM path contains a control character"
             raise ValueError(message)
         return self
 
 
-class HostReply(BaseModel):
+type HostRequest = Annotated[HostCommand | DownloadRequest, Field(discriminator="action")]
+
+
+class HostRequestPayload(RootModel[HostRequest]):
+    pass
+
+
+class HostSuccess(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True, hide_input_in_errors=True)
-    ok: bool
+    ok: Literal[True] = True
     message: str = Field(max_length=4096)
     paths: list[str] = Field(default_factory=list, max_length=16)
+
+
+class HostFailure(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True, hide_input_in_errors=True)
+    ok: Literal[False] = False
+    message: str = Field(max_length=4096)
+    paths: tuple[()] = ()
+
+
+type HostReply = Annotated[HostSuccess | HostFailure, Field(discriminator="ok")]
+
+
+class HostReplyPayload(RootModel[HostReply]):
+    pass
 
 
 def read_message(channel: socket.socket) -> bytes:
@@ -73,7 +98,7 @@ def exchange(registration: HostRegistration, request: HostRequest, *, timeout: f
         channel.settimeout(timeout)
         channel.connect(registration.socket)
         channel.sendall(request.model_dump_json().encode() + b"\n")
-        return HostReply.model_validate_json(read_message(channel))
+        return HostReplyPayload.model_validate_json(read_message(channel)).root
 
 
 def website_url(value: str) -> str:

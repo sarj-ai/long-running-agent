@@ -14,7 +14,13 @@ from long_running_agent.client.browser import BrowserRoute
 from long_running_agent.client.controller import Client
 from long_running_agent.client.host import HostBridge
 from long_running_agent.config import Settings
-from long_running_agent.host_connection import HostRegistration, HostReply, HostRequest, exchange, read_message
+from long_running_agent.host_connection import (
+    HostCommand,
+    HostRegistration,
+    HostReplyPayload,
+    exchange,
+    read_message,
+)
 from long_running_agent.process import DEVNULL, PIPE, spawn
 import pytest
 
@@ -77,8 +83,8 @@ def test_private_return_channel_opens_only_its_owned_vm_viewer(bridge: HostBridg
     endpoint = registration(bridge)
     assert Path(endpoint.socket).stat().st_mode & 0o777 == 0o600
     assert Path(endpoint.socket).parent.stat().st_mode & 0o777 == 0o700
-    assert exchange(endpoint, HostRequest(action="status")).ok
-    assert exchange(endpoint, HostRequest(action="browser")).ok
+    assert exchange(endpoint, HostCommand(action="status")).ok
+    assert exchange(endpoint, HostCommand(action="browser")).ok
     controller = bridge.controller
     assert isinstance(controller, HostController)
     assert controller.commands[-1] == [
@@ -104,7 +110,7 @@ def test_arbitrary_host_commands_and_mac_paths_never_reach_native_ui(bridge: Hos
         channel.connect(endpoint.socket)
         channel.sendall(payload)
         response = channel.recv(16384)
-    assert not HostReply.model_validate_json(response).ok
+    assert not HostReplyPayload.model_validate_json(response).root.ok
     assert isinstance(bridge.controller, HostController)
     assert bridge.controller.commands == before
 
@@ -112,8 +118,8 @@ def test_arbitrary_host_commands_and_mac_paths_never_reach_native_ui(bridge: Hos
 def test_status_remains_responsive_while_a_user_action_is_busy(bridge: HostBridge) -> None:
     endpoint = registration(bridge)
     with bridge.action_lock:
-        assert exchange(endpoint, HostRequest(action="status"), timeout=1).ok
-        reply = exchange(endpoint, HostRequest(action="image"), timeout=1)
+        assert exchange(endpoint, HostCommand(action="status"), timeout=1).ok
+        reply = exchange(endpoint, HostCommand(action="image"), timeout=1)
         assert not reply.ok
         assert "another request" in reply.message
 
