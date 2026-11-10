@@ -18,6 +18,10 @@
 /favicon.ico
   Cache-Control: public, max-age=86400
 
+/ui/v1/*
+  ! Content-Security-Policy
+  Cache-Control: public, max-age=300, must-revalidate
+
 /reference.json
   ! Content-Security-Policy
   Access-Control-Allow-Origin: *
