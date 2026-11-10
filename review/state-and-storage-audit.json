@@ -1,0 +1,1308 @@
+{
+  "scope": "All tracked CLI, runtime, setup, browser, SSH, maintenance and infrastructure sources; native Codex durable storage is a separately owned provider boundary.",
+  "machines": [
+    {
+      "id": "capacity-retry",
+      "oldRepresentation": "phase plus unconstrained count/due/error fields",
+      "authoritativeReplacement": "codex_retry_state.Attempt closed union; observe_capacity, acknowledged, uncertain",
+      "events": [
+        "capacity observed",
+        "deadline",
+        "dispatch",
+        "acknowledge",
+        "unknown delivery",
+        "new error"
+      ],
+      "guards": [
+        "secure fsynced ledger",
+        "one shared account/retry flock",
+        "verified foreground native pane",
+        "same process/home/thread",
+        "bounded retry budget"
+      ],
+      "recovery": "v1 receipt migration preserves count and cursor; dispatching becomes uncertain; time never clears uncertainty",
+      "decision": "convert",
+      "sources": [
+        "runtime/codex_retry_state.py",
+        "runtime/codex_recovery.py"
+      ]
+    },
+    {
+      "id": "native-turn-observation",
+      "oldRepresentation": "completion state and optional fingerprint; generic native payload",
+      "authoritativeReplacement": "ObservedCompletion | CapacityCompletion and typed native record variants",
+      "events": [
+        "task_started",
+        "user_message",
+        "response_item tool/input/output",
+        "task_complete",
+        "turn_aborted"
+      ],
+      "guards": [
+        "bounded private tail",
+        "matching open fd/inode snapshot",
+        "malformed recognized event fails closed"
+      ],
+      "recovery": "tool activity supersedes earlier completion; unknown never authorizes resend",
+      "decision": "convert",
+      "sources": [
+        "runtime/codex_events.py"
+      ]
+    },
+    {
+      "id": "native-rpc",
+      "oldRepresentation": "optional id/method/result/error bag",
+      "authoritativeReplacement": "RpcNotification | RpcServerRequest | RpcSuccess | RpcFailure; runtime RootModel",
+      "events": [
+        "receive",
+        "request reply",
+        "notification",
+        "login completion"
+      ],
+      "guards": [
+        "strict boundary union",
+        "exact request ID",
+        "bounded subprocess communication"
+      ],
+      "recovery": "unsupported or malformed replies fail closed; native Codex owns durable tool checkpoints",
+      "decision": "convert",
+      "sources": [
+        "runtime/codex.py"
+      ]
+    },
+    {
+      "id": "host-bridge",
+      "oldRepresentation": "action/path and ok/paths bags",
+      "authoritativeReplacement": "HostCommand | DownloadRequest; HostSuccess | HostFailure",
+      "events": [
+        "connect",
+        "status",
+        "browser",
+        "image",
+        "download",
+        "disconnect"
+      ],
+      "guards": [
+        "private Unix socket",
+        "bounded payload and connections",
+        "path validation",
+        "prepared descriptor identity"
+      ],
+      "recovery": "context manager closes sockets and server workers; failed requests contain no success paths",
+      "decision": "convert",
+      "sources": [
+        "host_connection.py",
+        "client/host.py",
+        "runtime/host.py"
+      ]
+    },
+    {
+      "id": "growth-observation",
+      "oldRepresentation": "four independent optional measurements",
+      "authoritativeReplacement": "NoGrowthSamples | TrackingGrowth",
+      "events": [
+        "sample",
+        "gap",
+        "noise",
+        "reclaim",
+        "reset"
+      ],
+      "guards": [
+        "finite bounded sample policy",
+        "same filesystem target",
+        "minimum samples/horizon"
+      ],
+      "recovery": "restart starts fresh; partial samples cannot predict cleanup",
+      "decision": "convert",
+      "sources": [
+        "runtime/cleanup_daemon.py"
+      ]
+    },
+    {
+      "id": "cleanup-schedule",
+      "oldRepresentation": "phase with deadlines, failure/backoff and report facts",
+      "authoritativeReplacement": "Phase literal; Schedule.restore exhaustive cases; Schedule deadline/selection methods",
+      "events": [
+        "poll",
+        "deadline",
+        "pressure",
+        "budget",
+        "worker start",
+        "worker report",
+        "stop",
+        "crash"
+      ],
+      "guards": [
+        "one daemon lock",
+        "stop Event",
+        "bounded failure history",
+        "watchdog",
+        "provider-native worktree remove only"
+      ],
+      "recovery": "running heartbeat on restart becomes error; stopped becomes waiting; output/timeout/worker failure remains failure. Counters and capacity samples are independent facts valid in every phase, not conditional state payloads",
+      "decision": "simplify",
+      "sources": [
+        "runtime/cleanup_daemon.py"
+      ]
+    },
+    {
+      "id": "cleanup-worker",
+      "oldRepresentation": "subprocess/selector/stop/deadline lifecycle",
+      "authoritativeReplacement": "ChildProcess context manager, WorkerReport boundary schema and FailureStage/FailureKind literals",
+      "events": [
+        "spawn",
+        "output",
+        "exit",
+        "timeout",
+        "cancel"
+      ],
+      "guards": [
+        "bounded report/output",
+        "PID identity",
+        "owned child process",
+        "stop and reap"
+      ],
+      "recovery": "failure receipts persist separately; failed inspection never authorizes removal",
+      "decision": "retain-explicit",
+      "sources": [
+        "runtime/cleanup_daemon.py",
+        "process.py"
+      ]
+    },
+    {
+      "id": "cleanup-publication",
+      "oldRepresentation": "branch remote PR states and local worktree graph",
+      "authoritativeReplacement": "typed provider response schemas and canonical publication checks",
+      "events": [
+        "inspect local graph",
+        "read refs",
+        "read PR",
+        "decide retain/remove"
+      ],
+      "guards": [
+        "fresh remote truth",
+        "exact commit/head",
+        "unpublished or changed branches retained"
+      ],
+      "recovery": "provider failure or uncertainty retains source; provider PR lifecycle remains GitHub-owned",
+      "decision": "retain-explicit",
+      "sources": [
+        "runtime/cleanup_publication.py"
+      ]
+    },
+    {
+      "id": "cleanup-attempt-budget",
+      "oldRepresentation": "receipt/cursor files",
+      "authoritativeReplacement": "AttemptStamp, AttemptReceipt, AttemptHistory, ReviewCursor, InventoryCursor runtime schemas",
+      "events": [
+        "reserve attempt",
+        "advance review",
+        "checkpoint inventory",
+        "new stamp"
+      ],
+      "guards": [
+        "atomic private write",
+        "fsync",
+        "bounded reads",
+        "same native model/capacity fingerprint"
+      ],
+      "recovery": "reserve before action; crash spends budget conservatively; malformed advisory quarantined, protective evidence retained",
+      "decision": "retain-explicit",
+      "sources": [
+        "runtime/cleanup_state.py"
+      ]
+    },
+    {
+      "id": "worktree-deletion",
+      "oldRepresentation": "filesystem/git/index/activity across local/native state",
+      "authoritativeReplacement": "native identity snapshots, inventory classifications and cleanup eligibility checks",
+      "events": [
+        "discover",
+        "inspect",
+        "revalidate",
+        "native remove",
+        "readback"
+      ],
+      "guards": [
+        "fresh activity including tool checkpoints",
+        "Git process ownership",
+        "native worktree remove",
+        "identity/version checks"
+      ],
+      "recovery": "no manual source deletion; unknown activity, publication or provenance retains worktree",
+      "decision": "retain-explicit",
+      "sources": [
+        "runtime/cleanup.py",
+        "runtime/worktrees.py",
+        "runtime/cleanup_activity.py"
+      ]
+    },
+    {
+      "id": "capacity-calibration",
+      "oldRepresentation": "disk samples and thresholds",
+      "authoritativeReplacement": "Calibration/LowerObservation/Policy schemas",
+      "events": [
+        "explicit post-cleanup calibration",
+        "sample",
+        "select"
+      ],
+      "guards": [
+        "fresh mount identity",
+        "signed ownership/private files",
+        "threshold validation"
+      ],
+      "recovery": "missing or invalid calibration prevents speculative reclaim; measurements are immutable input facts",
+      "decision": "retain-explicit",
+      "sources": [
+        "runtime/cleanup_capacity.py"
+      ]
+    },
+    {
+      "id": "native-process-ownership",
+      "oldRepresentation": "pid/start time/session/tty/home/thread and foreground combinations",
+      "authoritativeReplacement": "ProcessIdentity, PaneTarget, ScreenProcess and verified target inventory",
+      "events": [
+        "discover",
+        "inspect",
+        "focus",
+        "reopen",
+        "interrupt"
+      ],
+      "guards": [
+        "pidfd/start-time validation",
+        "foreground group",
+        "same uid/session/home",
+        "restricted pane target"
+      ],
+      "recovery": "stale or ambiguous process stays blocked; process-local resources use structured ownership and finally cleanup",
+      "decision": "retain-explicit",
+      "sources": [
+        "runtime/codex_panes.py",
+        "process.py"
+      ]
+    },
+    {
+      "id": "account-switch",
+      "oldRepresentation": "login notifications/process exit/account profiles",
+      "authoritativeReplacement": "typed native RPC and account provider boundary models; shared recovery lock",
+      "events": [
+        "begin device login",
+        "notify",
+        "read account",
+        "switch",
+        "refresh"
+      ],
+      "guards": [
+        "same account lock as retry dispatch",
+        "native authorization readback",
+        "deadline"
+      ],
+      "recovery": "no tools are replayed by account switching; malformed/unsupported account data errors",
+      "decision": "retain-explicit",
+      "sources": [
+        "runtime/codex.py"
+      ]
+    },
+    {
+      "id": "cloud-power-and-tunnel",
+      "oldRepresentation": "native instance status, tunnel ownership, ephemeral ports",
+      "authoritativeReplacement": "typed PowerAction and native Cloud command result checks; connection owner context",
+      "events": [
+        "start",
+        "resume",
+        "wait",
+        "SSH connect",
+        "tunnel exit"
+      ],
+      "guards": [
+        "instance identity",
+        "host key validation",
+        "bounded process lifetime",
+        "owned port"
+      ],
+      "recovery": "GCP/SSH own durable status; failures propagate and owned child processes close",
+      "decision": "retain-explicit",
+      "sources": [
+        "client/cloud.py",
+        "client/connection.py",
+        "client/browser.py"
+      ]
+    },
+    {
+      "id": "transfer",
+      "oldRepresentation": "path/descriptor/size/hash combinations",
+      "authoritativeReplacement": "PreparedFile, FileState, TransferControl and exact file readback",
+      "events": [
+        "prepare",
+        "send",
+        "cancel",
+        "verify"
+      ],
+      "guards": [
+        "descriptor identity",
+        "file bounds",
+        "immutable snapshot",
+        "path controls"
+      ],
+      "recovery": "changed file aborts; failed transfer never reports verified success",
+      "decision": "retain-explicit",
+      "sources": [
+        "client/transfer.py",
+        "host_connection.py"
+      ]
+    },
+    {
+      "id": "setup-and-maintenance",
+      "oldRepresentation": "install marker, root helper, sudo policy, services, generated configuration",
+      "authoritativeReplacement": "validated maintenance requests and canonical runtime settings/setup definitions",
+      "events": [
+        "install",
+        "verify",
+        "upgrade",
+        "repair",
+        "uninstall"
+      ],
+      "guards": [
+        "root ownership",
+        "private permissions",
+        "exact argv policy",
+        "atomic config writes"
+      ],
+      "recovery": "repeat installation reconciles desired files/services; foreign markers never authorize privileges",
+      "decision": "retain-explicit",
+      "sources": [
+        "runtime/setup.py",
+        "runtime/maintenance_worker.py",
+        "runtime/admin_worker.py"
+      ]
+    }
+  ],
+  "applicationOwnedTables": 0,
+  "nativeTables": [
+    {
+      "table": "_sqlx_migrations",
+      "columns": [
+        {
+          "name": "version",
+          "nullable": true,
+          "type": "BIGINT"
+        },
+        {
+          "name": "description",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "installed_on",
+          "nullable": false,
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "success",
+          "nullable": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "checksum",
+          "nullable": false,
+          "type": "BLOB"
+        },
+        {
+          "name": "execution_time",
+          "nullable": false,
+          "type": "BIGINT"
+        }
+      ],
+      "rows": 62,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "backfill_state",
+      "columns": [
+        {
+          "name": "id",
+          "nullable": true,
+          "type": "INTEGER"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "last_watermark",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "last_success_at",
+          "nullable": true,
+          "type": "INTEGER"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "type": "INTEGER"
+        }
+      ],
+      "rows": 1,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "external_agent_config_imports",
+      "columns": [
+        {
+          "name": "import_id",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "completed_at_ms",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "successes",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "failures",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "provider_id",
+          "nullable": true,
+          "type": "TEXT"
+        }
+      ],
+      "rows": 0,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "guardian_review_feedback",
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "thread_id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "record",
+          "nullable": false,
+          "type": "BLOB"
+        }
+      ],
+      "rows": 12,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "project_idempotency_keys",
+      "columns": [
+        {
+          "name": "key",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "project_id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "created_at_ms",
+          "nullable": false,
+          "type": "INTEGER"
+        }
+      ],
+      "rows": 0,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "project_roots",
+      "columns": [
+        {
+          "name": "project_id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "position",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "path",
+          "nullable": false,
+          "type": "TEXT"
+        }
+      ],
+      "rows": 0,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "projects",
+      "columns": [
+        {
+          "name": "id",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "metadata",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "position",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "created_at_ms",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "updated_at_ms",
+          "nullable": false,
+          "type": "INTEGER"
+        }
+      ],
+      "rows": 0,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "remote_control_enrollments",
+      "columns": [
+        {
+          "name": "websocket_url",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "account_id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "app_server_client_name",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "server_id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "environment_id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "server_name",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "remote_control_enabled",
+          "nullable": true,
+          "type": "INTEGER"
+        }
+      ],
+      "rows": 0,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "rollout_migration_skipped_rollouts",
+      "columns": [
+        {
+          "name": "migration_id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "rollout_path",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "rollout_size_bytes",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "rollout_modified_at_ns",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "skip_reason",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "skipped_at",
+          "nullable": false,
+          "type": "INTEGER"
+        }
+      ],
+      "rows": 0,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "rollout_migration_state",
+      "columns": [
+        {
+          "name": "migration_id",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "last_checked_thread_created_at",
+          "nullable": true,
+          "type": "INTEGER"
+        },
+        {
+          "name": "last_checked_thread_id",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "type": "INTEGER"
+        }
+      ],
+      "rows": 0,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "sqlite_sequence",
+      "columns": [
+        {
+          "name": "name",
+          "nullable": true,
+          "type": ""
+        },
+        {
+          "name": "seq",
+          "nullable": true,
+          "type": ""
+        }
+      ],
+      "rows": 0,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "thread_attachments",
+      "columns": [
+        {
+          "name": "id",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "thread_id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "attachment_type",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "identity_key",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "payload",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "type": "INTEGER"
+        }
+      ],
+      "rows": 0,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "thread_dynamic_tools",
+      "columns": [
+        {
+          "name": "thread_id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "position",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "description",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "input_schema",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "defer_loading",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "namespace",
+          "nullable": true,
+          "type": "TEXT"
+        }
+      ],
+      "rows": 0,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "thread_read_receipts",
+      "columns": [
+        {
+          "name": "thread_id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "first_unread_turn",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "revision",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "last_published_turn",
+          "nullable": true,
+          "type": "TEXT"
+        }
+      ],
+      "rows": 295,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "thread_sections",
+      "columns": [
+        {
+          "name": "id",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "appearance",
+          "nullable": true,
+          "type": "TEXT"
+        }
+      ],
+      "rows": 1,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "thread_spawn_edges",
+      "columns": [
+        {
+          "name": "parent_thread_id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "child_thread_id",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "type": "TEXT"
+        }
+      ],
+      "rows": 2307,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "table": "threads",
+      "columns": [
+        {
+          "name": "id",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "rollout_path",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "source",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "model_provider",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "cwd",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "title",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "sandbox_policy",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "approval_mode",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "tokens_used",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "has_user_event",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "archived",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "archived_at",
+          "nullable": true,
+          "type": "INTEGER"
+        },
+        {
+          "name": "git_sha",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "git_branch",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "git_origin_url",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "cli_version",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "first_user_message",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "agent_nickname",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "agent_role",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "memory_mode",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "model",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "reasoning_effort",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "agent_path",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "created_at_ms",
+          "nullable": true,
+          "type": "INTEGER"
+        },
+        {
+          "name": "updated_at_ms",
+          "nullable": true,
+          "type": "INTEGER"
+        },
+        {
+          "name": "thread_source",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "preview",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "recency_at",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "recency_at_ms",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "history_mode",
+          "nullable": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "name",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "is_pinned",
+          "nullable": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "thread_section_id",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "section_position",
+          "nullable": true,
+          "type": "INTEGER"
+        },
+        {
+          "name": "section_entered_at_ms",
+          "nullable": true,
+          "type": "INTEGER"
+        },
+        {
+          "name": "project_id",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "originator",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "daybreak_enabled",
+          "nullable": true,
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "creator_user_id",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "creator_account_id",
+          "nullable": true,
+          "type": "TEXT"
+        },
+        {
+          "name": "attached_thread_parent_id",
+          "nullable": true,
+          "type": "TEXT"
+        }
+      ],
+      "rows": 12022,
+      "decision": "retain-external-provider-state",
+      "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    }
+  ],
+  "coordination": "Wiki and Google automation credentials and execution leases are tenant/service-owned. LRA uses neither application database; no shared coordination daemon or new generic engine is required.",
+  "exceptions": [
+    "Native Codex owns checkpointing, tool execution, waiting, interruption and resumable thread storage. This CLI can verify evidence and ownership but cannot promise exactly-once external tools; uncertain input delivery remains blocked.",
+    "Independent telemetry, static configuration, OS resource handles and provider response DTOs are boundary facts, not additional application workflows. Native response schemas are validated before decisions."
+  ],
+  "sourceCoverage": [
+    ".basedpyright-strict.json",
+    ".checkov.yml",
+    ".gitattributes",
+    ".github/workflows/commit-policy.yml",
+    ".github/workflows/docs.yml",
+    ".github/workflows/secrets.yml",
+    ".github/workflows/standards.yml",
+    ".github/workflows/tests.yml",
+    ".gitignore",
+    ".markdownlint.yaml",
+    ".pre-commit-config.yaml",
+    ".pyright-strict.json",
+    ".python-version",
+    ".repo-standards/repository.toml",
+    ".ruff-strict.toml",
+    ".sarj-standards.toml",
+    ".shellcheckrc",
+    ".taplo.toml",
+    ".yamllint.yaml",
+    "LICENSE",
+    "README.md",
+    "apps/docs/astro.config.ts",
+    "apps/docs/doctor.config.json",
+    "apps/docs/oxfmt.config.mts",
+    "apps/docs/oxfmt.strict.mts",
+    "apps/docs/oxlint.config.mts",
+    "apps/docs/oxlint.strict.mts",
+    "apps/docs/package-lock.json",
+    "apps/docs/package.json",
+    "apps/docs/public/_headers",
+    "apps/docs/public/favicon.ico",
+    "apps/docs/public/fonts/NERD-FONTS-LICENSE.txt",
+    "apps/docs/public/fonts/OFL.txt",
+    "apps/docs/public/fonts/lra-terminal-bold.woff2",
+    "apps/docs/public/fonts/lra-terminal-regular.woff2",
+    "apps/docs/public/sarj-logo-dark.webp",
+    "apps/docs/public/sarj-logo-light.webp",
+    "apps/docs/public/sarj-logo.svg",
+    "apps/docs/scripts/verify-deployment.ts",
+    "apps/docs/scripts/worker.test.ts",
+    "apps/docs/src/assets/engineering/geist-mono.woff2",
+    "apps/docs/src/assets/engineering/geist-ofl.txt",
+    "apps/docs/src/assets/engineering/geist.woff2",
+    "apps/docs/src/assets/engineering/newsreader-ofl.txt",
+    "apps/docs/src/assets/engineering/newsreader.woff2",
+    "apps/docs/src/assets/wiki/nunito-ofl.txt",
+    "apps/docs/src/assets/wiki/wiki-demo.png",
+    "apps/docs/src/components/disabled-feature.astro",
+    "apps/docs/src/components/engineering-header.astro",
+    "apps/docs/src/components/engineering-project-card.astro",
+    "apps/docs/src/components/engineering-theme.astro",
+    "apps/docs/src/components/parameters.astro",
+    "apps/docs/src/components/project-navigation.astro",
+    "apps/docs/src/components/reference-page.astro",
+    "apps/docs/src/components/terminal-demo.astro",
+    "apps/docs/src/env.d.ts",
+    "apps/docs/src/integrations/cloudflare-artifacts.ts",
+    "apps/docs/src/lib/engineering-projects.ts",
+    "apps/docs/src/lib/env.ts",
+    "apps/docs/src/lib/mount-terminal-demo.ts",
+    "apps/docs/src/lib/paths.ts",
+    "apps/docs/src/lib/reference.ts",
+    "apps/docs/src/lib/source-revision.ts",
+    "apps/docs/src/lib/terminal-demo.test.ts",
+    "apps/docs/src/lib/terminal-demo.ts",
+    "apps/docs/src/lib/terminal-input.test.ts",
+    "apps/docs/src/lib/terminal-input.ts",
+    "apps/docs/src/lib/terminal-screen.test.ts",
+    "apps/docs/src/lib/terminal-screen.ts",
+    "apps/docs/src/lib/terminal-style-hashes.ts",
+    "apps/docs/src/lib/wiki-description.ts",
+    "apps/docs/src/pages/404.astro",
+    "apps/docs/src/pages/cli/[...path].astro",
+    "apps/docs/src/pages/cli/index.astro",
+    "apps/docs/src/pages/engineering-home.astro",
+    "apps/docs/src/pages/health.json.ts",
+    "apps/docs/src/pages/index.astro",
+    "apps/docs/src/pages/reference.json.ts",
+    "apps/docs/src/pages/robots.txt.ts",
+    "apps/docs/src/pages/setup/index.astro",
+    "apps/docs/src/pages/terraform/index.astro",
+    "apps/docs/src/pages/wiki-project.astro",
+    "apps/docs/src/styles/engineering.css",
+    "apps/docs/src/styles/global.css",
+    "apps/docs/src/styles/wiki-project.css",
+    "apps/docs/src/worker.ts",
+    "apps/docs/syncpack.strict.mts",
+    "apps/docs/tsconfig.json",
+    "apps/docs/wrangler.jsonc",
+    "packages/long-running-agent/LICENSE",
+    "packages/long-running-agent/pyproject.toml",
+    "packages/long-running-agent/src/long_running_agent/__init__.py",
+    "packages/long-running-agent/src/long_running_agent/cli.py",
+    "packages/long-running-agent/src/long_running_agent/client/__init__.py",
+    "packages/long-running-agent/src/long_running_agent/client/app.py",
+    "packages/long-running-agent/src/long_running_agent/client/browser.py",
+    "packages/long-running-agent/src/long_running_agent/client/cloud.py",
+    "packages/long-running-agent/src/long_running_agent/client/connection.py",
+    "packages/long-running-agent/src/long_running_agent/client/controller.py",
+    "packages/long-running-agent/src/long_running_agent/client/host.py",
+    "packages/long-running-agent/src/long_running_agent/client/ssh_config.py",
+    "packages/long-running-agent/src/long_running_agent/client/terminal.py",
+    "packages/long-running-agent/src/long_running_agent/client/transfer.py",
+    "packages/long-running-agent/src/long_running_agent/client/tunnel.py",
+    "packages/long-running-agent/src/long_running_agent/config.py",
+    "packages/long-running-agent/src/long_running_agent/host_connection.py",
+    "packages/long-running-agent/src/long_running_agent/infra.py",
+    "packages/long-running-agent/src/long_running_agent/process.py",
+    "packages/long-running-agent/src/long_running_agent/py.typed",
+    "packages/long-running-agent/src/long_running_agent/runtime/__init__.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/admin.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/admin_worker.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/app.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/bootstrap.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/cleanup.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/cleanup_activity.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/cleanup_capacity.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/cleanup_daemon.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/cleanup_inspection.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/cleanup_probe.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/cleanup_publication.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/cleanup_state.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/codex.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/codex_events.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/codex_panes.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/codex_recovery.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/doctor.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/health.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/host.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/maintenance.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/maintenance_worker.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/settings.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/setup.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/transfer.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/worktrees.py",
+    "packages/long-running-agent/src/long_running_agent/runtime/zellij.py",
+    "pyproject.toml",
+    "pyright.strict.json",
+    "pyrightconfig.json",
+    "scripts/generate_docs.py",
+    "scripts/scan-secrets.sh",
+    "terraform/.gitignore",
+    "terraform/.terraform.lock.hcl",
+    "terraform/access.tf",
+    "terraform/backend.tf",
+    "terraform/backups.tf",
+    "terraform/example.backend.hcl",
+    "terraform/example.tfvars",
+    "terraform/host.tf",
+    "terraform/main.tf",
+    "terraform/mise.toml",
+    "terraform/moved.tf",
+    "terraform/outputs.tf",
+    "terraform/variables.tf",
+    "terraform/versions.tf",
+    "tests/client/test_browser.py",
+    "tests/client/test_connect_modes.py",
+    "tests/client/test_connection.py",
+    "tests/client/test_controller.py",
+    "tests/client/test_disconnect.py",
+    "tests/client/test_host.py",
+    "tests/client/test_native_bridge.py",
+    "tests/client/test_ssh_config.py",
+    "tests/client/test_terminal.py",
+    "tests/client/test_transfer.py",
+    "tests/runtime/test_admin.py",
+    "tests/runtime/test_bootstrap.py",
+    "tests/runtime/test_cleanup.py",
+    "tests/runtime/test_cleanup_activity.py",
+    "tests/runtime/test_cleanup_adversarial.py",
+    "tests/runtime/test_cleanup_capacity.py",
+    "tests/runtime/test_cleanup_daemon.py",
+    "tests/runtime/test_cleanup_inspection.py",
+    "tests/runtime/test_cleanup_probe.py",
+    "tests/runtime/test_cleanup_process.py",
+    "tests/runtime/test_cleanup_publication.py",
+    "tests/runtime/test_cleanup_reference_recovery.py",
+    "tests/runtime/test_cleanup_resilience.py",
+    "tests/runtime/test_cleanup_state.py",
+    "tests/runtime/test_codex.py",
+    "tests/runtime/test_codex_panes.py",
+    "tests/runtime/test_codex_recovery.py",
+    "tests/runtime/test_codex_switch_passes.py",
+    "tests/runtime/test_doctor.py",
+    "tests/runtime/test_health.py",
+    "tests/runtime/test_host.py",
+    "tests/runtime/test_maintenance.py",
+    "tests/runtime/test_settings.py",
+    "tests/runtime/test_setup.py",
+    "tests/runtime/test_transfer.py",
+    "tests/runtime/test_worktrees.py",
+    "tests/runtime/test_zellij.py",
+    "tests/test_config.py",
+    "tests/test_docs.py",
+    "tests/test_infra.py",
+    "uv.lock",
+    "zizmor.yml"
+  ]
+}

@@ -14,7 +14,16 @@ from threading import Thread
 from typing import TYPE_CHECKING, override
 from urllib.parse import urlunsplit
 
-from long_running_agent.host_connection import HostRegistration, HostReply, HostRequest, read_message, website_url
+from long_running_agent.host_connection import (
+    HostFailure,
+    HostRegistration,
+    HostReply,
+    HostRequest,
+    HostRequestPayload,
+    HostSuccess,
+    read_message,
+    website_url,
+)
 from long_running_agent.runtime import host as host_module
 from long_running_agent.runtime.host import choose_connection, connection_directory, registered
 from pydantic import ValidationError
@@ -42,9 +51,9 @@ def live_socket(home: Path, identifier: str) -> Generator[Path]:
         @override
         def handle(self) -> None:
             channel: socket.socket = self.request  # pyright: ignore[reportAny] -- UnixStreamServer supplies a connected stream socket.
-            request = HostRequest.model_validate_json(read_message(channel))
+            request = HostRequestPayload.model_validate_json(read_message(channel)).root
             assert request.action == "status"
-            channel.sendall(HostReply(ok=True, message="Connected").model_dump_json().encode() + b"\n")
+            channel.sendall(HostSuccess(message="Connected").model_dump_json().encode() + b"\n")
 
     with UnixStreamServer(str(endpoint), Handler) as server:
         endpoint.chmod(0o600)
@@ -105,7 +114,7 @@ def test_explicit_connection_does_not_probe_unrelated_receipts(home: Path, monke
         probes.append(registration.connection)
         if registration.connection != selected:
             raise TimeoutError
-        return HostReply(ok=True, message="Connected")
+        return HostSuccess(message="Connected")
 
     monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Observe every production exchange lookup; injecting only the selected probe could miss unrelated ambient calls.
         host_module, "exchange", probe
@@ -157,7 +166,7 @@ def test_missing_named_receipt_keeps_concurrently_published_registration(
         assert request.action == "status"
         assert timeout == pytest.approx(0.3, rel=0, abs=0)
         probes.append(registration.connection)
-        return HostReply(ok=True, message="Connected")
+        return HostSuccess(message="Connected")
 
     monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Publish after the real failed read at the shared discovery/cleanup lookup; injection would replace the read whose handler races publication.
         host_module, "saved_registration", publish_after_missing
@@ -228,7 +237,7 @@ def test_explicit_connection_keeps_inconclusive_receipts(
         if failure == "malformed-reply":
             message = "Synthetic malformed reply"
             raise ValueError(message)
-        return HostReply(ok=False, message="Unavailable")
+        return HostFailure(message="Unavailable")
 
     monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Deliver socket outcomes at the production exchange lookup; injecting another path would bypass the cleanup boundary under test.
         host_module, "exchange", probe
@@ -287,7 +296,7 @@ def test_complete_auth_urls_preserve_query_and_fragment_without_shell_interpreta
 )
 def test_return_channel_has_no_arbitrary_command_or_mac_file_interface(data: dict[str, str]) -> None:
     with pytest.raises(ValidationError):
-        HostRequest.model_validate_json(json.dumps(data))
+        HostRequestPayload.model_validate_json(json.dumps(data))
 
 
 def test_more_than_32_dead_connections_do_not_block_a_new_terminal(home: Path) -> None:

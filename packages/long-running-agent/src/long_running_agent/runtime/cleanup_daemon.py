@@ -14,7 +14,7 @@ import socket
 import sys
 from threading import Event
 import time
-from typing import TYPE_CHECKING, Annotated, Final, Literal, Self
+from typing import TYPE_CHECKING, Annotated, Final, Literal, Self, assert_never
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 import typer
@@ -266,34 +266,42 @@ class CapacitySample:
         )
 
 
+@dataclass(frozen=True)
+class NoGrowthSamples:
+    pass
+
+
+@dataclass(frozen=True)
+class TrackingGrowth:
+    started: CapacitySample
+    previous: CapacitySample
+    positive_samples: int
+    target_enter: int
+
+
 @dataclass
 class GrowthTrend:
-    started: CapacitySample | None = None
-    previous: CapacitySample | None = None
-    positive_samples: int = 0
-    target_enter: int | None = None
+    state: NoGrowthSamples | TrackingGrowth = field(default_factory=NoGrowthSamples)
 
     def observe(self, space: Space, now: float, *, thresholds: cleanup_capacity.Thresholds | None = None) -> bool:
         thresholds = capacity_thresholds(space, thresholds)
-        if self.target_enter != thresholds.enter:
-            self.started = self.previous = None
-            self.positive_samples = 0
-        self.target_enter = thresholds.enter
         sample = CapacitySample(space, now)
-        previous, started = self.previous, self.started
-        if previous is None or started is None or not sample.growing_from(previous):
-            self.started = self.previous = sample
-            self.positive_samples = 0
+        current = self.state
+        if (
+            isinstance(current, NoGrowthSamples)
+            or current.target_enter != thresholds.enter
+            or not sample.growing_from(current.previous)
+        ):
+            self.state = TrackingGrowth(sample, sample, 0, thresholds.enter)
             return False
-        self.previous = sample
-        self.positive_samples += 1
-        elapsed = now - started.checked_at
-        if self.positive_samples < GROWTH_MIN_SAMPLES or elapsed < GROWTH_MIN_SECONDS:
+        count = current.positive_samples + 1
+        elapsed = now - current.started.checked_at
+        if count < GROWTH_MIN_SAMPLES or elapsed < GROWTH_MIN_SECONDS:
+            self.state = TrackingGrowth(current.started, sample, count, thresholds.enter)
             return False
         distance = thresholds.enter - (space.total - space.available)
-        consumed = started.space.available - space.available
-        self.started = previous
-        self.positive_samples = 1
+        consumed = current.started.space.available - space.available
+        self.state = TrackingGrowth(current.previous, sample, 1, thresholds.enter)
         return distance * elapsed <= consumed * GROWTH_HORIZON_SECONDS
 
 
@@ -336,11 +344,16 @@ class Schedule:
             return schedule
         delay = min(NORMAL_SECONDS, max(0, previous.next_sweep_at - wall))
         phase = previous.phase
-        if phase == "running":
-            phase = "error"
-            delay = max(delay, PRESSURE_SECONDS)
-        elif phase == "stopped":
-            phase = "waiting"
+        match phase:
+            case "running":
+                phase = "error"
+                delay = max(delay, PRESSURE_SECONDS)
+            case "stopped":
+                phase = "waiting"
+            case "waiting" | "pressure" | "blocked" | "budget" | "retained" | "cleaned" | "error":
+                pass
+            case _:
+                assert_never(phase)
         return cls(
             now + delay,
             previous.consecutive_failures,

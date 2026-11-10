@@ -191,9 +191,7 @@ def test_uncertain_native_input_is_not_replayed_after_daemon_restart(
 
 def test_crash_receipt_is_uncertain_and_budget_survives_restart(tmp_path: Path) -> None:
     root = recovery.directory(tmp_path)
-    state = recovery.Ledger(
-        attempts={"fixture": recovery.Attempt(error="f" * 64, attempts=1, due=1234.0, phase="dispatching")}
-    )
+    state = recovery.Ledger(attempts={"fixture": recovery.DispatchingAttempt(error="f" * 64, attempts=1, due=1234.0)})
     recovery.save(root, state)
     restored = recovery.ledger(root)
     assert restored.attempts["fixture"].phase == "uncertain"
@@ -468,3 +466,75 @@ def test_enable_keeps_the_selected_virtualenv_python(tmp_path: Path) -> None:
     configuration.read(tmp_path / ".config/systemd/user/lra-codex-recovery.service")
     command = shlex.split(configuration["Service"]["ExecStart"])
     assert command == [sys.executable, "-I", "-m", "long_running_agent.cli", "codex", "retry", "run"]
+
+
+@pytest.mark.parametrize(
+    ("phase", "count", "expected"),
+    [
+        ("waiting", 0, "waiting"),
+        ("waiting", 8, "exhausted"),
+        ("dispatching", 2, "uncertain"),
+        ("uncertain", 2, "uncertain"),
+        ("sent", 3, "sent"),
+        ("exhausted", 8, "exhausted"),
+    ],
+)
+def test_legacy_retry_migration_preserves_uncertainty_and_consumed_attempts(
+    tmp_path: Path, phase: str, count: int, expected: str
+) -> None:
+    root = recovery.directory(tmp_path)
+    private_write(
+        root / "retries.json",
+        json.dumps(
+            {
+                "version": 1,
+                "cursor": 23,
+                "attempts": {"fixture": {"error": "f" * 64, "attempts": count, "due": 1234.0, "phase": phase}},
+            }
+        ),
+    )
+    migrated = recovery.ledger(root)
+    assert migrated.cursor == 23
+    assert migrated.attempts["fixture"].phase == expected
+    assert migrated.attempts["fixture"].attempts == count
+    recovery.save(root, migrated)
+    assert json.loads((root / "retries.json").read_text())["version"] == 2
+
+
+def test_invalid_legacy_dispatch_does_not_reset_or_replace_the_receipt(tmp_path: Path) -> None:
+    root = recovery.directory(tmp_path)
+    payload = json.dumps(
+        {
+            "version": 1,
+            "attempts": {
+                "fixture": {
+                    "error": "f" * 64,
+                    "attempts": 0,
+                    "due": 1234.0,
+                    "phase": "dispatching",
+                }
+            },
+        }
+    )
+    private_write(root / "retries.json", payload)
+    with pytest.raises(recovery.RecoveryError, match="invalid"):
+        recovery.ledger(root)
+    assert (root / "retries.json").read_text() == payload
+
+
+@pytest.mark.parametrize("kind", ["function_call", "function_call_output", "custom_tool_call", "message"])
+def test_intervening_tool_or_output_activity_blocks_replay_of_an_older_capacity_failure(kind: str) -> None:
+    records = [
+        {
+            "type": "event_msg",
+            "timestamp": "first",
+            "payload": {
+                "type": "task_complete",
+                "turn_id": "old-turn",
+                "error": {"message": "Selected model is at capacity."},
+            },
+        },
+        {"type": "response_item", "timestamp": "later", "payload": {"type": kind}},
+    ]
+    payload = b"".join(json.dumps(record).encode() + b"\n" for record in records)
+    assert codex_events.latest_completion(payload).state == "active"

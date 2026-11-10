@@ -13,7 +13,7 @@ import signal
 import sqlite3
 import stat
 import time
-from typing import TYPE_CHECKING, Final, NewType, Protocol
+from typing import TYPE_CHECKING, Final, Literal, NewType, Protocol
 from uuid import uuid7
 
 from pydantic import BaseModel, ConfigDict, RootModel, ValidationError
@@ -144,7 +144,7 @@ class PanePlan:
 class PaneOutcome:
     session: str
     pane_id: PaneId
-    state: str
+    state: Literal["reopened", "failed"]
     detail: str
 
 

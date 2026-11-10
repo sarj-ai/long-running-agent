@@ -9,7 +9,7 @@ import selectors
 import time
 from typing import TYPE_CHECKING, Annotated, Final, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, RootModel, ValidationError
 import typer
 
 from long_running_agent.process import DEVNULL, PIPE, ChildProcess, ProcessTimeout, environment_snapshot, spawn
@@ -62,12 +62,37 @@ class WireError(Record):
     code: int
 
 
-class Message(Record):
-    id: int | str | None = None
-    method: str | None = None
+class RpcNotification(Record):
+    id: None = None
+    method: str
     params: dict[str, JsonValue] = Field(default_factory=dict)
-    result: JsonValue = None
-    error: WireError | None = None
+
+
+class RpcServerRequest(Record):
+    id: int | str
+    method: str
+    params: dict[str, JsonValue] = Field(default_factory=dict)
+
+
+class RpcSuccess(Record):
+    id: int | str
+    method: None = None
+    result: JsonValue
+    error: None = None
+
+
+class RpcFailure(Record):
+    id: int | str
+    method: None = None
+    result: None = None
+    error: WireError
+
+
+type Message = RpcNotification | RpcServerRequest | RpcSuccess | RpcFailure
+
+
+class RpcMessagePayload(RootModel[Message]):
+    pass
 
 
 class LoginCompleted(Record):
@@ -157,12 +182,12 @@ class CodexProcess:
                 raise CodexError(message)
         line, self.buffer = self.buffer.split(b"\n", 1)
         try:
-            return Message.model_validate_json(line)
+            return RpcMessagePayload.model_validate_json(line).root
         except ValidationError:
             message = "Native Codex returned an unsupported protocol message"
             raise CodexError(message) from None
 
-    def remember_login(self, response: Message) -> None:
+    def remember_login(self, response: RpcNotification) -> None:
         try:
             self.logins.append(LoginCompleted.model_validate(response.params))
         except ValidationError:
@@ -176,11 +201,11 @@ class CodexProcess:
         deadline = time.monotonic() + self.timeout
         while True:
             response = self.receive(deadline)
-            if response.method == "account/login/completed":
+            if isinstance(response, RpcNotification) and response.method == "account/login/completed":
                 self.remember_login(response)
-            if response.id != request_id or response.method is not None:
+            if not isinstance(response, RpcSuccess | RpcFailure) or response.id != request_id:
                 continue
-            if response.error is not None:
+            if isinstance(response, RpcFailure):
                 message = f"Native Codex rejected {method} (RPC {response.error.code})"
                 raise CodexError(message)
             return response.result
@@ -193,7 +218,7 @@ class CodexProcess:
                 if event.login_id == login_id:
                     return event.success
             response = self.receive(deadline)
-            if response.method == "account/login/completed":
+            if isinstance(response, RpcNotification) and response.method == "account/login/completed":
                 self.remember_login(response)
 
 

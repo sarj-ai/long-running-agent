@@ -14,15 +14,31 @@ import stat
 import sys
 from threading import Event
 import time
-from typing import TYPE_CHECKING, Annotated, Final, Literal
+from typing import TYPE_CHECKING, Annotated, Final, Literal, assert_never
 from uuid import uuid7
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, RootModel, ValidationError
 import typer
 
 from long_running_agent.process import run
 
 from . import codex_events, codex_panes
+from .codex_retry_state import (
+    MAX_ATTEMPTS,
+    Attempt,
+    Block,
+    Cooldown,
+    Dispatch,
+    DispatchingAttempt,
+    ExhaustedAttempt,
+    SentAttempt,
+    UncertainAttempt,
+    Wait,
+    WaitingAttempt,
+    acknowledged as acknowledge_dispatch,
+    observe_capacity,
+    uncertain,
+)
 from .settings import RuntimePaths, private_write, systemd_value, user_environment
 
 
@@ -34,11 +50,7 @@ if TYPE_CHECKING:
 SERVICE: Final = "lra-codex-recovery.service"
 INTERVAL: Final = 15
 STALE_SECONDS: Final = 120
-INITIAL_DELAY: Final = 30
 ACK_SECONDS: Final = 2
-MAX_ATTEMPTS: Final = 8
-MAX_DELAY: Final = 900
-COOLDOWN: Final = 3600
 SGR_DIM: Final = 2
 SGR_RGB: Final = 2
 PAGE_SIZE: Final = 16
@@ -67,7 +79,7 @@ class Record(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", hide_input_in_errors=True)
 
 
-class Attempt(Record):
+class LegacyAttempt(Record):
     error: str = Field(pattern=r"^[0-9a-f]{64}$")
     attempts: int = Field(default=0, ge=0, le=MAX_ATTEMPTS)
     due: float = Field(ge=0, allow_inf_nan=False)
@@ -75,9 +87,35 @@ class Attempt(Record):
 
 
 class Ledger(Record):
-    version: Literal[1] = 1
+    version: Literal[2] = 2
     cursor: int = Field(default=0, ge=0)
     attempts: dict[str, Attempt] = Field(default_factory=dict, max_length=2048)
+
+
+class LegacyLedger(Record):
+    version: Literal[1]
+    cursor: int = Field(default=0, ge=0)
+    attempts: dict[str, LegacyAttempt] = Field(default_factory=dict, max_length=2048)
+
+
+class PersistedLedger(RootModel[Annotated[Ledger | LegacyLedger, Field(discriminator="version")]]):
+    pass
+
+
+def migrate_attempt(attempt: LegacyAttempt) -> Attempt:
+    match attempt.phase:
+        case "waiting" if attempt.attempts == MAX_ATTEMPTS:
+            return ExhaustedAttempt(error=attempt.error, due=attempt.due)
+        case "waiting":
+            return WaitingAttempt(error=attempt.error, due=attempt.due, attempts=attempt.attempts)
+        case "dispatching" | "uncertain":
+            return UncertainAttempt(error=attempt.error, due=attempt.due, attempts=attempt.attempts)
+        case "sent":
+            return SentAttempt(error=attempt.error, due=attempt.due, attempts=attempt.attempts)
+        case "exhausted":
+            return ExhaustedAttempt(error=attempt.error, due=attempt.due, attempts=attempt.attempts)
+        case _:
+            assert_never(attempt.phase)
 
 
 class PaneStatus(Record):
@@ -129,7 +167,7 @@ def directory(home: Path) -> Path:
     return current
 
 
-def read_record(path: Path, model: type[Ledger | Sweep]) -> Ledger | Sweep:
+def read_record[T: BaseModel](path: Path, model: type[T]) -> T:
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(descriptor, "rb") as stream:
         metadata = os.fstat(stream.fileno())
@@ -173,16 +211,22 @@ def guard(home: Path, name: str = "operation.lock") -> Generator[Path]:
 
 def ledger(root: Path) -> Ledger:
     try:
-        result = read_record(root / "retries.json", Ledger)
+        stored = read_record(root / "retries.json", PersistedLedger).root
     except FileNotFoundError:
         return Ledger()
-    if not isinstance(result, Ledger):
-        message = "Unexpected Codex recovery record"
-        raise RecoveryError(message)
-    for attempt in result.attempts.values():
-        if attempt.phase == "dispatching":
-            attempt.phase = "uncertain"
-    return result
+    try:
+        attempts = {
+            key: migrate_attempt(attempt)
+            if isinstance(attempt, LegacyAttempt)
+            else uncertain(attempt)
+            if isinstance(attempt, DispatchingAttempt)
+            else attempt
+            for key, attempt in stored.attempts.items()
+        }
+        return Ledger(cursor=stored.cursor, attempts=attempts)
+    except ValidationError:
+        message = "Codex recovery metadata is invalid; no automatic input was authorized"
+        raise RecoveryError(message) from None
 
 
 def save(root: Path, state: Ledger) -> None:
@@ -331,7 +375,8 @@ def current_target(target: codex_panes.PaneTarget, *, proc: Path) -> codex_panes
 
 def verify(target: codex_panes.PaneTarget, error: str, *, proc: Path, io: PaneIO) -> None:
     current = current_target(target, proc=proc)
-    if capacity_error(io.screen(current)) is None or codex_events.completion(current, proc=proc).fingerprint != error:
+    observed = codex_events.completion(current, proc=proc)
+    if capacity_error(io.screen(current)) is None or observed.state != "capacity" or observed.fingerprint != error:
         message = "Codex pane, checkpoint, or input changed before recovery"
         raise RecoveryError(message)
 
@@ -354,7 +399,8 @@ def wait_for_draft(
                 message = "Codex input changed after paste; no Enter was sent"
                 raise RecoveryError(message)
             current_target(target, proc=codex_panes.PROC)
-            if codex_events.completion(target, proc=codex_panes.PROC).fingerprint != error:
+            observed = codex_events.completion(target, proc=codex_panes.PROC)
+            if observed.state != "capacity" or observed.fingerprint != error:
                 message = "Codex turn changed after paste; no Enter was sent"
                 raise RecoveryError(message)
             return
@@ -431,51 +477,42 @@ class RecoverySweep:
         )
 
     def retry(self, target: codex_panes.PaneTarget, key: str, error: str) -> None:
-        attempt = self.state.attempts.get(key)
-        if attempt is None:
-            self.state.attempts[key] = Attempt(error=error, due=self.report.observed_at + INITIAL_DELAY)
-            self.report.waiting += 1
-            return
-        if attempt.phase in {"dispatching", "uncertain", "sent"} and attempt.error == error:
-            if attempt.phase != "sent" or self.report.observed_at >= attempt.due:
-                attempt.phase = "uncertain"
+        decision = observe_capacity(
+            self.state.attempts.get(key), error, self.report.observed_at, available=not self.report.attempted
+        )
+        match decision:
+            case Wait():
+                self.state.attempts[key] = decision.attempt
+                self.report.waiting += 1
+                return
+            case Block():
+                self.state.attempts[key] = decision.attempt
                 self.report.uncertain += 1
-            else:
-                self.report.waiting += 1
-            return
-        if attempt.phase in {"dispatching", "uncertain", "sent"}:
-            attempt.phase = "waiting"
-        if attempt.attempts >= MAX_ATTEMPTS:
-            if self.report.observed_at < attempt.due:
-                attempt.phase = "exhausted"
+                return
+            case Cooldown():
+                self.state.attempts[key] = decision.attempt
                 self.report.exhausted += 1
-            else:
-                self.state.attempts[key] = Attempt(error=error, due=self.report.observed_at + INITIAL_DELAY)
-                self.report.waiting += 1
-            return
-        if self.report.observed_at < attempt.due or self.report.attempted:
-            self.report.waiting += 1
-            return
+                return
+            case Dispatch():
+                attempt = decision.attempt
+            case _:
+                assert_never(decision)
         verify(target, error, proc=self.proc, io=self.io)
-        attempt.error = error
-        attempt.attempts += 1
-        attempt.phase = "dispatching"
-        delay = COOLDOWN if attempt.attempts == MAX_ATTEMPTS else min(MAX_DELAY, 60 * (1 << (attempt.attempts - 1)))
-        attempt.due = self.report.observed_at + delay
+        self.state.attempts[key] = attempt
         save(self.root, self.state)
         self.report.attempted += 1
         try:
             self.io.submit(target)
         except OSError, RuntimeError:
-            attempt.phase = "uncertain"
+            self.state.attempts[key] = uncertain(attempt)
             self.report.uncertain += 1
             save(self.root, self.state)
             return
         if acknowledged(target, error, proc=self.proc):
-            attempt.phase = "sent"
+            self.state.attempts[key] = acknowledge_dispatch(attempt)
             self.report.continued += 1
         else:
-            attempt.phase = "uncertain"
+            self.state.attempts[key] = uncertain(attempt)
             self.report.uncertain += 1
         save(self.root, self.state)
 
@@ -633,12 +670,9 @@ def reset() -> None:
 def status(*, as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
     """Show service health, pending retries, cooldowns, and uncertain panes."""
     root = directory(RuntimePaths.current().home)
-    record: Ledger | Sweep | None = None
+    record: Sweep | None = None
     with suppress(FileNotFoundError):
         record = read_record(root / "status.json", Sweep)
-    if record is not None and not isinstance(record, Sweep):
-        message = "Unexpected Codex recovery status"
-        raise RecoveryError(message)
     view = WatcherStatus(service=service_state(), sweep=record)
     if as_json:
         typer.echo(view.model_dump_json())
