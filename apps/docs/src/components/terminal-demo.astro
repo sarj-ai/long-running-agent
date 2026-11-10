@@ -1,4 +1,10 @@
-<section aria-busy="true" aria-label="Interactive terminal demo" class="terminal-demo not-content" data-terminal-demo>
+<section aria-label="Interactive terminal demo" class="terminal-demo not-content" data-terminal-demo>
+  <div class="demo-start" data-demo-start-panel>
+    <p>Try the terminal with sample data.</p>
+    <button data-demo-start disabled type="button">Start terminal demo</button>
+    <p data-demo-error hidden role="status">The demo could not load. Try again.</p>
+  </div>
+  <div data-demo-content hidden>
   <div class="demo-help">
     <div data-instructions>
       <p class="demo-instructions">Click the terminal to use shortcuts.</p>
@@ -22,15 +28,40 @@
   </footer>
   <pre aria-label="Current sample terminal transcript" aria-live="off" class="demo-sr-only" data-transcript></pre>
   <p aria-atomic="true" aria-live="polite" class="demo-sr-only" data-status></p>
-  <noscript><p>Enable JavaScript to try the terminal demo.</p></noscript>
+  </div>
+  <noscript><p>Enable JavaScript to try the terminal demo. Connection commands are available above.</p></noscript>
 </section>
 
 <script>
-  import "@xterm/xterm/css/xterm.css";
-
-  import { mountTerminalDemo } from "../lib/mount-terminal-demo";
-
-  for (const root of document.querySelectorAll<HTMLElement>("[data-terminal-demo]")) void mountTerminalDemo(root);
+  for (const root of document.querySelectorAll<HTMLElement>("[data-terminal-demo]")) {
+    const start = root.querySelector<HTMLButtonElement>("[data-demo-start]");
+    const panel = root.querySelector<HTMLElement>("[data-demo-start-panel]");
+    const content = root.querySelector<HTMLElement>("[data-demo-content]");
+    const error = root.querySelector<HTMLElement>("[data-demo-error]");
+    if (start) start.disabled = false;
+    start?.addEventListener("click", async () => {
+      if (!start || !panel || !content || !error) return;
+      start.disabled = true;
+      start.textContent = "Loading terminal…";
+      error.hidden = true;
+      root.setAttribute("aria-busy", "true");
+      try {
+        const { mountTerminalDemo } = await import("../lib/mount-terminal-demo");
+        content.hidden = false;
+        await mountTerminalDemo(root);
+        panel.hidden = true;
+        root.querySelector<HTMLTextAreaElement>("textarea")?.focus({ preventScroll: true });
+      } catch {
+        content.hidden = true;
+        panel.hidden = false;
+        error.hidden = false;
+        start.disabled = false;
+        start.textContent = "Retry terminal demo";
+      } finally {
+        root.setAttribute("aria-busy", "false");
+      }
+    });
+  }
 </script>
 
 <style>
@@ -38,6 +69,9 @@
   @font-face { font-family: LRATerminal; src: url("/projects/lra/fonts/lra-terminal-bold.woff2") format("woff2"); font-weight: 700; font-display: block; }
   .terminal-demo { margin: 1.5rem 0 2rem; min-width: 0; border: 1px solid #313244; border-radius: 0.45rem; overflow: hidden; background: #1e1e2e; color: #cdd6f4; }
   .terminal-demo [hidden] { display: none !important; }
+  .demo-start { display: grid; justify-items: start; gap: 0.75rem; padding: 1.25rem; }
+  .demo-start p { margin: 0; }
+  .demo-start [data-demo-start] { padding-inline: 1rem; background: #cdd6f4; color: #181825; font-weight: 600; }
   .demo-help { padding: 0.65rem 0.85rem; border-bottom: 1px solid #313244; color: #bac2de; font: 0.76rem/1.5 var(--sl-font, sans-serif); }
   .demo-instructions { margin: 0 0 0.6rem; }
   .demo-shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem 1.25rem; margin: 0; }

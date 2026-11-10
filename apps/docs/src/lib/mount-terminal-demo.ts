@@ -1,5 +1,6 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
+import TERMINAL_STYLES from "@xterm/xterm/css/xterm.css?url";
 
 import { type FocusDirection, type Tab, TerminalDemo } from "./terminal-demo";
 import { TerminalInput } from "./terminal-input";
@@ -10,6 +11,8 @@ import {
 } from "./terminal-screen";
 
 const ESC = "\u{1B}";
+let stylesheet: Promise<void> | undefined;
+
 const THEME = {
   background: "#1e1e2e",
   foreground: "#cdd6f4",
@@ -34,6 +37,7 @@ const THEME = {
 } as const;
 
 export async function mountTerminalDemo(root: HTMLElement): Promise<void> {
+  await loadTerminalStyles();
   const host = root.querySelector<HTMLElement>("[data-terminal]");
   const instructions = root.querySelector<HTMLElement>("[data-instructions]");
   const status = root.querySelector<HTMLElement>("[data-status]");
@@ -806,4 +810,25 @@ export async function mountTerminalDemo(root: HTMLElement): Promise<void> {
   observer.observe(host);
   removal.observe(document.documentElement, { childList: true, subtree: true });
   resize();
+}
+
+function loadTerminalStyles(): Promise<void> {
+  if (stylesheet) return stylesheet;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = TERMINAL_STYLES;
+  stylesheet = new Promise((resolve, reject) => {
+    link.addEventListener("load", () => resolve(), { once: true });
+    link.addEventListener(
+      "error",
+      () => {
+        link.remove();
+        stylesheet = undefined;
+        reject(new Error("Terminal styles failed to load"));
+      },
+      { once: true },
+    );
+    document.head.append(link);
+  });
+  return stylesheet;
 }

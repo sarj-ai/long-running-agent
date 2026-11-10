@@ -6,12 +6,13 @@
         function preference(value) {
           try {
             if (value) localStorage.setItem(KEY, value);
-            return localStorage.getItem(KEY);
+            return { status: "stored", value: localStorage.getItem(KEY) };
           } catch {
-            return null;
+            return { status: "unavailable" };
           }
         }
-        let selected = preference();
+        const stored = preference();
+        let selected = stored.status === "stored" ? stored.value : null;
         function synchronize() {
           const dark = selected === "dark" || (selected !== "light" && MEDIA.matches);
           ROOT.dataset.theme = dark ? "dark" : "light";

@@ -38,46 +38,9 @@ html[data-theme="dark"]:has(.wiki-project) {
   outline-offset: 4px;
 }
 .wiki-project main {
-  max-inline-size: 80rem;
+  max-inline-size: 62rem;
   margin-inline: auto;
   padding: 2rem clamp(1rem, 4vw, 2.5rem) 4rem;
-}
-.wiki-layout {
-  display: grid;
-  grid-template-columns: 10rem minmax(0, 1fr);
-  align-items: start;
-  gap: clamp(1.5rem, 4vw, 3rem);
-}
-.wiki-sidebar {
-  position: sticky;
-  inset-block-start: 6rem;
-}
-.wiki-sidebar [role="tablist"] {
-  display: grid;
-  gap: 0.25rem;
-}
-.wiki-sidebar button {
-  display: flex;
-  align-items: center;
-  min-block-size: 44px;
-  inline-size: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid transparent;
-  border-radius: 0.35rem;
-  color: var(--sl-color-gray-2);
-  background: transparent;
-  font: inherit;
-  font-size: 0.9375rem;
-  text-align: start;
-  cursor: pointer;
-}
-.wiki-sidebar button:hover {
-  color: var(--sl-color-white);
-}
-.wiki-sidebar button[aria-selected="true"] {
-  color: var(--sl-color-white);
-  background: var(--sl-color-gray-6);
-  font-weight: 650;
 }
 .wiki-content {
   min-inline-size: 0;
@@ -144,6 +107,11 @@ html[data-theme="dark"]:has(.wiki-project) {
 }
 .wiki-details {
   max-inline-size: 42rem;
+  margin-block-start: 2rem;
+}
+.wiki-details h2 {
+  margin-block: 0 0.75rem;
+  font-size: 1.125rem;
 }
 .wiki-details ul {
   margin: 0;
@@ -169,31 +137,12 @@ html[data-theme="dark"]:has(.wiki-project) {
   align-items: center;
   min-block-size: 44px;
 }
-@media (width < 48rem) {
-  .wiki-project main {
-    padding-block-start: 1rem;
-  }
-  .wiki-layout {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 1.75rem;
-  }
-  .wiki-sidebar {
-    position: static;
-  }
-  .wiki-sidebar [role="tablist"] {
-    display: flex;
-  }
-  .wiki-sidebar button {
-    justify-content: center;
-  }
-}
 @media (forced-colors: active) {
   .wiki-project,
   .engineering-header {
     color: CanvasText;
     background: Canvas;
   }
-  .wiki-sidebar button[aria-selected="true"],
   .wiki-actions .wiki-primary {
     forced-color-adjust: none;
     color: HighlightText;

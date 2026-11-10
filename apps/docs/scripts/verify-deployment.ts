@@ -121,7 +121,12 @@ async function verifyWiki(mode: VerificationMode): Promise<void> {
     /http-equiv="content-security-policy"|\/wiki-project\//u,
     "Unpublished Wiki metadata survived promotion",
   );
-  await verifyEngineeringAssets(mode, ownedDocument.markup, document.markup);
+  await verifyEngineeringAssets(
+    mode,
+    ownedDocument.markup,
+    document.markup,
+    true,
+  );
   if (mode === "artifact") {
     await assert.rejects(
       readFile(new URL("wiki-project/index.html", ARTIFACT_ROOT)),
@@ -363,6 +368,7 @@ async function verifyEngineeringAssets(
   mode: VerificationMode,
   ownedDocument: string,
   document: string,
+  customFonts = false,
 ): Promise<void> {
   const resourcePattern = /<(?:link|script|img|source)\b[^>]*>/gu;
   const resourceElements = new Set(
@@ -395,7 +401,8 @@ async function verifyEngineeringAssets(
       }
     }),
   );
-  assert.ok(fonts.size > 0);
+  if (customFonts) assert.ok(fonts.size > 0, "Self-hosted fonts missing");
+  else assert.equal(fonts.size, 0, "Engineering home must use system fonts");
   await Promise.all(
     [...fonts].map(async (href) => assetBytes(mode, new URL(href))),
   );
@@ -489,12 +496,22 @@ async function verifyTerminalStyles(): Promise<void> {
       readFile(new URL(`.${link[1]}`, DIST_ROOT), "utf8"),
     ),
   );
+  assert.ok(styles.some((css) => css.includes(".demo-viewport")));
   assert.ok(
-    styles.some(
-      (css) =>
-        css.includes(".demo-viewport") &&
-        css.includes(".xterm-helper-textarea"),
-    ),
+    styles.every((css) => !css.includes(".xterm .xterm-helpers")),
+    "Terminal runtime styles must load with the demo",
+  );
+  const files = await readdir(new URL("_astro/", ARTIFACT_ROOT));
+  const emittedStyles = await Promise.all(
+    files
+      .filter((file) => file.endsWith(".css"))
+      .map(async (file) =>
+        readFile(new URL(`_astro/${file}`, ARTIFACT_ROOT), "utf8"),
+      ),
+  );
+  assert.ok(
+    emittedStyles.some((css) => css.includes(".xterm .xterm-helpers")),
+    "Deferred terminal styles missing from the artifact",
   );
 }
 

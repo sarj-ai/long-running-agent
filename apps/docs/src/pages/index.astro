@@ -10,7 +10,7 @@ import { CONNECTION_COMMANDS, REFERENCE } from "../lib/reference";
   <article class="reference-page">
     <h1>{REFERENCE.package.name}</h1>
     <p class="command-help">{REFERENCE.package.description}</p>
-    <TerminalDemo />
     <Code code={CONNECTION_COMMANDS.map((command) => command.path.join(" ")).join("\n")} lang="bash" />
+    <TerminalDemo />
   </article>
 </ReferencePage>
