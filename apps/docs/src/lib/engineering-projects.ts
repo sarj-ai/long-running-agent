@@ -3,7 +3,8 @@ export const ENGINEERING_PROJECTS = [
     id: "code-standards",
     path: "/projects/code-standards/",
     name: "Code Standards",
-    description: "Source code rules and checks.",
+    description:
+      "Lint rules for Python, TypeScript, SQL, infrastructure, and text.",
   },
   {
     id: "repo-standards",
@@ -21,13 +22,12 @@ export const ENGINEERING_PROJECTS = [
     id: "wiki",
     path: "/projects/wiki/",
     name: "Wiki",
-    description: "A focused workspace for Google Drive documents.",
+    description: "Read and edit Google Drive documents.",
   },
   {
     id: "workspace-sync",
     path: "/projects/workspace-sync/",
     name: "Workspace Sync",
-    description:
-      "Google Workspace authority and guarded identity reconciliation.",
+    description: "Sync Google Workspace profiles and access across your tools.",
   },
 ] as const;

@@ -3,7 +3,7 @@ import { defineConfig } from "oxlint";
 import { createConfig, ignorePatterns } from "./oxlint.strict.mts";
 
 // xterm 6.0.0 generates three style elements for the single landing-page terminal.
-// These exact hashes cover its fixed Mocha theme, 14px font, dimensions CSS, and scrollbar.
+// The exact hashes cover their initial empty state and fixed terminal styles.
 // Recheck in a browser under the production CSP when upgrading xterm or changing its options.
 const managed = createConfig({ testFrameworks: ["node"] });
 const astroReactRules: Record<string, "off"> = Object.fromEntries(

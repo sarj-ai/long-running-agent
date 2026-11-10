@@ -10,7 +10,7 @@ import WIKI_SCREENSHOT from "../assets/wiki/wiki-demo.png";
 import EngineeringHeader from "../components/engineering-header.astro";
 import EngineeringTheme from "../components/engineering-theme.astro";
 import { SITE_ORIGIN, siteHref } from "../lib/paths";
-import { WIKI_DESCRIPTION } from "../lib/wiki-project";
+import { WIKI_DESCRIPTION } from "../lib/wiki-description";
 
 const CANONICAL = `${SITE_ORIGIN}/projects/wiki/`;
 ---
@@ -33,38 +33,26 @@ const CANONICAL = `${SITE_ORIGIN}/projects/wiki/`;
   </head>
   <body class="wiki-project">
     <a class="engineering-skip" href="#main-content">Skip to Wiki</a>
-    <EngineeringHeader />
+    <EngineeringHeader githubHref="https://github.com/sarj-ai/wiki" />
     <main id="main-content" tabindex="-1">
-      <div class="wiki-layout">
-        <aside class="wiki-sidebar">
-          <div aria-label="Wiki sections" aria-orientation="vertical" data-wiki-tabs role="tablist">
-            <button aria-controls="wiki-overview" aria-selected="true" id="wiki-overview-tab" role="tab" type="button">Overview</button>
-            <button aria-controls="wiki-details" aria-selected="false" id="wiki-details-tab" role="tab" tabindex="-1" type="button">Details</button>
-          </div>
-        </aside>
-        <div class="wiki-content">
+      <article class="wiki-content">
           <header class="wiki-intro">
             <h1>Wiki</h1>
             <p class="wiki-summary">{WIKI_DESCRIPTION}</p>
-            <div class="wiki-actions"><a aria-label="Demo (read-only, no sign-in)" class="wiki-primary" href="https://wiki.sarj.ai/demo">Demo <span aria-hidden="true">↗</span></a><a aria-label="GitHub: Wiki source" href="https://github.com/sarj-ai/wiki">GitHub <span aria-hidden="true">↗</span></a></div>
+            <div class="wiki-actions"><a aria-label="Demo (read-only, no sign-in)" class="wiki-primary" href="https://wiki.sarj.ai/demo">Demo <span aria-hidden="true">↗</span></a></div>
           </header>
-          <section aria-labelledby="wiki-overview-tab" class="wiki-panel" id="wiki-overview" role="tabpanel" tabindex="0">
+          <section aria-label="Wiki preview" class="wiki-panel">
             <a aria-label="Open the Wiki demo" class="wiki-screenshot" href="https://wiki.sarj.ai/demo">
-              <Image alt="Wiki demo with Latency workbook open and four files in the sidebar." decoding="async" fetchpriority="high" format="webp" loading="eager" quality={85} sizes="(min-width: 80rem) 62rem, (min-width: 48rem) calc(100vw - 16rem), calc(100vw - 2rem)" src={WIKI_SCREENSHOT} widths={[640, 960, 1440]} />
+              <Image alt="Wiki demo with Latency workbook open and four files in the sidebar." decoding="async" fetchpriority="high" format="webp" loading="eager" quality={80} sizes="(min-width: 64rem) 58rem, calc(100vw - 2rem)" src={WIKI_SCREENSHOT} widths={[640, 960, 1440]} />
             </a>
           </section>
-          <section aria-labelledby="wiki-details-tab" class="wiki-panel wiki-details" hidden id="wiki-details" role="tabpanel" tabindex="0">
-            <ul><li>Browse and search Google Drive.</li><li>Unslop and format documents.</li><li>Connect agents through MCP.</li></ul>
+          <section aria-labelledby="wiki-features" class="wiki-panel wiki-details">
+            <h2 id="wiki-features">Work with your documents</h2>
+            <ul><li>Browse and search Google Drive.</li><li>Edit and format documents.</li><li>Connect agents through MCP.</li></ul>
             <p>Your Drive requires Google sign-in. The demo is read-only.</p>
             <nav aria-label="Wiki links" class="wiki-links"><a href="https://wiki.sarj.ai/">Open Wiki</a><a href="https://github.com/sarj-ai/wiki/issues">Issues</a><a href="https://github.com/sarj-ai/wiki/blob/main/LICENSE">MIT license</a><a href={NUNITO_LICENSE}>Font license</a></nav>
           </section>
-        </div>
-      </div>
+      </article>
     </main>
   </body>
 </html>
-
-<script>
-  import { setupWikiTabs } from "../lib/wiki-project";
-  setupWikiTabs();
-</script>
