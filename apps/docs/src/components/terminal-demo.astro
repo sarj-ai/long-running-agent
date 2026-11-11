@@ -1,7 +1,7 @@
 <section aria-label="Interactive terminal demo" class="terminal-demo not-content" data-terminal-demo>
   <div class="demo-start" data-demo-start-panel>
-    <p>Try the terminal with sample data.</p>
-    <button data-demo-start disabled type="button">Start terminal demo</button>
+    <p data-demo-loading role="status">Loading terminal…</p>
+    <button data-demo-start hidden type="button">Retry terminal demo</button>
     <p data-demo-error hidden role="status">The demo could not load. Try again.</p>
   </div>
   <div data-demo-content hidden>
@@ -38,11 +38,12 @@
     const panel = root.querySelector<HTMLElement>("[data-demo-start-panel]");
     const content = root.querySelector<HTMLElement>("[data-demo-content]");
     const error = root.querySelector<HTMLElement>("[data-demo-error]");
-    if (start) start.disabled = false;
-    start?.addEventListener("click", async () => {
-      if (!start || !panel || !content || !error) return;
+    const loading = root.querySelector<HTMLElement>("[data-demo-loading]");
+    const load = async (): Promise<void> => {
+      if (!start || !panel || !content || !error || !loading) return;
       start.disabled = true;
-      start.textContent = "Loading terminal…";
+      start.hidden = true;
+      loading.hidden = false;
       error.hidden = true;
       root.setAttribute("aria-busy", "true");
       try {
@@ -50,17 +51,19 @@
         content.hidden = false;
         await mountTerminalDemo(root);
         panel.hidden = true;
-        root.querySelector<HTMLTextAreaElement>("textarea")?.focus({ preventScroll: true });
       } catch {
         content.hidden = true;
         panel.hidden = false;
         error.hidden = false;
+        loading.hidden = true;
         start.disabled = false;
-        start.textContent = "Retry terminal demo";
+        start.hidden = false;
       } finally {
         root.setAttribute("aria-busy", "false");
       }
-    });
+    };
+    start?.addEventListener("click", () => { void load(); });
+    void load();
   }
 </script>
 

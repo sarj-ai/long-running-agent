@@ -28,8 +28,7 @@ const CANONICAL = `${SITE_ORIGIN}/projects/wiki/`;
     ],
   }}
   sidebar={[
-    { label: "Overview", link: CANONICAL, attrs: { "data-wiki-section": "overview", "aria-current": "location" } },
-    { label: "Details", link: `${CANONICAL}#details`, attrs: { "data-wiki-section": "details" } },
+    { label: "Overview", link: CANONICAL, attrs: { "aria-current": "page" } },
   ]}
 >
   <article class="reference-page wiki-project">
@@ -38,28 +37,17 @@ const CANONICAL = `${SITE_ORIGIN}/projects/wiki/`;
       <p class="wiki-summary">{WIKI_DESCRIPTION}</p>
       <div class="wiki-actions">
         <a aria-label="Demo (read-only, no sign-in)" class="wiki-primary" href="https://wiki.sarj.ai/demo">Demo <span aria-hidden="true">↗</span></a>
-        <a aria-label="GitHub: Wiki source" href="https://github.com/sarj-ai/wiki">GitHub <span aria-hidden="true">↗</span></a>
       </div>
     </header>
     <a aria-label="Open the Wiki demo" class="wiki-screenshot" href="https://wiki.sarj.ai/demo">
       <Image alt="Wiki showing the Numbers Every Programmer Should Know document in light mode." class="wiki-screenshot-light" decoding="async" fetchpriority="high" format="webp" loading="eager" quality={85} sizes="(min-width: 80rem) 62rem, (min-width: 50rem) calc(100vw - 22rem), calc(100vw - 2rem)" src={WIKI_LIGHT} widths={[640, 960, 1440]} />
       <Image alt="Wiki showing the Numbers Every Programmer Should Know document in dark mode." class="wiki-screenshot-dark" decoding="async" fetchpriority="high" format="webp" loading="eager" quality={85} sizes="(min-width: 80rem) 62rem, (min-width: 50rem) calc(100vw - 22rem), calc(100vw - 2rem)" src={WIKI_DARK} widths={[640, 960, 1440]} />
     </a>
-    <section aria-labelledby="details" class="wiki-details">
-      <h2 id="details">Details</h2>
-      <ul><li>Browse and search Google Drive.</li><li>Edit and format documents.</li><li>Connect agents through MCP.</li></ul>
-      <p>Your Drive requires Google sign-in. The demo is read-only.</p>
-      <nav aria-label="Wiki links" class="wiki-links">
+    <nav aria-label="Wiki links" class="wiki-links">
         <a href="https://wiki.sarj.ai/">Open Wiki</a>
         <a href="https://github.com/sarj-ai/wiki/issues">Issues</a>
         <a href="https://github.com/sarj-ai/wiki/blob/main/LICENSE">MIT license</a>
         <a href={NUNITO_LICENSE}>Font license</a>
-      </nav>
-    </section>
+    </nav>
   </article>
 </StarlightPage>
-
-<script>
-  import { setupWikiNavigation } from "../lib/setup-wiki-navigation";
-  setupWikiNavigation();
-</script>
