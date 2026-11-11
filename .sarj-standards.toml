@@ -37,6 +37,7 @@ typescript = "apps/docs"
 manager = "pre-commit"
 
 [ci]
+runner = "blacksmith-4vcpu-ubuntu-2404"
 bootstrap = [
   "mise --no-config --no-env --no-hooks exec aqua:hashicorp/terraform@1.17.0 -- terraform -chdir=terraform init -backend=false -lockfile=readonly -input=false",
   "npm --prefix apps/docs run generate",
