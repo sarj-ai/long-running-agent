@@ -36,10 +36,6 @@
 .wiki-actions a:hover {
   text-decoration: underline;
 }
-.sidebar-content [data-wiki-section][aria-current="location"] {
-  color: var(--sl-color-accent-high);
-  background: var(--sl-color-accent-low);
-}
 .wiki-screenshot {
   display: block;
   overflow: hidden;
@@ -56,13 +52,11 @@
 [data-theme="light"] .wiki-screenshot-dark {
   display: none;
 }
-.wiki-details {
-  max-inline-size: 42rem;
-}
 .wiki-links {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem 1.5rem;
+  margin-block-start: 1.5rem;
   border-block-start: 1px solid var(--sarj-color-rule);
   padding-block-start: 0.75rem;
   font-size: 0.875rem;
@@ -73,7 +67,6 @@
   min-block-size: 44px;
 }
 @media (forced-colors: active) {
-  .sidebar-content [data-wiki-section][aria-current="location"],
   .wiki-actions .wiki-primary {
     forced-color-adjust: none;
     color: HighlightText;
