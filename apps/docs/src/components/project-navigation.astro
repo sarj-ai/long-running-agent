@@ -1,6 +1,12 @@
-<engineering-project-navigation project="lra">
+---
+import { isWikiProjectPath } from "../lib/paths";
+
+const WIKI = isWikiProjectPath(Astro.url.pathname);
+---
+
+<engineering-project-navigation project={WIKI ? "wiki" : "lra"}>
   <a aria-label="Sarj Engineering home" class="engineering-home-link" href="/">
     <img alt="Sarj" decoding="async" height="32" src="/projects/lra/ui/v1/sarj-logo.svg" width="52" />
   </a>
-  <span class="project-name">Long Running Agent</span>
+  <span class="project-name">{WIKI ? "Wiki" : "Long Running Agent"}</span>
 </engineering-project-navigation>

@@ -1,0 +1,13 @@
+---
+import SocialIcons from "@astrojs/starlight/components/SocialIcons.astro";
+import { Icon } from "@astrojs/starlight/components";
+
+import { isWikiProjectPath } from "../lib/paths";
+---
+
+{isWikiProjectPath(Astro.url.pathname) ? (
+  <a class="sl-flex" href="https://github.com/sarj-ai/wiki" rel="me">
+    <span class="sr-only">GitHub</span>
+    <Icon name="github" />
+  </a>
+) : <SocialIcons />}
