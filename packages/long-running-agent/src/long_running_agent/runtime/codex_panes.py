@@ -12,6 +12,7 @@ import shutil
 import signal
 import sqlite3
 import stat
+import sys
 import time
 from typing import TYPE_CHECKING, Final, Literal, NewType, Protocol
 from uuid import uuid7
@@ -269,11 +270,25 @@ def process_states(proc: Path) -> dict[int, Process]:
     }
 
 
+def open_process_descriptor(pid: int) -> int:
+    if sys.platform != "linux":
+        message = "Native Codex process control requires the Linux VM"
+        raise PaneError(message)
+    return os.pidfd_open(pid)
+
+
+def send_process_signal(descriptor: int, number: int) -> None:
+    if sys.platform != "linux":
+        message = "Native Codex process control requires the Linux VM"
+        raise PaneError(message)
+    signal.pidfd_send_signal(descriptor, number)
+
+
 @dataclass(frozen=True)
 class ProcessAccess:
     read: Callable[[Path], dict[int, Process]] = process_states
-    open: Callable[[int], int] = os.pidfd_open
-    send: Callable[[int, int], None] = signal.pidfd_send_signal
+    open: Callable[[int], int] = open_process_descriptor
+    send: Callable[[int, int], None] = send_process_signal
     close: Callable[[int], None] = os.close
 
 

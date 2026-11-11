@@ -80,7 +80,12 @@ def test_invalid_terminal_session_fails_before_connection(session: str) -> None:
 )
 def test_vm_entrypoint_preserves_caller_arguments_after_disconnect(tmp_path: Path, arguments: list[str]) -> None:
     ssh = tmp_path / "ssh"
-    ssh.write_text(f"#!{sys.executable}\nimport sys\nsys.exit(255 if '-tt' in sys.argv else 0)\n")
+    ssh.write_text(
+        f"#!{sys.executable}\nimport shlex,sys\n"
+        "remote=shlex.split(sys.argv[-1])\n"
+        "if 'prepare' in remote: print('/run/user/1000/lra-host/'+remote[-1]+'.sock')\n"
+        "sys.exit(255 if '-tt' in sys.argv else 0)\n"
+    )
     ssh.chmod(0o700)
     program = (
         "import sys\nfrom long_running_agent.cli import vm_main\n"
@@ -99,6 +104,21 @@ def test_vm_entrypoint_preserves_caller_arguments_after_disconnect(tmp_path: Pat
     )
     assert result.returncode == 0, result.stderr
     assert "Reconnect:" in result.stderr
+
+
+def test_connect_entrypoint_imports_without_linux_process_apis() -> None:
+    program = (
+        "import os,signal,sys\n"
+        "for module,name in [(os,'pidfd_open'),(signal,'pidfd_send_signal')]:\n"
+        "    if hasattr(module,name): delattr(module,name)\n"
+        "from long_running_agent.cli import sarj_connect_main\n"
+        "sys.argv=['sarj-connect','--help']\n"
+        "sarj_connect_main()\n"
+    )
+    result = subprocess.run([sys.executable, "-c", program], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+    assert "terminal" in result.stdout
+    assert "browser" in result.stdout
 
 
 def test_connect_help_lists_connection_modes_and_existing_vm_aliases_stay_available() -> None:

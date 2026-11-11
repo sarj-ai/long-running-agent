@@ -375,6 +375,29 @@
         "runtime/maintenance_worker.py",
         "runtime/admin_worker.py"
       ]
+    },
+    {
+      "id": "client-platform-boundary",
+      "oldRepresentation": "Import-time default fields captured Linux-only pidfd functions while loading the Mac connection CLI.",
+      "authoritativeReplacement": "ProcessAccess defaults call open_process_descriptor/send_process_signal, which reject unsupported platforms before using native Linux ownership APIs.",
+      "events": [
+        "import client",
+        "connect",
+        "request native process control"
+      ],
+      "guards": [
+        "No Linux API access during import",
+        "Native control requires Linux",
+        "No fallback to unsafe PID-only signaling"
+      ],
+      "recovery": "A Mac client can reconnect normally; unsupported native control fails explicitly without signaling a process.",
+      "decision": "simplify",
+      "sources": [
+        "runtime/codex_panes.py"
+      ],
+      "verificationSources": [
+        "tests/client/test_connect_modes.py"
+      ]
     }
   ],
   "applicationOwnedTables": 0,
