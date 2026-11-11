@@ -71,6 +71,7 @@ export default defineConfig({
         MobileTableOfContents: "./src/components/disabled-feature.astro",
         PageTitle: "@sarj/design/PageAnchor.astro",
         SiteTitle: "./src/components/project-navigation.astro",
+        SocialIcons: "./src/components/project-social-icons.astro",
       },
     }),
     cloudflareArtifacts(ASSET_ROOT),

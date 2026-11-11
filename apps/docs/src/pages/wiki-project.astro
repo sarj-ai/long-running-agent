@@ -1,70 +1,65 @@
 ---
-import "@sarj/design/styles.css";
-import "../styles/engineering.css";
 import "../styles/wiki-project.css";
 
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import { Image } from "astro:assets";
 
 import NUNITO_LICENSE from "../assets/wiki/nunito-ofl.txt?url&no-inline";
-import WIKI_SCREENSHOT from "../assets/wiki/wiki-demo.png";
-import EngineeringHeader from "../components/engineering-header.astro";
-import EngineeringTheme from "../components/engineering-theme.astro";
-import { SITE_ORIGIN, siteHref } from "../lib/paths";
+import WIKI_DARK from "../assets/wiki/wiki-demo-dark.png";
+import WIKI_LIGHT from "../assets/wiki/wiki-demo-light.png";
+import { SITE_ORIGIN } from "../lib/paths";
 import { WIKI_DESCRIPTION } from "../lib/wiki-description";
 
 const CANONICAL = `${SITE_ORIGIN}/projects/wiki/`;
 ---
 
-<!doctype html>
-<html data-theme="light" lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta content="width=device-width,initial-scale=1" name="viewport" />
-    <meta content="light dark" name="color-scheme" />
-    <meta content={WIKI_DESCRIPTION} name="description" />
-    <meta content="Wiki · Sarj Engineering" property="og:title" />
-    <meta content={WIKI_DESCRIPTION} property="og:description" />
-    <meta content={CANONICAL} property="og:url" />
-    <meta content="website" property="og:type" />
-    <link href={CANONICAL} rel="canonical" />
-    <link href={siteHref("/favicon.ico")} rel="icon" />
-    <title>Wiki · Sarj Engineering</title>
-    <EngineeringTheme />
-  </head>
-  <body class="wiki-project">
-    <a class="engineering-skip" href="#main-content">Skip to Wiki</a>
-    <EngineeringHeader githubHref="https://github.com/sarj-ai/wiki" />
-    <main id="main-content" tabindex="-1">
-      <div class="wiki-layout">
-        <aside class="wiki-sidebar">
-          <div aria-label="Wiki sections" aria-orientation="vertical" data-wiki-tabs role="tablist">
-            <button aria-controls="wiki-overview" aria-selected="true" id="wiki-overview-tab" role="tab" type="button">Overview</button>
-            <button aria-controls="wiki-details" aria-selected="false" id="wiki-details-tab" role="tab" tabindex="-1" type="button">Details</button>
-          </div>
-        </aside>
-        <div class="wiki-content">
-          <header class="wiki-intro">
-            <h1>Wiki</h1>
-            <p class="wiki-summary">{WIKI_DESCRIPTION}</p>
-            <div class="wiki-actions"><a aria-label="Demo (read-only, no sign-in)" class="wiki-primary" href="https://wiki.sarj.ai/demo">Demo <span aria-hidden="true">↗</span></a><a aria-label="GitHub: Wiki source" href="https://github.com/sarj-ai/wiki">GitHub <span aria-hidden="true">↗</span></a></div>
-          </header>
-          <section aria-labelledby="wiki-overview-tab" class="wiki-panel" id="wiki-overview" role="tabpanel" tabindex="0">
-            <a aria-label="Open the Wiki demo" class="wiki-screenshot" href="https://wiki.sarj.ai/demo">
-              <Image alt="Wiki demo with Latency workbook open and four files in the sidebar." decoding="async" fetchpriority="high" format="webp" loading="eager" quality={85} sizes="(min-width: 80rem) 62rem, (min-width: 48rem) calc(100vw - 16rem), calc(100vw - 2rem)" src={WIKI_SCREENSHOT} widths={[640, 960, 1440]} />
-            </a>
-          </section>
-          <section aria-labelledby="wiki-details-tab" class="wiki-panel wiki-details" id="wiki-details" role="tabpanel" tabindex="0">
-            <ul><li>Browse and search Google Drive.</li><li>Edit and format documents.</li><li>Connect agents through MCP.</li></ul>
-            <p>Your Drive requires Google sign-in. The demo is read-only.</p>
-            <nav aria-label="Wiki links" class="wiki-links"><a href="https://wiki.sarj.ai/">Open Wiki</a><a href="https://github.com/sarj-ai/wiki/issues">Issues</a><a href="https://github.com/sarj-ai/wiki/blob/main/LICENSE">MIT license</a><a href={NUNITO_LICENSE}>Font license</a></nav>
-          </section>
-        </div>
+<StarlightPage
+  frontmatter={{
+    title: "Wiki",
+    description: WIKI_DESCRIPTION,
+    pagefind: false,
+    prev: false,
+    next: false,
+    head: [
+      { tag: "title", content: "Wiki · Sarj Engineering" },
+      { tag: "link", attrs: { rel: "canonical", href: CANONICAL } },
+      { tag: "meta", attrs: { property: "og:url", content: CANONICAL } },
+      { tag: "meta", attrs: { property: "og:site_name", content: "Sarj Engineering" } },
+    ],
+  }}
+  sidebar={[
+    { label: "Overview", link: CANONICAL, attrs: { "data-wiki-section": "overview", "aria-current": "location" } },
+    { label: "Details", link: `${CANONICAL}#details`, attrs: { "data-wiki-section": "details" } },
+  ]}
+>
+  <article class="reference-page wiki-project">
+    <header class="wiki-intro">
+      <h1>Wiki</h1>
+      <p class="wiki-summary">{WIKI_DESCRIPTION}</p>
+      <div class="wiki-actions">
+        <a aria-label="Demo (read-only, no sign-in)" class="wiki-primary" href="https://wiki.sarj.ai/demo">Demo <span aria-hidden="true">↗</span></a>
+        <a aria-label="GitHub: Wiki source" href="https://github.com/sarj-ai/wiki">GitHub <span aria-hidden="true">↗</span></a>
       </div>
-    </main>
-  </body>
-</html>
+    </header>
+    <a aria-label="Open the Wiki demo" class="wiki-screenshot" href="https://wiki.sarj.ai/demo">
+      <Image alt="Wiki showing the Numbers Every Programmer Should Know document in light mode." class="wiki-screenshot-light" decoding="async" fetchpriority="high" format="webp" loading="eager" quality={85} sizes="(min-width: 80rem) 62rem, (min-width: 50rem) calc(100vw - 22rem), calc(100vw - 2rem)" src={WIKI_LIGHT} widths={[640, 960, 1440]} />
+      <Image alt="Wiki showing the Numbers Every Programmer Should Know document in dark mode." class="wiki-screenshot-dark" decoding="async" fetchpriority="high" format="webp" loading="eager" quality={85} sizes="(min-width: 80rem) 62rem, (min-width: 50rem) calc(100vw - 22rem), calc(100vw - 2rem)" src={WIKI_DARK} widths={[640, 960, 1440]} />
+    </a>
+    <section aria-labelledby="details" class="wiki-details">
+      <h2 id="details">Details</h2>
+      <ul><li>Browse and search Google Drive.</li><li>Edit and format documents.</li><li>Connect agents through MCP.</li></ul>
+      <p>Your Drive requires Google sign-in. The demo is read-only.</p>
+      <nav aria-label="Wiki links" class="wiki-links">
+        <a href="https://wiki.sarj.ai/">Open Wiki</a>
+        <a href="https://github.com/sarj-ai/wiki/issues">Issues</a>
+        <a href="https://github.com/sarj-ai/wiki/blob/main/LICENSE">MIT license</a>
+        <a href={NUNITO_LICENSE}>Font license</a>
+      </nav>
+    </section>
+  </article>
+</StarlightPage>
 
 <script>
-  import { setupWikiTabs } from "../lib/setup-wiki-tabs";
-  setupWikiTabs();
+  import { setupWikiNavigation } from "../lib/setup-wiki-navigation";
+  setupWikiNavigation();
 </script>

@@ -9,3 +9,9 @@ export const SITE_BASE_PATH: string = SITE_URL.pathname;
 export function siteHref(path: string): string {
   return `${SITE_BASE_PATH}${path.replace(/^\//u, "")}`;
 }
+
+export function isWikiProjectPath(pathname: string): boolean {
+  return (
+    pathname === "/projects/wiki/" || pathname === siteHref("/wiki-project/")
+  );
+}
