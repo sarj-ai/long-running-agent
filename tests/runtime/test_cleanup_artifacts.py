@@ -172,6 +172,50 @@ def test_tracked_provider_file_is_never_a_disposable_download(provider: Fixture)
     assert provider.binary.is_file()
 
 
+@pytest.mark.parametrize("referenced", [False, True])
+def test_verified_bare_primary_keeps_source_and_configuration_while_inspecting_downloads(
+    provider: Fixture, monkeypatch: pytest.MonkeyPatch, referenced: bool
+) -> None:
+    head = cleanup.git(provider.root, "rev-parse", "HEAD").strip()
+    cleanup.git(provider.root, "config", "core.bare", "true")
+    observed = cleanup_artifacts.inspect(provider.root, provider.target, now=provider.now)
+    census(provider, monkeypatch, cleanup.References(frozenset({provider.root}) if referenced else frozenset()))
+    reason = cleanup_artifacts.remove(provider.paths, observed)
+    if referenced:
+        assert "referenced" in reason
+    else:
+        assert reason == "removed"
+    assert provider.binary.exists() is referenced
+    assert cleanup.git(provider.root, "config", "--get", "core.bare").strip() == "true"
+    assert cleanup.git(provider.root, "rev-parse", "HEAD").strip() == head
+    assert (provider.root / ".git/objects").is_dir()
+    assert (provider.root / "source.txt").read_text() == "committed source\n"
+
+
+@pytest.mark.parametrize("bare", [False, True])
+def test_provider_tracked_in_head_is_retained_even_after_index_removal(provider: Fixture, bare: bool) -> None:
+    cleanup.git(provider.root, "add", "-f", str(provider.binary))
+    cleanup.git(
+        provider.root,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-qm",
+        "private tracked provider fixture",
+    )
+    cleanup.git(provider.root, "rm", "--cached", str(provider.binary))
+    setting = str(bare).lower()
+    cleanup.git(provider.root, "config", "core.bare", setting)
+    with pytest.raises(ValueError, match="tracked"):
+        cleanup_artifacts.inspect(provider.root, provider.target, now=provider.now)
+    assert provider.binary.is_file()
+    assert cleanup.git(provider.root, "config", "--get", "core.bare").strip() == setting
+
+
 def test_removed_provider_does_not_pin_checkout_through_empty_ignored_parents(
     provider: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:

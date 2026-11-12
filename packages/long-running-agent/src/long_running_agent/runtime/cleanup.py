@@ -1427,7 +1427,7 @@ def local_files(path: Path) -> str:
         relative = Path(record[3:])
         if not record.startswith("!! ") or relative.is_absolute() or ".." in relative.parts:
             return "tracked, untracked, or non-disposable ignored local files"
-        if generated_install_state(path, relative) or cleanup_artifacts.empty_provider_parent(path, relative):
+        if generated_install_state(path, relative) or cleanup_artifacts.empty_provider_directory(path, relative):
             continue
         generated_parts = next((index + 1 for index, part in enumerate(relative.parts) if part in GENERATED), None)
         if generated_parts is None:
