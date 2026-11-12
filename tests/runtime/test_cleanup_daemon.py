@@ -69,6 +69,28 @@ def summary(*, removed: int = 0, reason: str = "referenced by saved workspace") 
     )
 
 
+@pytest.mark.parametrize("previous_completion", [None, 123.0])
+def test_busy_mutex_is_blocked_and_does_not_advance_successful_cleanup_time(
+    previous_completion: float | None, tmp_path: Path
+) -> None:
+    schedule = cleanup_daemon.Schedule.new()
+    schedule.last_run_at = previous_completion
+    result = cleanup_daemon.Summary(worktrees=0, attempted=0, removed=0, reasons={}, cache=cleanup.CLEANUP_BUSY)
+    space = cleanup_daemon.Space(total=1000 * GIB, available=10 * GIB)
+    assert schedule.completed(result, space, now=10.0, wall=200.0) == "blocked"
+    assert schedule.last_run_at == previous_completion
+    assert schedule.due == pytest.approx(10.0 + cleanup_daemon.PRESSURE_SECONDS)
+    assert schedule.failures == 0
+    assert cleanup_daemon.incomplete_inspection(result)
+    assert not cleanup_daemon.baseline_learning_eligible(result)
+    cleanup_daemon.publish(tmp_path, schedule, space, "blocked")
+    heartbeat = cleanup_daemon.Heartbeat.model_validate_json((tmp_path / cleanup_daemon.STATUS_FILE).read_text())
+    assert heartbeat.phase == "blocked"
+    assert heartbeat.last_run_at == previous_completion
+    assert heartbeat.last_result is not None
+    assert heartbeat.last_result.cache == cleanup.CLEANUP_BUSY
+
+
 def worker_script(payload: str) -> list[str]:
     return [sys.executable, "-c", "import sys;sys.stdout.write(sys.argv[1])", payload]
 
