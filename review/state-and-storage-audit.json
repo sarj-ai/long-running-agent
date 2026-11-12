@@ -193,7 +193,7 @@
     {
       "id": "cleanup-attempt-budget",
       "oldRepresentation": "receipt/cursor files",
-      "authoritativeReplacement": "AttemptStamp, AttemptReceipt, AttemptHistory, ReviewCursor, InventoryCursor runtime schemas",
+      "authoritativeReplacement": "AttemptStamp, AttemptReceipt, AttemptHistory and ReviewCursor; inventory checkpoint is CompleteRepositoryCursor | VisitedWorktreeCursor, validated from the existing version-1 JSON without new fields.",
       "events": [
         "reserve attempt",
         "advance review",
@@ -214,8 +214,8 @@
     },
     {
       "id": "worktree-deletion",
-      "oldRepresentation": "filesystem/git/index/activity across local/native state",
-      "authoritativeReplacement": "native identity snapshots, inventory classifications and cleanup eligibility checks",
+      "oldRepresentation": "Decision removed/attempted booleans and a worker result DTO allowed the impossible removed-without-charge combination.",
+      "authoritativeReplacement": "RetainedDecision | ChargedDecision | RemovedDecision with fixed non-init Literal flags; worker report uses the corresponding strict discriminated union while preserving native JSON fields.",
       "events": [
         "discover",
         "inspect",
@@ -229,12 +229,25 @@
         "native worktree remove",
         "identity/version checks"
       ],
-      "recovery": "no manual source deletion; unknown activity, publication or provenance retains worktree",
-      "decision": "retain-explicit",
+      "recovery": "Reserve the durable attempt before native removal. ChargedDecision includes a timeout, interruption or missing acknowledgement; it never asserts that the external action did not happen. Fresh native readback and every existing eligibility/ownership/publication guard remain required.",
+      "decision": "convert",
       "sources": [
         "runtime/cleanup.py",
         "runtime/worktrees.py",
-        "runtime/cleanup_activity.py"
+        "runtime/cleanup_activity.py",
+        "runtime/cleanup_daemon.py"
+      ],
+      "verification": "Implemented; focused/native full checks, release qualification and production installation remain pending.",
+      "states": [
+        "retained-without-charge",
+        "charged-removal-unconfirmed",
+        "removed-after-charge"
+      ],
+      "commands": [
+        "retain",
+        "durably reserve attempt",
+        "native nonforce worktree remove",
+        "validate worker report"
       ]
     },
     {
@@ -398,6 +411,34 @@
       "verificationSources": [
         "tests/client/test_connect_modes.py"
       ]
+    },
+    {
+      "id": "bounded-inventory-progress",
+      "oldRepresentation": "InventoryPage combined pending:boolean with an optional cursor; checkpoint_review replaced both fields independently. A nullable cursor.worktree encoded repository-complete versus worktree-visited progress.",
+      "authoritativeReplacement": "CompleteInventoryPage | DeferredInventoryPage | PendingInventoryPage with non-init Literal pending/cursor fields; pending_inventory_page centralizes deferral. CompleteRepositoryCursor | VisitedWorktreeCursor replaces nullable checkpoint data without changing persisted JSON.",
+      "events": [
+        "bounded discovery reaches deadline",
+        "candidate page fills",
+        "repository enumeration fails",
+        "repository completes",
+        "review reaches deadline",
+        "review checkpoints",
+        "restart"
+      ],
+      "guards": [
+        "bounded native Git inventory",
+        "same root/repository/worktree validation",
+        "private atomic checkpoint",
+        "review checkpoint never skips unexamined suffix",
+        "aggregate errors do not imply an incomplete rotation"
+      ],
+      "recovery": "A deadline before any checkpoint is a distinct deferred state. Complete rotations can still report repository errors. Existing version-1 JSON parses into the cursor union; malformed advisory state is quarantined, never used as deletion authority.",
+      "decision": "convert",
+      "sources": [
+        "runtime/cleanup.py",
+        "runtime/cleanup_state.py"
+      ],
+      "verification": "Implemented; native types, migration, recovery and complete checks pending."
     }
   ],
   "applicationOwnedTables": 0,

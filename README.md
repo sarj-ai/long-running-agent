@@ -18,4 +18,4 @@ uv tool install --editable ./packages/long-running-agent
 On the VM, `lra codex switch` changes accounts and reopens saved conversations.
 Use `lra codex retry enable` to recover temporary model-capacity failures automatically.
 
-Version 0.7.2 · Python >=3.14,<3.15 · MIT
+Version 0.7.3 · Python >=3.14,<3.15 · MIT

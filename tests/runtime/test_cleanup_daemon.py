@@ -431,7 +431,7 @@ def test_worker_exit_also_reaps_its_descendants_before_returning(tmp_path: Path,
 
 @pytest.mark.parametrize(
     "mutation",
-    ["report-only", "duplicate", "relative", "unattempted-removal", "over-budget"],
+    ["report-only", "duplicate", "relative", "over-budget"],
 )
 def test_inconsistent_native_worker_results_fail_closed(mutation: str) -> None:
     payload = worker_payload()
@@ -443,8 +443,6 @@ def test_inconsistent_native_worker_results_fail_closed(mutation: str) -> None:
             payload["worktrees"].append(row.copy())
         case "relative":
             row["path"] = "relative"
-        case "unattempted-removal":
-            row["removed"] = True
         case _:
             payload["worktrees"] = [worktree_payload(path=f"/fixture/{index}", attempted=True) for index in range(3)]
     with pytest.raises(ValueError, match="inconsistent results"):
@@ -1384,3 +1382,26 @@ def test_unknown_identity_keeps_bootstrap_hysteresis_while_disabling_forecast() 
         assert schedule.capacity_recovery is recovering
         assert isinstance(schedule.growth.state, cleanup_daemon.TrackingGrowth)
         assert schedule.growth.state.positive_samples == 0
+
+
+@pytest.mark.parametrize(("attempted", "removed"), [(False, True), (1, 1), (0, 0), ("true", True), (True, None)])
+def test_worker_result_rejects_impossible_or_nonboolean_wire_states(
+    attempted: bool | int | str | None,
+    removed: bool | int | str | None,
+) -> None:
+    payload = {
+        "apply": True,
+        "max_removals": 2,
+        "cache": "skipped",
+        "worktrees": [{"path": "/fixture/worktree", "reason": "fixture", "attempted": attempted, "removed": removed}],
+    }
+    with pytest.raises(ValueError, match="worktrees"):
+        cleanup_daemon.WorkerReport.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize(("attempted", "removed"), [(False, False), (True, False), (True, True)])
+def test_worker_result_preserves_the_native_wire_shape(attempted: bool, removed: bool) -> None:
+    payload = worker_payload()
+    payload["worktrees"] = [worktree_payload(attempted=attempted, removed=removed)]
+    report = cleanup_daemon.WorkerReport.model_validate_json(json.dumps(payload))
+    assert report.model_dump()["worktrees"] == payload["worktrees"]

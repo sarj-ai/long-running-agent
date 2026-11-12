@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import deque
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 import errno
 import fcntl
 import json
@@ -27,8 +27,10 @@ from .cleanup_state import (
     CAPACITY_ATTEMPTS,
     MAX_ATTEMPTS,
     AttemptStamp,
+    CompleteRepositoryCursor,
     InventoryCursor,
     ReviewCursor,
+    VisitedWorktreeCursor,
     active_receipts,
     inventory_cursor,
     remaining_attempts,
@@ -182,19 +184,65 @@ class Worktree:
 
 
 @dataclass(frozen=True)
-class Decision:
+class _DecisionDetails:
     path: str
     reason: str
-    removed: bool = False
-    attempted: bool = False
 
 
 @dataclass(frozen=True)
-class InventoryPage:
+class RetainedDecision(_DecisionDetails):
+    removed: Literal[False] = field(default=False, init=False)
+    attempted: Literal[False] = field(default=False, init=False)
+
+
+@dataclass(frozen=True)
+class ChargedDecision(_DecisionDetails):
+    removed: Literal[False] = field(default=False, init=False)
+    attempted: Literal[True] = field(default=True, init=False)
+
+
+@dataclass(frozen=True)
+class RemovedDecision(_DecisionDetails):
+    removed: Literal[True] = field(default=True, init=False)
+    attempted: Literal[True] = field(default=True, init=False)
+
+
+type Decision = RetainedDecision | ChargedDecision | RemovedDecision
+
+
+@dataclass(frozen=True, kw_only=True)
+class _InventoryPageDetails:
     entries: list[Worktree]
-    cursor: InventoryCursor | None
-    pending: bool
     errors: int = 0
+
+
+@dataclass(frozen=True)
+class CompleteInventoryPage(_InventoryPageDetails):
+    cursor: None = field(default=None, init=False)
+    pending: Literal[False] = field(default=False, init=False)
+
+
+@dataclass(frozen=True)
+class DeferredInventoryPage(_InventoryPageDetails):
+    cursor: None = field(default=None, init=False)
+    pending: Literal[True] = field(default=True, init=False)
+
+
+@dataclass(frozen=True)
+class PendingInventoryPage(_InventoryPageDetails):
+    cursor: InventoryCursor
+    pending: Literal[True] = field(default=True, init=False)
+
+
+type InventoryPage = CompleteInventoryPage | DeferredInventoryPage | PendingInventoryPage
+
+
+def pending_inventory_page(
+    entries: list[Worktree], cursor: InventoryCursor | None, errors: int
+) -> DeferredInventoryPage | PendingInventoryPage:
+    if cursor is None:
+        return DeferredInventoryPage(entries=entries, errors=errors)
+    return PendingInventoryPage(entries=entries, cursor=cursor, errors=errors)
 
 
 @dataclass
@@ -502,9 +550,9 @@ def parse_worktrees(text: str, repository: Path) -> list[Worktree]:
             continue
         fields: dict[str, str] = {}
         unknown = False
-        for field in record.split("\0"):
-            if field:
-                key, _, value = field.partition(" ")
+        for record_field in record.split("\0"):
+            if record_field:
+                key, _, value = record_field.partition(" ")
                 unknown |= key in fields or key not in {
                     "worktree",
                     "HEAD",
@@ -631,7 +679,7 @@ def repository_candidates(repository: Path, root: Path, cursor: InventoryCursor 
 def candidate_page(paths: RuntimePaths) -> InventoryPage:
     root = paths.code
     if not root.exists():
-        return InventoryPage([], None, pending=False)
+        return CompleteInventoryPage(entries=[])
     cursor = inventory_cursor(state_directory(paths), root)
     deadline = time.monotonic() + INVENTORY_PAGE_SECONDS
     discovered = sorted(repositories(root), key=str)
@@ -644,22 +692,22 @@ def candidate_page(paths: RuntimePaths) -> InventoryPage:
         ):
             continue
         if time.monotonic() >= deadline:
-            return InventoryPage(list(entries.values()), progress, pending=True, errors=errors)
+            return pending_inventory_page(list(entries.values()), progress, errors)
         try:
             rows = repository_candidates(repository, root, cursor)
         except OSError, RuntimeError, ValueError:
             # One broken repository must not starve unrelated repositories.
             # It is retried on the next complete rotation and remains visible.
             errors = min(MAX_DIRECTORIES, errors + 1)
-            progress = InventoryCursor(repository=repository, errors=errors)
+            progress = CompleteRepositoryCursor(repository=repository, errors=errors)
             continue
         for entry in rows:
             if len(entries) >= INVENTORY_PAGE_SIZE:
-                return InventoryPage(list(entries.values()), progress, pending=True, errors=errors)
+                return pending_inventory_page(list(entries.values()), progress, errors)
             entries[entry.path] = entry
-            progress = InventoryCursor(repository=repository, worktree=entry.path, errors=errors)
-        progress = InventoryCursor(repository=repository, errors=errors)
-    return InventoryPage(list(entries.values()), None, pending=False, errors=errors)
+            progress = VisitedWorktreeCursor(repository=repository, worktree=entry.path, errors=errors)
+        progress = CompleteRepositoryCursor(repository=repository, errors=errors)
+    return CompleteInventoryPage(entries=list(entries.values()), errors=errors)
 
 
 def bounded_bytes(path: Path, *, budget: cleanup_activity.InventoryBudget | None = None) -> bytes:
@@ -1586,35 +1634,31 @@ def remove_reviewed(entry: Worktree, paths: RuntimePaths, *, min_age_days: float
     identity = entry.path.stat().st_dev, entry.path.stat().st_ino
     fresh = registered_candidate(entry, paths.code)
     if fresh != entry or identity != (entry.path.stat().st_dev, entry.path.stat().st_ino):
-        return Decision(str(entry.path), "worktree identity changed during review")
+        return RetainedDecision(str(entry.path), "worktree identity changed during review")
     reason = eligibility(
         entry, paths.code, fresh_references(paths, entry.path), min_age_days=min_age_days, now=time.time()
     )
     if reason != "eligible":
-        return Decision(str(entry.path), reason)
+        return RetainedDecision(str(entry.path), reason)
     if not maintenance_idle():
-        return Decision(str(entry.path), "memory or disk pressure is high or unknown; retained")
+        return RetainedDecision(str(entry.path), "memory or disk pressure is high or unknown; retained")
     if recovery and not capacity_recovery_needed(paths.home):
-        return Decision(str(entry.path), "capacity recovery reached its free-space target; retained")
+        return RetainedDecision(str(entry.path), "capacity recovery reached its free-space target; retained")
     limit = CAPACITY_ATTEMPTS if recovery else MAX_ATTEMPTS
     inspection_check()
     if not reserve_attempt(state_directory(paths), AttemptStamp.current(), entry.path, entry.head, limit=limit):
-        return Decision(str(entry.path), "rolling 24-hour native-removal budget exhausted; retained")
+        return RetainedDecision(str(entry.path), "rolling 24-hour native-removal budget exhausted; retained")
     try:
         inspection_check()
     except InspectionDeferredError:
-        return Decision(
-            str(entry.path), "native removal deferred after durable charge; branch retained", attempted=True
-        )
+        return ChargedDecision(str(entry.path), "native removal deferred after durable charge; branch retained")
     try:
         # Once charged, native removal keeps its existing independent 120-second bound.
         with inspection_window(None):
             git(entry.repository, "worktree", "remove", "--", str(entry.path), timeout=120)
     except OSError, RuntimeError:
-        return Decision(
-            str(entry.path), "native removal did not complete; inspect checkout; branch retained", attempted=True
-        )
-    return Decision(str(entry.path), "removed clean merged worktree; branch retained", removed=True, attempted=True)
+        return ChargedDecision(str(entry.path), "native removal did not complete; inspect checkout; branch retained")
+    return RemovedDecision(str(entry.path), "removed clean merged worktree; branch retained")
 
 
 def can_refresh(repository: Path, refreshed: set[Path]) -> bool:
@@ -1688,7 +1732,9 @@ def review(
     timing: ReviewTiming | None = None,
 ) -> Decision:
     if apply and attempts >= MAX_REMOVALS:
-        return Decision(str(entry.path), "per-run native-removal limit reached; retained without further inspection")
+        return RetainedDecision(
+            str(entry.path), "per-run native-removal limit reached; retained without further inspection"
+        )
     if apply:
         reason = preliminary_status(entry, paths, min_age_days=min_age_days, merge_views=merge_views)
     else:
@@ -1714,7 +1760,7 @@ def review(
             timing=timing,
         )
     if reason != "eligible" or not apply:
-        return Decision(str(entry.path), reason)
+        return RetainedDecision(str(entry.path), reason)
     with final_inspection_window(final_deadline, timing):
         return remove_reviewed(entry, paths, min_age_days=min_age_days, recovery=recovery)
 
@@ -1743,7 +1789,7 @@ def apply_retention(
 
 
 def retained_inventory(entries: list[Worktree], reason: str) -> list[Decision]:
-    return [Decision(str(entry.path), reason) for entry in entries]
+    return [RetainedDecision(str(entry.path), reason) for entry in entries]
 
 
 def removal_budget(paths: RuntimePaths, limit: int) -> RemovalBudget:
@@ -1842,7 +1888,7 @@ def review_page(
             deadline = min(deadline, final_deadline)
         with review_window(deadline, entry, progress):
             if reason is not None:
-                return Decision(str(entry.path), reason)
+                return RetainedDecision(str(entry.path), reason)
             return review(
                 entry,
                 paths,
@@ -1875,7 +1921,7 @@ def review_page(
         except LiveInspectionFailedError as error:
             return decisions + retained_inventory(remaining, str(error))
         except OSError, RuntimeError, ValueError, sqlite3.Error:
-            result = Decision(str(entry.path), "inspection failed; retained")
+            result = RetainedDecision(str(entry.path), "inspection failed; retained")
         attempts += result.attempted
         decisions.append(result)
         if not apply:
@@ -1939,12 +1985,12 @@ def checkpoint_review(paths: RuntimePaths, batch: InventoryPage, progress: Revie
     cursor = (
         inventory_cursor(state_directory(paths), paths.code)
         if entry is None
-        else InventoryCursor(repository=entry.repository, worktree=entry.path, errors=batch.errors)
+        else VisitedWorktreeCursor(repository=entry.repository, worktree=entry.path, errors=batch.errors)
     )
     # Resume after the last started review, never after the unexamined suffix.
     # A timed-out candidate is retained and retried on the next rotation; it
     # cannot monopolize every sweep. This checkpoint grants no removal authority.
-    return replace(batch, cursor=cursor, pending=True)
+    return pending_inventory_page(batch.entries, cursor, batch.errors)
 
 
 def npm_arguments(paths: RuntimePaths) -> list[str]:
@@ -2029,7 +2075,7 @@ def cleanup_lock(paths: RuntimePaths, *, daemon: bool = False) -> Generator[Path
         yield state
 
 
-def cache_maintenance(paths: RuntimePaths, state: Path, decisions: list[Decision], *, elapsed: float) -> str:
+def cache_maintenance(paths: RuntimePaths, state: Path, decisions: Sequence[Decision], *, elapsed: float) -> str:
     stamp = state / "cache-pruned"
     if stamp.exists() and time.time() - stamp.stat().st_mtime < 7 * DAY:
         return "skipped: weekly npm verification is not due"

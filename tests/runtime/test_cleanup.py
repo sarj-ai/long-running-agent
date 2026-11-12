@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 from collections.abc import Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import errno
 import gzip
 import json
@@ -340,7 +340,7 @@ def test_bare_inventory_keeps_native_linked_worktree_lock(
     cleanup.git(repository.main, "config", "core.bare", "true")
     isolate_native_git(repository, monkeypatch)
     decisions = cleanup.reap(repository.paths, apply=True)
-    assert decisions == [cleanup.Decision(str(entry.path), "locked, prunable, or unknown worktree")]
+    assert decisions == [cleanup.RetainedDecision(str(entry.path), "locked, prunable, or unknown worktree")]
     assert entry.path.is_dir()
     assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
 
@@ -481,7 +481,7 @@ def test_capacity_flag_below_recovery_floor_preserves_normal_seven_day_retention
         os, "statvfs", recovered_filesystem
     )
     report = cleanup.reap(recent.paths, apply=True, capacity_recovery=True)
-    assert report == [cleanup.Decision(str(entry.path), "worktree checkout is too recent")]
+    assert report == [cleanup.RetainedDecision(str(entry.path), "worktree checkout is too recent")]
     assert entry.path.is_dir()
     assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
     assert not (cleanup.state_directory(repository.paths) / "cleanup-attempts.json").exists()
@@ -540,11 +540,7 @@ def test_clean_merged_detached_checkout_is_removed_only_with_a_preserved_local_b
         cleanup, "git", native_removal
     )
     report = cleanup.reap(repository.paths, apply=True)
-    assert report == [
-        cleanup.Decision(
-            str(entry.path), "removed clean merged worktree; branch retained", removed=True, attempted=True
-        )
-    ]
+    assert report == [cleanup.RemovedDecision(str(entry.path), "removed clean merged worktree; branch retained")]
     assert len(removals) == 1
     assert not entry.path.exists()
     assert original(repository.main, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/") == branches
@@ -581,7 +577,9 @@ def test_detached_checkout_with_only_remote_and_tag_coverage_is_retained(
     assert not cleanup.preserved_detached(entry)
     isolate_native_git(repository, monkeypatch)
     report = cleanup.reap(repository.paths, apply=True)
-    assert report == [cleanup.Decision(str(entry.path), "detached HEAD has no verified preserving local branch")]
+    assert report == [
+        cleanup.RetainedDecision(str(entry.path), "detached HEAD has no verified preserving local branch")
+    ]
     assert entry.path.is_dir()
     assert not (cleanup.state_directory(repository.paths) / "cleanup-attempts.json").exists()
 
@@ -719,7 +717,7 @@ def test_post_status_checkout_mutations_retain_without_charging(
         "sequencer": "Git operation or index update is in progress",
         "public-root": "path is missing, linked, foreign-owned, or writable by another user",
     }
-    assert page == [cleanup.Decision(str(entry.path), reasons[mutation])]
+    assert page == [cleanup.RetainedDecision(str(entry.path), reasons[mutation])]
     assert (entry.path.stat().st_dev, entry.path.stat().st_ino) == identity
     fresh = next(item for item in cleanup.inventory(repository.paths.code) if item.path == entry.path)
     assert (fresh.path, fresh.head, fresh.branch) == (entry.path, head_after, entry.branch)
@@ -798,7 +796,7 @@ def test_successful_native_ancestry_with_object_diagnostics_cannot_authorize_rem
         cleanup, "run", native_result
     )
     report = cleanup.reap(repository.paths, apply=True)
-    assert report == [cleanup.Decision(str(entry.path), "inspection failed; retained")]
+    assert report == [cleanup.RetainedDecision(str(entry.path), "inspection failed; retained")]
     assert entry.path.is_dir()
     assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
     assert not (cleanup.state_directory(repository.paths) / "cleanup-attempts.json").exists()
@@ -876,11 +874,7 @@ def test_fresh_feature_fetch_does_not_prevent_guarded_default_branch_refresh(
     assert len(fetched) == 1
     assert fetched[0][-1] == "refs/heads/main:refs/remotes/origin/main"
     assert "branch 'main' of " in fetch.read_text()
-    assert result == [
-        cleanup.Decision(
-            str(entry.path), "removed clean merged worktree; branch retained", removed=True, attempted=True
-        )
-    ]
+    assert result == [cleanup.RemovedDecision(str(entry.path), "removed clean merged worktree; branch retained")]
     assert original(repository.main, "rev-parse", entry.branch).strip() == entry.head
 
 
@@ -938,7 +932,7 @@ def test_cached_negative_proof_cannot_authorize_fetch_before_checkout_guards(
         cleanup, "git", observe_native_fetch
     )
     report = cleanup.reap(repository.paths, apply=True)
-    assert report == [cleanup.Decision(str(entry.path), expected_reason)]
+    assert report == [cleanup.RetainedDecision(str(entry.path), expected_reason)]
     assert not fetched
     assert (fetch.read_bytes(), fetch.stat().st_mtime_ns) == before_fetch
     assert original(repository.main, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
@@ -1250,7 +1244,7 @@ def test_global_live_failure_preserves_actual_removal_and_stops_at_the_pending_c
     page = cleanup.reap(repository.paths, apply=True)
     assert page[0].removed
     assert page[0].attempted
-    assert page[1] == cleanup.Decision(str(second.path), "live reference inspection failed; retained")
+    assert page[1] == cleanup.RetainedDecision(str(second.path), "live reference inspection failed; retained")
     assert not first.path.exists()
     assert second.path.is_dir()
     state = cleanup.state_directory(repository.paths)
@@ -1288,31 +1282,35 @@ def test_cursor_write_failure_does_not_hide_a_completed_native_removal(
     assert not (state / "cleanup-cursor.json").exists()
     assert len(cleanup_state.active_receipts(state, cleanup_state.AttemptStamp.current()).receipts) == 1
     preceding = [
-        cleanup_daemon.WorktreeResult(
-            path=str(repository.paths.code / f"retained-{number}"),
-            reason=f"independent retained reason {number}",
-            removed=False,
-            attempted=False,
-        )
+        {
+            "path": str(repository.paths.code / f"retained-{number}"),
+            "reason": f"independent retained reason {number}",
+            "removed": False,
+            "attempted": False,
+        }
         for number in range(cleanup_daemon.MAX_REASONS)
     ]
-    actual = [
-        cleanup_daemon.WorktreeResult(path=row.path, reason=row.reason, removed=row.removed, attempted=row.attempted)
-        for row in page
-    ]
-    summary = cleanup_daemon.summarize(
-        cleanup_daemon.WorkerReport(apply=True, max_removals=2, worktrees=[*preceding, *actual], cache="skipped")
+    report = cleanup_daemon.WorkerReport.model_validate(
+        {
+            "apply": True,
+            "max_removals": 2,
+            "worktrees": [*preceding, *(asdict(row) for row in page)],
+            "cache": "skipped",
+        }
     )
+    summary = cleanup_daemon.summarize(report)
     assert summary.attempted == summary.removed == 1
     assert len(summary.reasons) == cleanup_daemon.MAX_REASONS
     assert all(row.reason in summary.reasons for row in page)
     space = cleanup_daemon.Space(total=1000, available=500)
     assert cleanup_daemon.Schedule.new().completed(summary, space, 1.0, repository.now) == "cleaned"
     retained = cleanup_daemon.summarize(
-        cleanup_daemon.WorkerReport(apply=True, max_removals=2, worktrees=[*preceding, actual[-1]], cache="skipped")
+        cleanup_daemon.WorkerReport.model_validate(
+            {"apply": True, "max_removals": 2, "worktrees": [*preceding, asdict(page[-1])], "cache": "skipped"}
+        )
     )
     assert retained.attempted == retained.removed == 0
-    assert actual[-1].reason in retained.reasons
+    assert page[-1].reason in retained.reasons
     assert cleanup_daemon.Schedule.new().completed(retained, space, 1.0, repository.now) == "blocked"
 
 
@@ -1330,7 +1328,10 @@ def test_report_time_budget_defers_unchecked_rows_without_reading_or_changing_pr
 
     page = cleanup.reap(repository.paths, apply=False)
 
-    assert page == [cleanup.Decision(str(first.path), "eligible"), cleanup.Decision(str(second.path), cleanup.DEFERRED)]
+    assert page == [
+        cleanup.RetainedDecision(str(first.path), "eligible"),
+        cleanup.RetainedDecision(str(second.path), cleanup.DEFERRED),
+    ]
     assert [(path.read_bytes(), path.stat().st_mtime_ns, path.stat().st_ino) for path in files] == before
     assert first.path.is_dir()
     assert second.path.is_dir()
@@ -1371,7 +1372,7 @@ def test_unknown_private_cursor_blocks_apply_without_inspection_or_state_repair(
         cleanup, "references", no_live_inspection
     )
     assert cleanup.reap(repository.paths, apply=True) == [
-        cleanup.Decision(str(entry.path), "inspection cursor inspection failed; retained")
+        cleanup.RetainedDecision(str(entry.path), "inspection cursor inspection failed; retained")
     ]
     assert (cursor.read_bytes(), cursor.lstat().st_ino, cursor.lstat().st_mode) == before
     assert not (state / "cleanup-attempts.json").exists()
@@ -1387,7 +1388,7 @@ def test_missing_native_checkout_has_a_finite_cursor_key_and_keeps_its_branch(
     shutil.rmtree(entry.path)
     isolate_native_git(repository, monkeypatch)
     page = cleanup.reap(repository.paths, apply=True)
-    assert page == [cleanup.Decision(str(entry.path), "locked, prunable, or unknown worktree")]
+    assert page == [cleanup.RetainedDecision(str(entry.path), "locked, prunable, or unknown worktree")]
     state = cleanup.state_directory(repository.paths)
     cursor = cleanup_state.review_cursor(state, repository.paths.code)
     assert cursor is not None
@@ -1480,9 +1481,7 @@ def test_late_durable_charge_is_reported_without_launching_native_removal(
     )
     page = cleanup.reap(repository.paths, apply=True)
     assert page == [
-        cleanup.Decision(
-            str(entry.path), "native removal deferred after durable charge; branch retained", attempted=True
-        )
+        cleanup.ChargedDecision(str(entry.path), "native removal deferred after durable charge; branch retained")
     ]
     state = cleanup.state_directory(repository.paths)
     assert len(cleanup_state.active_receipts(state, cleanup_state.AttemptStamp.current()).receipts) == 1
@@ -1520,7 +1519,9 @@ def test_verified_fetch_oid_cannot_be_replaced_by_a_moving_remote_ref(
         else [cleanup.remove_reviewed(entry, repository.paths, min_age_days=7)]
     )
     assert targets == [initial.head]
-    assert report == [cleanup.Decision(str(entry.path), "commits are not proven merged into origin's default branch")]
+    assert report == [
+        cleanup.RetainedDecision(str(entry.path), "commits are not proven merged into origin's default branch")
+    ]
     assert original(repository.main, "rev-parse", "refs/remotes/origin/main").strip() == entry.head
     assert original(repository.main, "rev-parse", entry.branch).strip() == entry.head
     assert fetch.read_bytes() == fetch_before
@@ -1608,7 +1609,7 @@ def test_final_native_removal_revalidates_fetch_evidence_without_the_initial_cac
     assert original(repository.main, "rev-parse", entry.branch).strip() == entry.head
     if invalidate:
         assert changed
-        assert report[0] == cleanup.Decision(str(entry.path), cleanup.MISSING_DEFAULT_FETCH)
+        assert report[0] == cleanup.RetainedDecision(str(entry.path), cleanup.MISSING_DEFAULT_FETCH)
         assert entry.path.is_dir()
         assert not (repository.paths.home / ".local/state/long-running-agent/cleanup-attempts.json").exists()
     else:
@@ -1640,12 +1641,14 @@ def test_merge_proof_cache_does_not_survive_between_native_reap_invocations(
         cleanup, "git", native_command_counter
     )
     first = cleanup.reap(repository.paths, apply=False)
-    assert first == [cleanup.Decision(str(initial.path), "commits are not proven merged into origin's default branch")]
+    assert first == [
+        cleanup.RetainedDecision(str(initial.path), "commits are not proven merged into origin's default branch")
+    ]
     original(initial.path, "push", "-q", "origin", initial.branch + ":refs/heads/main")
     original(repository.main, "fetch", "-q", "origin", "refs/heads/main:refs/remotes/origin/main")
     os.utime(repository.main / ".git/FETCH_HEAD", (repository.now, repository.now))
     second = cleanup.reap(repository.paths, apply=False)
-    assert second == [cleanup.Decision(str(initial.path), "eligible")]
+    assert second == [cleanup.RetainedDecision(str(initial.path), "eligible")]
     proof_reads = [call for call in calls if call.arguments == ("rev-parse", "--git-path", "FETCH_HEAD")]
     assert len(proof_reads) == 2
     assert initial.path.is_dir()
@@ -1926,7 +1929,7 @@ def test_unknown_budget_retains_native_inventory_without_inspection_or_state_rep
         cleanup, "references", inspect_references
     )
     report = cleanup.reap(repository.paths, apply=True)
-    assert report == [cleanup.Decision(str(entry.path), "native-removal budget inspection failed; retained")]
+    assert report == [cleanup.RetainedDecision(str(entry.path), "native-removal budget inspection failed; retained")]
     assert (ledger.read_bytes(), marker.read_bytes()) == before
     assert (entry.path / "source.txt").read_text() == "committed\n"
     assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
@@ -2240,7 +2243,7 @@ def test_nondisposable_native_status_retains_before_opening_an_earlier_ignored_c
     scans = observe_directory_scans(cache, monkeypatch)
     isolate_native_git(repository, monkeypatch)
     assert cleanup.reap(repository.paths, apply=True) == [
-        cleanup.Decision(str(entry.path), "tracked, untracked, or non-disposable ignored local files")
+        cleanup.RetainedDecision(str(entry.path), "tracked, untracked, or non-disposable ignored local files")
     ]
     assert scans == []
     assert (cache / "cache.bin").read_bytes() == b"disposable fixture"
@@ -2268,7 +2271,7 @@ def test_repeated_native_ignored_records_scan_one_root_and_final_validation_stil
     assert status.count("!! node_modules/") == 2
     scans = observe_directory_scans(modules, monkeypatch)
     isolate_native_git(repository, monkeypatch)
-    assert cleanup.reap(repository.paths, apply=False) == [cleanup.Decision(str(initial.path), "eligible")]
+    assert cleanup.reap(repository.paths, apply=False) == [cleanup.RetainedDecision(str(initial.path), "eligible")]
     assert scans == [modules]
     native = cleanup.git
     inventories = 0
@@ -2287,7 +2290,7 @@ def test_repeated_native_ignored_records_scan_one_root_and_final_validation_stil
         cleanup, "git", native_inventory
     )
     assert cleanup.reap(repository.paths, apply=True) == [
-        cleanup.Decision(str(initial.path), "ignored files may contain nested source repositories")
+        cleanup.RetainedDecision(str(initial.path), "ignored files may contain nested source repositories")
     ]
     assert inventories == 2
     assert scans == [modules, modules]
@@ -2326,11 +2329,7 @@ def test_ignored_generated_caches_below_tracked_source_can_accompany_native_remo
     assert eligible(repository, entry) == "eligible"
     isolate_native_git(repository, monkeypatch)
     report = cleanup.reap(repository.paths, apply=True)
-    assert report == [
-        cleanup.Decision(
-            str(entry.path), "removed clean merged worktree; branch retained", removed=True, attempted=True
-        )
-    ]
+    assert report == [cleanup.RemovedDecision(str(entry.path), "removed clean merged worktree; branch retained")]
     assert not entry.path.exists()
     assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
     assert cleanup.git(repository.main, "rev-parse", "HEAD:python/pkg/source.py") == source_blob
@@ -2619,7 +2618,7 @@ def test_cheap_checkout_vetoes_precede_real_object_alias_inspection(
         case _:
             pytest.fail("Unknown native checkout retention fixture")
     isolate_native_git(repository, monkeypatch)
-    assert cleanup.reap(repository.paths, apply=True) == [cleanup.Decision(str(entry.path), expected)]
+    assert cleanup.reap(repository.paths, apply=True) == [cleanup.RetainedDecision(str(entry.path), expected)]
     assert payload.is_file()
     assert cleanup.git(repository.main, "cat-file", "-t", entry.head).strip() == "commit"
     assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
@@ -3229,7 +3228,7 @@ def test_recent_successful_cache_stamp_keeps_weekly_admission_before_sweep_defer
     private_write(stamp, "current successful fixture verification\n")
     os.utime(stamp, (repository.now, repository.now))
     before = stamp.read_bytes(), stamp.stat().st_mtime_ns
-    decisions = [cleanup.Decision(str(repository.main), "native fixture attempt", attempted=True)]
+    decisions = [cleanup.ChargedDecision(str(repository.main), "native fixture attempt")]
     assert cleanup.cache_maintenance(repository.paths, state, decisions, elapsed=150) == (
         "skipped: weekly npm verification is not due"
     )
@@ -3387,7 +3386,7 @@ def test_dirty_native_candidate_is_retained_before_expensive_global_inspection(
         cleanup, "references", forbidden_live_inventory
     )
     assert cleanup.reap(repository.paths, apply=True) == [
-        cleanup.Decision(str(entry.path), "tracked, untracked, or non-disposable ignored local files")
+        cleanup.RetainedDecision(str(entry.path), "tracked, untracked, or non-disposable ignored local files")
     ]
     assert target.read_text() == "keep every unsaved byte\n"
     assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
@@ -3507,7 +3506,7 @@ def test_due_cache_verification_can_run_after_a_bounded_partial_worktree_page(
     evidence = native_cache(repository, monkeypatch)
     state = cleanup.state_directory(repository.paths)
     outcome = cleanup.cache_maintenance(
-        repository.paths, state, [cleanup.Decision("uninspected", cleanup.DEFERRED)], elapsed=60
+        repository.paths, state, [cleanup.RetainedDecision("uninspected", cleanup.DEFERRED)], elapsed=60
     )
     assert outcome.startswith("npm download cache verified")
     assert evidence.command.is_file()
@@ -3731,7 +3730,7 @@ def test_generated_scan_deadline_never_turns_an_unfinished_cache_into_removal(
         os, "scandir", slow_native_scan
     )
     page = cleanup.reap(repository.paths, apply=True)
-    assert page == [cleanup.Decision(str(entry.path), "inspection failed; retained")]
+    assert page == [cleanup.RetainedDecision(str(entry.path), "inspection failed; retained")]
     assert json.loads((cache / "cache.json").read_text()) == {}
     assert not (cleanup.state_directory(repository.paths) / "cleanup-attempts.json").exists()
     assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
@@ -3831,7 +3830,7 @@ def test_coded_probe_failure_preserves_native_budget_cursor_and_branch_until_fre
     state = cleanup.state_directory(repository.paths)
     first = cleanup.reap(repository.paths, apply=True)
     assert first == [
-        cleanup.Decision(
+        cleanup.RetainedDecision(
             str(entry.path),
             "live reference inspection failed: read-only process probe unavailable (worker-maps-too-large); retained",
         )
@@ -3844,7 +3843,7 @@ def test_coded_probe_failure_preserves_native_budget_cursor_and_branch_until_fre
     corrupt = True
     corrupt_report = cleanup.reap(repository.paths, apply=True)
     assert corrupt_report == [
-        cleanup.Decision(
+        cleanup.RetainedDecision(
             str(entry.path), "live reference inspection failed: read-only process probe unavailable; retained"
         )
     ]
@@ -4359,11 +4358,7 @@ def test_bootstrap_capacity_target_reaps_from_twenty_five_percent_without_resett
     normal = cleanup.reap(recent.paths, apply=True)
     assert all("24-hour" in row.reason and not row.attempted for row in normal)
     recovered = cleanup.reap(recent.paths, apply=True, capacity_recovery=True)
-    assert recovered == [
-        cleanup.Decision(
-            str(entry.path), "removed clean merged worktree; branch retained", removed=True, attempted=True
-        )
-    ]
+    assert recovered == [cleanup.RemovedDecision(str(entry.path), "removed clean merged worktree; branch retained")]
     receipts = cleanup_state.active_receipts(state, cleanup_state.AttemptStamp.current()).receipts
     assert receipts[:2] == prefix
     assert len(receipts) == 3

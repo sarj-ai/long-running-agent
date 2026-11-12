@@ -16,7 +16,7 @@ from threading import Event
 import time
 from typing import TYPE_CHECKING, Annotated, Final, Literal, Self, assert_never
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 import typer
 
 from long_running_agent.process import DEVNULL, PIPE, ChildProcess, ProcessTimeout, environment_snapshot, run, spawn
@@ -162,12 +162,39 @@ def persist_failure(state: Path, failure: Failure | None) -> None:
             private_write(state / FAILURE_FILE, failure.model_dump_json() + "\n")
 
 
-class WorktreeResult(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
+class _WorktreeResultDetails(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", from_attributes=True, frozen=True)
     path: Annotated[str, Field(min_length=1, max_length=4096)]
     reason: Annotated[str, Field(min_length=1, max_length=512)]
+
+
+class _WorktreeResultWire(_WorktreeResultDetails):
     removed: bool
     attempted: bool
+
+
+class RetainedWorktreeResult(_WorktreeResultDetails):
+    removed: Literal[False]
+    attempted: Literal[False]
+
+
+class ChargedWorktreeResult(_WorktreeResultDetails):
+    removed: Literal[False]
+    attempted: Literal[True]
+
+
+class RemovedWorktreeResult(_WorktreeResultDetails):
+    removed: Literal[True]
+    attempted: Literal[True]
+
+
+type _AttemptedWorktreeResult = Annotated[ChargedWorktreeResult | RemovedWorktreeResult, Field(discriminator="removed")]
+# Literal booleans accept integer equivalents; validate exact wire booleans first.
+type WorktreeResult = Annotated[
+    RetainedWorktreeResult | _AttemptedWorktreeResult,
+    Field(discriminator="attempted"),
+    BeforeValidator(_WorktreeResultWire.model_validate),
+]
 
 
 class WorkerReport(BaseModel):
@@ -189,7 +216,6 @@ class WorkerReport(BaseModel):
             or len(set(paths)) != len(paths)
             or any(not Path(path).is_absolute() for path in paths)
             or sum(row.attempted for row in self.worktrees) > self.max_removals
-            or any(row.removed and not row.attempted for row in self.worktrees)
         ):
             message = "Cleanup worker returned inconsistent results"
             raise ValueError(message)
