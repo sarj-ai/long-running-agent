@@ -40,7 +40,9 @@ ERROR: Final = "inspection incomplete"
 REQUEST_SECONDS: Final = 70
 PROCESS_ATTEMPTS: Final = 2
 PROCESS_EXIT_WAIT_SECONDS: Final = 0.1
-PACKAGE_MANAGERS: Final = frozenset({"uv", "uvx", "pip", "pip3", "pnpm", "npm", "npx", "yarn", "bun"})
+PACKAGE_MANAGERS: Final = frozenset(
+    {"uv", "uvx", "pip", "pip3", "pnpm", "npm", "npx", "yarn", "bun", "terraform", "sarj-local-check"}
+)
 CACHE_ENVIRONMENT: Final = frozenset(
     {b"NODE_COMPILE_CACHE", b"TMPDIR", b"TMP", b"TEMP", b"TF_PLUGIN_CACHE_DIR", b"TF_DATA_DIR"}
 )
@@ -399,7 +401,12 @@ def protect(path: str, candidates: AbstractSet[Path], result: ProcessReferences)
 def arguments(payload: bytes, candidates: AbstractSet[Path], result: ProcessReferences) -> None:
     for word in os.fsdecode(payload).split("\0"):
         title = Path(word.partition(" ")[0]).name
-        result.package_writer |= title in PACKAGE_MANAGERS or "pnpm.cjs" in word or "npm-cli.js" in word
+        result.package_writer |= (
+            title in PACKAGE_MANAGERS
+            or "pnpm.cjs" in word
+            or "npm-cli.js" in word
+            or word.endswith("/sarj/local-checks/background-check.py")
+        )
         result.zellij_running |= title == "zellij"
         result.protected.update(candidate for candidate in candidates if str(candidate) in word)
 

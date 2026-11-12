@@ -271,6 +271,8 @@ def remove(paths: RuntimePaths, observed: Cache) -> str:
     protected = cleanup.fresh_references(paths, observed.root)
     if protected.contains(observed.root):
         return "referenced by process, workspace, terminal, or container"
+    if shared_provider_cache(observed.root, observed.path) and protected.package_writer:
+        return "active package writer; shared cache retained"
     if not shutil.rmtree.avoids_symlink_attacks or mounted(observed.path, root=observed.root):
         return "unsafe removal or mount"
     if fingerprint(observed.root, observed.path, now=time.time()) != observed:
