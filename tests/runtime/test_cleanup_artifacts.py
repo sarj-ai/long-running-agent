@@ -110,6 +110,82 @@ def test_provider_downloads_are_independent_of_source_retention(
         assert (root / "private.env").read_text() == "private fixture data\n"
 
 
+def shared_provider(provider: Fixture, relative: str) -> Fixture:
+    target = provider.paths.home / relative
+    target.parent.mkdir(parents=True)
+    shutil.move(str(provider.target), str(target))
+    return Fixture(
+        provider.paths, target.parent, target, target / provider.binary.relative_to(provider.target), provider.now
+    )
+
+
+@pytest.mark.parametrize("relative", cleanup_artifacts.SHARED_PROVIDER_PATHS)
+def test_global_provider_cache_is_discovered_and_retired_without_parent_private_files(
+    provider: Fixture, monkeypatch: pytest.MonkeyPatch, relative: str
+) -> None:
+    fixture = shared_provider(provider, relative)
+    private = fixture.root / "credentials.tfrc.json"
+    private.write_text("private fixture configuration stays\n")
+    state = fixture.paths.home / "state"
+    state.mkdir(mode=0o700)
+    census(fixture, monkeypatch, cleanup.References(frozenset()))
+    report = cleanup_artifacts.recover(
+        fixture.paths, state, deadline=time.monotonic() + 30, temporary=fixture.paths.home / "unused"
+    )
+    assert report.inspected == report.removed == 1
+    assert report.reclaimed_bytes > 0
+    assert not fixture.target.exists()
+    assert fixture.root.is_dir()
+    assert private.read_text() == "private fixture configuration stays\n"
+    assert (provider.root / "source.txt").read_text() == "committed source\n"
+
+
+@pytest.mark.parametrize("relative", cleanup_artifacts.SHARED_PROVIDER_PATHS)
+@pytest.mark.parametrize("kind", ["process", "workspace", "terminal", "container", "queued"])
+def test_global_provider_cache_requires_fresh_activity_clearance(
+    provider: Fixture, monkeypatch: pytest.MonkeyPatch, relative: str, kind: str
+) -> None:
+    fixture = shared_provider(provider, relative)
+    references = {
+        "process": cleanup.References(frozenset({fixture.binary})),
+        "workspace": cleanup.References(frozenset(), workspaces=frozenset({fixture.root})),
+        "terminal": cleanup.References(frozenset(), arguments=(str(fixture.root),)),
+        "container": cleanup.References(frozenset(), mounted=frozenset({fixture.root})),
+        "queued": cleanup.References(frozenset(), arguments=(f"terraform --plugin-cache={fixture.target}",)),
+    }
+    observed = cleanup_artifacts.inspect(fixture.root, fixture.target, now=fixture.now)
+    census(fixture, monkeypatch, references[kind])
+    assert "referenced" in cleanup_artifacts.remove(fixture.paths, observed)
+    assert fixture.binary.is_file()
+
+
+@pytest.mark.parametrize("relative", cleanup_artifacts.SHARED_PROVIDER_PATHS)
+@pytest.mark.parametrize("kind", ["private", "target-symlink", "parent-symlink", "recent", "ancestor-git"])
+def test_global_provider_cache_preserves_filesystem_and_git_guards(provider: Fixture, relative: str, kind: str) -> None:
+    fixture = shared_provider(provider, relative)
+    now = fixture.now
+    match kind:
+        case "private":
+            (fixture.binary.parent / ".env").write_text("private fixture data stays\n")
+        case "target-symlink":
+            outside = fixture.target.with_name("preserved-provider-downloads")
+            fixture.target.rename(outside)
+            fixture.target.symlink_to(outside, target_is_directory=True)
+        case "parent-symlink":
+            outside = fixture.root.with_name("preserved-cache-parent")
+            fixture.root.rename(outside)
+            fixture.root.symlink_to(outside, target_is_directory=True)
+        case "recent":
+            now = time.time()
+        case "ancestor-git":
+            cleanup.git(fixture.paths.home, "init", "-q", "-b", "preserved")
+        case _:
+            pytest.fail(f"Unrecognized native cache protection: {kind}")
+    with pytest.raises(ValueError, match=r"unsafe|recent|unrecognized|Git"):
+        cleanup_artifacts.inspect(fixture.root, fixture.target, now=now)
+    assert fixture.binary.is_file()
+
+
 @pytest.mark.parametrize("kind", ["process", "workspace", "terminal", "container", "queued"])
 def test_fresh_reference_sources_protect_provider_downloads(
     provider: Fixture, monkeypatch: pytest.MonkeyPatch, kind: str

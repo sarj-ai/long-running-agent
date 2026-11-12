@@ -410,6 +410,12 @@ def test_confirmed_native_exit_can_be_skipped() -> None:
         "/home/other/code/private",
         "/home/other/.ssh",
         "{home}/.ssh",
+        "{home}",
+        "{home}/.cache",
+        "{home}/.cache/terraform-other",
+        "{home}/.cache/terraform/providers",
+        "{home}/.terraform.d/credentials.tfrc.json",
+        "{home}/.terraform.d-other",
         "{home}/code",
         "/tmp",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only rejection value; never creates a file.
         "/var/tmp",  # ruff: ignore[hardcoded-temp-file] -- Protocol-only rejection value; never creates a file.
@@ -461,6 +467,13 @@ def test_candidate_scope_is_strictly_lexical_and_uses_only_explicit_inspection_r
 def test_explicit_inspection_roots_accept_child_paths_without_resolving_or_creating_them(selected: str) -> None:
     home = Path("/home/registered-inspection-user")
     candidates = (Path(selected),)
+    assert probe.request(request_bytes(candidates), home) == probe.Request(NONCE, candidates)
+
+
+@pytest.mark.parametrize("relative", [".cache/terraform", ".terraform.d"], ids=["terraform-cache", "terraform-data"])
+def test_global_provider_cache_inspection_accepts_only_the_exact_parent(relative: str) -> None:
+    home = Path("/home/registered-inspection-user")
+    candidates = (home / relative,)
     assert probe.request(request_bytes(candidates), home) == probe.Request(NONCE, candidates)
 
 
