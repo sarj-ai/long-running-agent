@@ -220,7 +220,7 @@ def decode(payload: bytes) -> dict[str, JsonValue]:
     return value
 
 
-def candidate_path(value: object, roots: tuple[Path, ...]) -> Path:
+def candidate_path(value: object, roots: tuple[Path, ...], *, exact: tuple[Path, ...] = ()) -> Path:
     if (
         not isinstance(value, str)
         or len(os.fsencode(value)) > MAX_PATH_BYTES
@@ -230,7 +230,7 @@ def candidate_path(value: object, roots: tuple[Path, ...]) -> Path:
     candidate = Path(value)
     if not candidate.is_absolute() or ".." in candidate.parts or str(candidate) != value:
         raise InspectionError
-    if candidate in roots or not any(candidate.is_relative_to(root) for root in roots):
+    if candidate not in exact and (candidate in roots or not any(candidate.is_relative_to(root) for root in roots)):
         raise InspectionError
     return candidate
 
@@ -257,7 +257,7 @@ def request(payload: bytes, home: Path) -> Request:
         Path("/dev/shm"),  # ruff: ignore[hardcoded-temp-file] -- Fixed read-only query root; creates no files and grants no deletion authority.
     )
     for item in selected:
-        candidate = candidate_path(item, roots)
+        candidate = candidate_path(item, roots, exact=(home / ".cache/terraform", home / ".terraform.d"))
         if candidate in candidates:
             raise InspectionError
         candidates[candidate] = None

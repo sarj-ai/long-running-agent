@@ -43,6 +43,7 @@ PROVIDER_PATHS: Final = (
     "terraform/.terraform/providers",
     "terraform-data/providers",
 )
+SHARED_PROVIDER_PATHS: Final = (".cache/terraform/providers", ".terraform.d/plugin-cache")
 CACHE_PATHS: Final = (*PROVIDER_PATHS, "node-compile-cache", *cleanup_webpack_cache.PATHS)
 PROVIDER_DIRECTORIES: Final = frozenset(
     parent
@@ -203,7 +204,34 @@ def require_no_git_repository(root: Path) -> None:
     observed = cleanup.git_process(root, "rev-parse", "--show-toplevel", check=False)
     absent = "fatal: not a git repository (or any of the parent directories): .git"
     if observed.returncode != GIT_FATAL or observed.stdout or observed.stderr.strip() != absent:
-        message = "Webpack cache parent Git status is unverified"
+        message = "Cache parent Git status is unverified"
+        raise ValueError(message)
+
+
+def shared_provider_cache(root: Path, target: Path) -> bool:
+    return (root.name == ".terraform.d" and target == root / "plugin-cache") or (
+        root.parent.name == ".cache" and root.name == "terraform" and target == root / "providers"
+    )
+
+
+def require_git_cache(root: Path, target: Path) -> None:
+    arguments = git_arguments(root)
+    if Path(cleanup.git(root, *arguments, "rev-parse", "--show-toplevel").strip()) != root:
+        message = "Git checkout root differs"
+        raise ValueError(message)
+    relative = str(target.relative_to(root))
+    if cleanup.git_process(root, *arguments, "check-ignore", "-q", "--", relative, check=False).returncode:
+        message = "cache directory is not ignored"
+        raise ValueError(message)
+    literal = f":(literal){relative}"
+    if cleanup.git(root, *arguments, "ls-files", "-z", "--", literal) or cleanup.git(
+        root, *arguments, "ls-tree", "-r", "--name-only", "-z", "HEAD", "--", literal
+    ):
+        message = "cache directory contains tracked files"
+        raise ValueError(message)
+    directory = Path(cleanup.git(root, "rev-parse", "--absolute-git-dir").strip())
+    if any(cleanup_activity.present(directory / marker) for marker in cleanup.OPERATIONS):
+        message = "Git operation is in progress"
         raise ValueError(message)
 
 
@@ -223,25 +251,8 @@ def inspect(root: Path, target: Path, *, now: float) -> Cache:
     if not recognized:
         raise ValueError(message)
     if cleanup_activity.present(root / ".git"):
-        arguments = git_arguments(root)
-        if Path(cleanup.git(root, *arguments, "rev-parse", "--show-toplevel").strip()) != root:
-            message = "Git checkout root differs"
-            raise ValueError(message)
-        relative = str(target.relative_to(root))
-        if cleanup.git_process(root, *arguments, "check-ignore", "-q", "--", relative, check=False).returncode:
-            message = "cache directory is not ignored"
-            raise ValueError(message)
-        literal = f":(literal){relative}"
-        if cleanup.git(root, *arguments, "ls-files", "-z", "--", literal) or cleanup.git(
-            root, *arguments, "ls-tree", "-r", "--name-only", "-z", "HEAD", "--", literal
-        ):
-            message = "cache directory contains tracked files"
-            raise ValueError(message)
-        directory = Path(cleanup.git(root, "rev-parse", "--absolute-git-dir").strip())
-        if any(cleanup_activity.present(directory / marker) for marker in cleanup.OPERATIONS):
-            message = "Git operation is in progress"
-            raise ValueError(message)
-    elif webpack_cache:
+        require_git_cache(root, target)
+    elif webpack_cache or shared_provider_cache(root, target):
         require_no_git_repository(root)
     elif not node_cache and not root.name.startswith(("sarj-", "lra-")):
         message = "temporary directory has no recognized fixture owner"
@@ -321,6 +332,16 @@ def candidates(parents: Sequence[Path]) -> list[tuple[Path, Path]]:
     return sorted(found, key=lambda item: str(item[1]))
 
 
+def shared_provider_candidates(home: Path) -> list[tuple[Path, Path]]:
+    found: list[tuple[Path, Path]] = []
+    for relative in SHARED_PROVIDER_PATHS:
+        cleanup.inspection_check()
+        target = home / relative
+        if cleanup_activity.present(target):
+            found.append((target.parent, target))
+    return found
+
+
 @contextmanager
 def legacy_lock(paths: RuntimePaths) -> Generator[None]:
     directory = paths.home / ".local/state/sarj-disk-cleaner"
@@ -361,7 +382,10 @@ def recover_locked(
 ) -> Report:
     report = Report()
     reasons: Counter[str] = Counter()
-    rows = candidates((paths.code / "worktrees", paths.code / "sarj-ai", temporary))
+    rows = [
+        *candidates((paths.code / "worktrees", paths.code / "sarj-ai", temporary)),
+        *shared_provider_candidates(paths.home),
+    ]
     cursor = private_payload(state / CURSOR).decode().strip() if (state / CURSOR).exists() else ""
     rows.sort(key=lambda row: (str(row[1]) <= cursor, str(row[1])))
     for root, target in rows[:MAX_CANDIDATES]:
