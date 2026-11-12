@@ -17,11 +17,11 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 
-# Native layout: nodejs/node v24.21.0, v24.22.0 and v24.22.1
+# Native layout: nodejs/node v24.21.0, v24.22.0, v24.22.1 and v26.12.1
 # src/compile_cache.{cc,h}, CompileCacheHandler::Persist()/ReadCacheFile().
 MAGIC: Final = 0x8ADF_DBB2
 HEADER: Final = struct.Struct("=5I")
-MAX_ENTRIES: Final = 8192
+MAX_ENTRIES: Final = 16384
 MAX_NAMESPACES: Final = 32
 MAX_FILE_BYTES: Final = 16 * 1024 * 1024
 MAX_BYTES: Final = 256 * 1024 * 1024
@@ -85,7 +85,7 @@ def directory(path: Path) -> bool:
 
 
 def cache_files(target: Path, deadline: float) -> Generator[Path]:
-    pattern = rf"v24\.(?:21\.0|22\.[01])-x64-[0-9a-f]{{8}}-{os.getuid()}"
+    pattern = rf"(?:v24\.(?:21\.0|22\.[01])|v26\.12\.1)-x64-[0-9a-f]{{8}}-{os.getuid()}"
     with os.scandir(target) as roots:
         for index, root in enumerate(roots):
             cleanup.inspection_check()
