@@ -60,6 +60,23 @@ NODE_26_CACHE = base64.b64decode(
 )
 
 
+NODE_26_13_CACHE = base64.b64decode(
+    "stvfikQAAACAAwAAKSkq2dSn7tepBt7AUr3/l0QAACCz9UTPMiY/5GADAAAAAAAAAAAAAAEkUQMwB8RgAAAAAB8AAAABCAch"
+    "DwQEIQMQB7UBYgAAAAANAAAAAgQHRBIYPgAaHxfQAQAAACEHhREhAxwHrQFgAAAAAAUAAAAHSQkHyQoBGAcZAWIAAAAAAgAA"
+    "AAAAAAABAAAAAAAAAAgAAABIYAAAAAAKAAAAASRRAwwHzQFFYCoAAABBAAAAYAAAAAD/////RVkBTAdlDwgAATBQah70gr1L"
+    "AAAAL3Zhci90bXAvbHJhLWRpc2stbWFpbnRlbmFuY2UtMjAyNjExMTIvbm9kZTI2MTMtbmF0aXZlLXZubXk1anViL2ZpeHR1"
+    "cmUuY2pzAAAAAABhAAAAAAAAAAAAAAAAAAAAAEBiAAAAAAIAAAAAAAAAAAAAAAAAAABfAAAAARxKYAAAAAAFAAAABRii0AEB"
+    "DFBh8q+aXwcAAAByZXF1aXJlAAEMUGFW7NlKBgAAAG1vZHVsZQAAARBQYvK++tYKAAAAX19maWxlbmFtZQAAAAAAAAEQUGK6"
+    "mmMZCQAAAF9fZGlybmFtZQAAAAAAAABgAAAAAAAAAAABFFdgAAAAAAMAAAAYASRRAyQHxGAAAAAABQAAAAEIByEPBEQhAwwH"
+    "tQFhAAAAAAcAAAACBAYAE5ACACEHhREhAwwHrQFgAAAAAAEAAAAEAGIAAAAAAQAAAAAAAAAAAAAAiwAAALcAAABgAAAAAP//"
+    "//8BIAc9AWRDMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABEAAAARWAAAAAA/////wEMB+BhAAAAAAEAAAAG"
+    "AAAAAAAAAAQgYgAAAQAAAAIAABAACAAAAAD5GgAAAAAAABiRGAQYQGAAAAAACgAAAIEAW0BiAgADAAAAAAAL0AEAAgAAAPsa"
+    "AAAAAAAABRii0AFlKAAAAAYAAgAAAAAAAAAAACMAANAz9wEC0YcCBCnPiwMAAs5o+Pf29QU5BQQHDrcAYAAAAAD/////ASiS"
+    "ZMRxAcAAAAAAAAAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEQAAABFYAAAAAD/////QGAAAAAAGwAAAAEQk2IJAAAAAQAA"
+    "AAYUMAlAAAAAAwAAAAAAAACUYgUABgAAAAIAABIAAAEAAAD6GgAAAAAAAAsKCgoKCgoKCg=="
+)
+
+
 @dataclass(frozen=True)
 class NativeCache:
     target: Path
@@ -271,11 +288,11 @@ def test_genuine_node26_cache_uses_the_verified_native_format(tmp_path: Path, ta
     assert observed.allocated == payload.stat().st_blocks * 512
 
 
-@pytest.mark.parametrize("kind", ["newer", "uidless"])
-def test_unqualified_node26_namespace_variants_stay_protected(tmp_path: Path, kind: str) -> None:
+@pytest.mark.parametrize("kind", ["unknown-major", "uidless"])
+def test_unknown_node_major_and_uidless_namespaces_stay_protected(tmp_path: Path, kind: str) -> None:
     root = tmp_path / "node26-private"
     target = root / "node-compile-cache"
-    name = f"v26.12.2-x64-310b2ce3-{os.getuid()}" if kind == "newer" else "v26.12.1-x64-310b2ce3"
+    name = f"v27.0.0-x64-310b2ce3-{os.getuid()}" if kind == "unknown-major" else "v26.12.1-x64-310b2ce3"
     namespace = target / name
     namespace.mkdir(parents=True)
     payload = namespace / "4f68eddf"
@@ -283,6 +300,43 @@ def test_unqualified_node26_namespace_variants_stay_protected(tmp_path: Path, ki
     with pytest.raises(ValueError, match="unrecognized"):
         cleanup_artifacts.inspect(root, target, now=time.time() + 3 * cleanup.DAY)
     assert payload.read_bytes() == NODE_26_CACHE
+
+
+@pytest.mark.parametrize(
+    ("version", "payload"),
+    [
+        ("v24.0.0", NATIVE_CACHE),
+        ("v24.23.0", NATIVE_CACHE),
+        ("v26.13.0", NODE_26_13_CACHE),
+        ("v26.14.0", NODE_26_13_CACHE),
+    ],
+)
+def test_verified_node_format_survives_minor_version_changes(tmp_path: Path, version: str, payload: bytes) -> None:
+    root = tmp_path / "native-family-private"
+    target = root / "node-compile-cache"
+    namespace = target / f"{version}-x64-310b2ce3-{os.getuid()}"
+    namespace.mkdir(parents=True)
+    file = namespace / "c74c039d"
+    file.write_bytes(payload)
+    assert (
+        hashlib.sha256(NODE_26_13_CACHE).hexdigest()
+        == "92a06a3630edfbbc9e290694564536541b6366a80cd06e534f65678fa63a9834"
+    )
+    observed = cleanup_artifacts.inspect(root, target, now=time.time() + 3 * cleanup.DAY)
+    assert observed.allocated == file.stat().st_blocks * 512
+
+
+@pytest.mark.parametrize("version", ["v26.013.0", "v26.13.00", "v26.13.0-rc.1"])
+def test_noncanonical_node_version_names_remain_protected(tmp_path: Path, version: str) -> None:
+    root = tmp_path / "native-family-private"
+    target = root / "node-compile-cache"
+    namespace = target / f"{version}-x64-310b2ce3-{os.getuid()}"
+    namespace.mkdir(parents=True)
+    file = namespace / "c74c039d"
+    file.write_bytes(NODE_26_13_CACHE)
+    with pytest.raises(ValueError, match="unrecognized"):
+        cleanup_artifacts.inspect(root, target, now=time.time() + 3 * cleanup.DAY)
+    assert file.read_bytes() == NODE_26_13_CACHE
 
 
 def test_native_cache_larger_than_the_original_entry_limit_is_completely_inspected(tmp_path: Path) -> None:
