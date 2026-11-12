@@ -141,6 +141,17 @@ def test_global_provider_cache_is_discovered_and_retired_without_parent_private_
 
 
 @pytest.mark.parametrize("relative", cleanup_artifacts.SHARED_PROVIDER_PATHS)
+def test_shared_provider_cache_retains_an_active_package_writer(
+    provider: Fixture, monkeypatch: pytest.MonkeyPatch, relative: str
+) -> None:
+    fixture = shared_provider(provider, relative)
+    observed = cleanup_artifacts.inspect(fixture.root, fixture.target, now=fixture.now)
+    census(fixture, monkeypatch, cleanup.References(frozenset(), package_writer=True))
+    assert cleanup_artifacts.remove(fixture.paths, observed) == "active package writer; shared cache retained"
+    assert fixture.binary.is_file()
+
+
+@pytest.mark.parametrize("relative", cleanup_artifacts.SHARED_PROVIDER_PATHS)
 @pytest.mark.parametrize("kind", ["process", "workspace", "terminal", "container", "queued"])
 def test_global_provider_cache_requires_fresh_activity_clearance(
     provider: Fixture, monkeypatch: pytest.MonkeyPatch, relative: str, kind: str

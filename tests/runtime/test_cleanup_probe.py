@@ -741,6 +741,39 @@ def test_native_child_environment_only_cache_reference_is_preserved(process: Pro
         stop_child(child)
 
 
+@pytest.mark.parametrize(
+    ("queued", "writer"),
+    [
+        pytest.param("terraform", True, id="terraform"),
+        pytest.param("sarj-local-check", True, id="queued-verification"),
+        pytest.param("/usr/local/bin/sarj-local-check", True, id="absolute-launcher"),
+        pytest.param(
+            "/home/registered-inspection-user/.local/lib/sarj/local-checks/background-check.py",
+            True,
+            id="installed-admission-worker",
+        ),
+        pytest.param("terraform-other", False, id="unrelated-terraform-name"),
+        pytest.param("sarj-local-check-other", False, id="unrelated-launcher-name"),
+        pytest.param("/other/background-check.py", False, id="unrelated-background-worker"),
+    ],
+)
+def test_native_queued_commands_report_shared_cache_writers(queued: str, *, writer: bool) -> None:
+    child = spawn(
+        [sys.executable, "-c", "import sys;print('ready',flush=True);sys.stdin.buffer.read()", queued],
+        stdin=PIPE,
+        stdout=PIPE,
+        stderr=PIPE,
+    )
+    try:
+        assert child.stdout is not None
+        assert select.select([child.stdout], [], [], 5)[0]
+        assert child.stdout.readline() == b"ready\n"
+        found = probe.inspect_process(Path("/proc") / str(child.pid), (), os.getuid(), new_budget())
+        assert found.package_writer is writer
+    finally:
+        stop_child(child)
+
+
 @contextmanager
 def native_process(
     process: ProcessFixture,
