@@ -448,12 +448,13 @@ class Schedule:
     ) -> Phase:
         self.failures = 0
         self.last_result = result
-        self.last_run_at = wall
+        if result.cache != cleanup.CLEANUP_BUSY:
+            self.last_run_at = wall
         self.observe(space, now, thresholds=thresholds)
         pressured = any("pressure is high or unknown" in reason for reason in result.reasons)
         delay = (
             PRESSURE_SECONDS
-            if pressured or result.inventory_errors
+            if result.cache == cleanup.CLEANUP_BUSY or pressured or result.inventory_errors
             else (LOW_SPACE_SECONDS if self.capacity_recovery or result.inventory_pending else NORMAL_SECONDS)
         )
         incomplete = incomplete_inspection(result)
@@ -475,7 +476,8 @@ class Schedule:
 
 def incomplete_inspection(result: Summary) -> bool:
     return bool(
-        (result.artifacts is not None and any("inspection" in reason for reason in result.artifacts.reasons))
+        result.cache == cleanup.CLEANUP_BUSY
+        or (result.artifacts is not None and any("inspection" in reason for reason in result.artifacts.reasons))
         or result.inventory_errors
         or cleanup.DEFERRED in result.reasons
         or any("inspection failed" in reason for reason in result.reasons)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field, replace
 import errno
@@ -95,6 +95,7 @@ FINAL_PROOF_SECONDS: Final = 150
 REPORT_SECONDS: Final = 120
 COMMAND_TIMEOUT_STATUS: Final = 124
 DEFERRED: Final = "inspection deferred: sweep time budget exhausted; retained"
+CLEANUP_BUSY: Final = "skipped: cleanup lock is busy"
 REFERENCE_ATTEMPTS: Final = 2
 REFERENCE_RETRY_SECONDS: Final = 0.05
 ReferenceStage = Literal["processes", "terminals", "boot-policy", "containers", "workspaces", "workspace-containers"]
@@ -2148,7 +2149,25 @@ def cleanup_run(
         message = "Run cleanup as your own Linux user, never with sudo"
         raise RuntimeError(message)
     paths = RuntimePaths.current()
-    with cleanup_lock(paths) as state:
+    with ExitStack() as locks:
+        try:
+            state = locks.enter_context(cleanup_lock(paths))
+        except BlockingIOError:
+            typer.echo(
+                json.dumps(
+                    {
+                        "apply": apply,
+                        "max_removals": MAX_REMOVALS,
+                        "worktrees": [],
+                        "cache": CLEANUP_BUSY,
+                        "artifacts": None,
+                        "inventory_paged": paged,
+                        "inventory_pending": paged,
+                        "inventory_errors": 0,
+                    }
+                )
+            )
+            return
         started = time.monotonic()
         # Cache recovery has its own inventory and budget. Worktree retention
         # and a slow source review must not starve validated download cleanup.

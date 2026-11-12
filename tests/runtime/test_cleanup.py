@@ -3190,6 +3190,73 @@ def test_cleanup_lock_cannot_chmod_an_unrelated_hardlinked_file(tmp_path: Path) 
 @pytest.mark.skipif(
     os.getuid() == 0 or not Path("/proc/self").exists(), reason="cleanup CLI requires unprivileged Linux"
 )
+@pytest.mark.parametrize("paged", [False, True])
+def test_busy_cleanup_mutex_returns_a_deferred_report_without_inspecting_or_changing_work(
+    repository: Repository, monkeypatch: pytest.MonkeyPatch, paged: bool
+) -> None:
+    entry = repository.linked()
+
+    def private_paths(_cls: type[RuntimePaths]) -> RuntimePaths:
+        return repository.paths
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Route only native home discovery to a private fixture; the real mutex, Git checkout and CLI execute unchanged.
+        RuntimePaths, "current", classmethod(private_paths)
+    )
+    arguments = ["run", "--apply", "--artifacts"]
+    if paged:
+        arguments.append("--paged")
+    state = cleanup.state_directory(repository.paths)
+    receipt = state / "preserved-qualification-receipt"
+    private_write(receipt, "preserve completed native evidence\n")
+    with cleanup.cleanup_lock(repository.paths):
+        result = CliRunner().invoke(cleanup.app, arguments)
+        assert result.exit_code == 0, result.output
+        report = cleanup_daemon.WorkerReport.model_validate_json(result.stdout)
+        assert report.cache == cleanup.CLEANUP_BUSY
+        assert report.worktrees == []
+        assert report.artifacts is None
+        assert report.inventory_paged is paged
+        assert report.inventory_pending is paged
+        assert cleanup_daemon.incomplete_inspection(cleanup_daemon.summarize(report))
+        assert not cleanup_daemon.baseline_learning_eligible(cleanup_daemon.summarize(report))
+        assert entry.path.is_dir()
+        assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
+        assert receipt.read_text() == "preserve completed native evidence\n"
+        with (
+            pytest.raises(BlockingIOError, match="temporarily unavailable"),
+            cleanup.cleanup_lock(repository.paths),
+        ):
+            pytest.fail("The deferred worker released another cleanup's lock")
+
+
+@pytest.mark.skipif(
+    os.getuid() == 0 or not Path("/proc/self").exists(), reason="cleanup CLI requires unprivileged Linux"
+)
+def test_cleanup_mutex_deferral_does_not_hide_later_blocking_io_errors(
+    repository: Repository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def private_paths(_cls: type[RuntimePaths]) -> RuntimePaths:
+        return repository.paths
+
+    def unavailable_inventory(_paths: RuntimePaths) -> cleanup.InventoryPage:
+        message = "Native inventory was unavailable after acquiring the cleanup mutex"
+        raise BlockingIOError(message)
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Keep all mutable native state in the private repository fixture.
+        RuntimePaths, "current", classmethod(private_paths)
+    )
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Fail only the external Git inventory boundary after native mutex acquisition; this error must remain visible.
+        cleanup, "candidate_page", unavailable_inventory
+    )
+    result = CliRunner().invoke(cleanup.app, ["run", "--apply", "--paged"])
+    assert result.exit_code != 0
+    assert isinstance(result.exception, BlockingIOError)
+    assert cleanup.CLEANUP_BUSY not in result.stdout
+
+
+@pytest.mark.skipif(
+    os.getuid() == 0 or not Path("/proc/self").exists(), reason="cleanup CLI requires unprivileged Linux"
+)
 @pytest.mark.parametrize("refused", [False, True], ids=["successful-native-removals", "refused-native-attempts"])
 def test_native_cleanup_cli_defers_cache_after_every_attempted_removal(
     repository: Repository, monkeypatch: pytest.MonkeyPatch, refused: bool
