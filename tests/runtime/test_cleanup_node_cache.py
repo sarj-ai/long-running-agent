@@ -6,6 +6,8 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import time
 from typing import TYPE_CHECKING
 
@@ -291,6 +293,37 @@ def test_recent_node_cache_is_retained(node_cache: Fixture) -> None:
         cleanup_artifacts.inspect(node_cache.root, node_cache.target, now=time.time())
 
 
+def test_genuine_native_cache_reads_with_one_available_descriptor(node_cache: Fixture) -> None:
+    script = (
+        "from pathlib import Path\n"
+        "import resource,sys,time\n"
+        "from long_running_agent.runtime import cleanup_node_cache\n"
+        "resource.setrlimit(resource.RLIMIT_NOFILE,(4,4))\n"
+        "print(cleanup_node_cache.regular_file(Path(sys.argv[1]),time.monotonic()+10))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", script, str(node_cache.payload)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    assert int(result.stdout) == node_cache.payload.stat().st_size
+
+
+@pytest.mark.parametrize("chunk", [cleanup_node_cache.HEADER.size, 64, len(NATIVE_CACHE), len(NATIVE_CACHE) + 1])
+def test_genuine_native_cache_keeps_crc_and_eof_checks_across_chunk_boundaries(
+    node_cache: Fixture, monkeypatch: pytest.MonkeyPatch, chunk: int
+) -> None:
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Lower only the read chunk; genuine native bytes, checksum, EOF and filesystem identity checks remain real.
+        cleanup_node_cache, "CHUNK", chunk
+    )
+    assert cleanup_node_cache.installed(node_cache.target)
+    node_cache.payload.write_bytes(NATIVE_CACHE + b"unexpected trailing data")
+    assert not cleanup_node_cache.installed(node_cache.target)
+
+
 @pytest.mark.parametrize("tag", ["310b2ce3", "e5074b9b"])
 def test_genuine_node26_cache_uses_the_verified_native_format(tmp_path: Path, tag: str) -> None:
     root = tmp_path / "node26-private"
@@ -409,7 +442,7 @@ def test_genuine_node22_cache_keeps_native_disposal_guards(
 def test_native_cache_larger_than_the_original_entry_limit_is_completely_inspected(tmp_path: Path) -> None:
     root = tmp_path / "large-native-cache"
     native = native_cache(root)
-    for index in range(9000):
+    for index in range(40000):
         (native.payload.parent / f"{index:08x}").write_bytes(NATIVE_CACHE)
     observed = cleanup_artifacts.inspect(root, native.target, now=time.time() + 3 * cleanup.DAY)
     assert observed.allocated > 0
