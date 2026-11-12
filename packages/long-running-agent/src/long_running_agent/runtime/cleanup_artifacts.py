@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Annotated, Final, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from . import cleanup, cleanup_activity, cleanup_providers
+from . import cleanup, cleanup_activity, cleanup_node_cache, cleanup_providers
 from .cleanup_state import private_payload
 from .settings import private_write
 
@@ -42,6 +42,7 @@ PROVIDER_PATHS: Final = (
     "terraform/.terraform/providers",
     "terraform-data/providers",
 )
+CACHE_PATHS: Final = (*PROVIDER_PATHS, "node-compile-cache")
 PROVIDER_DIRECTORIES: Final = frozenset(
     parent
     for relative in PROVIDER_PATHS
@@ -123,10 +124,10 @@ def checked_metadata(item: Path, *, device: int, now: float) -> os.stat_result:
         or metadata.st_dev != device
         or not (stat.S_ISDIR(metadata.st_mode) or stat.S_ISREG(metadata.st_mode))
     ):
-        message = "unsafe provider contents"
+        message = "unsafe cache contents"
         raise ValueError(message)
     if max(metadata.st_mtime, metadata.st_ctime) > now - RETENTION_SECONDS:
-        message = "provider contents are too recent"
+        message = "cache contents are too recent"
         raise ValueError(message)
     return metadata
 
@@ -139,13 +140,14 @@ def fingerprint(root: Path, target: Path, *, now: float) -> Cache:
     digest = hashlib.sha256()
     pending = [target]
     count = allocated = 0
+    maximum = cleanup_node_cache.MAX_ENTRIES if target == root / "node-compile-cache" else MAX_ENTRIES
     while pending:
         cleanup.inspection_check()
         item = pending.pop()
         metadata = checked_metadata(item, device=observed.st_dev, now=now)
         count += 1
-        if count > MAX_ENTRIES:
-            message = "inspection deferred: provider entry budget"
+        if count > maximum:
+            message = "inspection deferred: cache entry budget"
             raise ValueError(message)
         digest.update(os.fsencode(item.relative_to(target)))
         digest.update(
@@ -167,8 +169,8 @@ def fingerprint(root: Path, target: Path, *, now: float) -> Cache:
         if stat.S_ISDIR(metadata.st_mode):
             with os.scandir(item) as entries:
                 for entry in entries:
-                    if len(pending) + count >= MAX_ENTRIES:
-                        message = "inspection deferred: provider entry budget"
+                    if len(pending) + count >= maximum:
+                        message = "inspection deferred: cache entry budget"
                         raise ValueError(message)
                     pending.append(Path(entry.path))
     return Cache(
@@ -189,7 +191,7 @@ def git_arguments(root: Path) -> tuple[str, ...]:
         return ()
     entries = cleanup.parse_worktrees(cleanup.git(root, "worktree", "list", "--porcelain", "-z"), root)
     if bare != "true" or not entries or not entries[0].bare or entries[0].path != root:
-        message = "Bare-primary provider root is unverified"
+        message = "Bare-primary cache root is unverified"
         raise ValueError(message)
     # Inspect this verified primary's downloads without changing core.bare or
     # making its shared Git storage eligible for checkout retirement.
@@ -198,8 +200,10 @@ def git_arguments(root: Path) -> tuple[str, ...]:
 
 def inspect(root: Path, target: Path, *, now: float) -> Cache:
     observed = fingerprint(root, target, now=now)
-    if not cleanup_providers.installed(target):
-        message = "unrecognized provider package contents"
+    node_cache = target == root / "node-compile-cache"
+    recognized = cleanup_node_cache.installed(target) if node_cache else cleanup_providers.installed(target)
+    if not recognized:
+        message = "unrecognized Node compile cache contents" if node_cache else "unrecognized provider package contents"
         raise ValueError(message)
     if cleanup_activity.present(root / ".git"):
         arguments = git_arguments(root)
@@ -208,23 +212,23 @@ def inspect(root: Path, target: Path, *, now: float) -> Cache:
             raise ValueError(message)
         relative = str(target.relative_to(root))
         if cleanup.git_process(root, *arguments, "check-ignore", "-q", "--", relative, check=False).returncode:
-            message = "provider directory is not ignored"
+            message = "cache directory is not ignored"
             raise ValueError(message)
         literal = f":(literal){relative}"
         if cleanup.git(root, *arguments, "ls-files", "-z", "--", literal) or cleanup.git(
             root, *arguments, "ls-tree", "-r", "--name-only", "-z", "HEAD", "--", literal
         ):
-            message = "provider directory contains tracked files"
+            message = "cache directory contains tracked files"
             raise ValueError(message)
         directory = Path(cleanup.git(root, "rev-parse", "--absolute-git-dir").strip())
         if any(cleanup_activity.present(directory / marker) for marker in cleanup.OPERATIONS):
             message = "Git operation is in progress"
             raise ValueError(message)
-    elif not root.name.startswith(("sarj-", "lra-")):
+    elif not node_cache and not root.name.startswith(("sarj-", "lra-")):
         message = "temporary directory has no recognized fixture owner"
         raise ValueError(message)
     if fingerprint(root, target, now=now) != observed:
-        message = "provider contents changed during inspection"
+        message = "cache contents changed during inspection"
         raise ValueError(message)
     return observed
 
@@ -233,14 +237,14 @@ def remove(paths: RuntimePaths, observed: Cache) -> str:
     # Worktree locks, source edits and unmerged commits protect the checkout;
     # they do not describe whether these validated downloads are disposable.
     if inspect(observed.root, observed.path, now=time.time()) != observed:
-        return "provider contents changed before removal"
+        return "cache contents changed before removal"
     protected = cleanup.fresh_references(paths, observed.root)
     if protected.contains(observed.root):
         return "referenced by process, workspace, terminal, or container"
     if not shutil.rmtree.avoids_symlink_attacks or mounted(observed.path, root=observed.root):
         return "unsafe removal or mount"
     if fingerprint(observed.root, observed.path, now=time.time()) != observed:
-        return "provider contents changed after live inspection"
+        return "cache contents changed after live inspection"
     cleanup.inspection_check()
     receipt = (
         paths.home
@@ -261,7 +265,7 @@ def remove(paths: RuntimePaths, observed: Cache) -> str:
             observed.modified,
             observed.changed,
         ):
-            return "provider directory identity changed"
+            return "cache directory identity changed"
         shutil.rmtree(observed.path.name, dir_fd=parent)
     finally:
         os.close(parent)
@@ -282,7 +286,7 @@ def candidates(parents: Sequence[Path]) -> list[tuple[Path, Path]]:
                 cleanup.inspection_check()
                 inspected += 1
                 if inspected > MAX_ROOTS:
-                    message = "inspection deferred: provider root budget"
+                    message = "inspection deferred: cache root budget"
                     raise ValueError(message)
                 if (
                     entry.name.startswith(".")
@@ -291,7 +295,7 @@ def candidates(parents: Sequence[Path]) -> list[tuple[Path, Path]]:
                 ):
                     continue
                 root = Path(entry.path)
-                for relative in PROVIDER_PATHS:
+                for relative in CACHE_PATHS:
                     target = root / relative
                     if cleanup_activity.present(target):
                         found.append((root, target))
@@ -324,7 +328,7 @@ def recover(paths: RuntimePaths, state: Path, *, deadline: float, temporary: Pat
             with legacy_lock(paths):
                 report = recover_locked(paths, state, deadline=deadline, temporary=temporary, outcomes=outcomes)
         except OSError, RuntimeError, ValueError, cleanup.LiveInspectionFailedError, cleanup.InspectionDeferredError:
-            reasons["inspection failed or deferred; remaining providers retained"] += 1
+            reasons["inspection failed or deferred; remaining caches retained"] += 1
     report.reasons.update(reasons)
     private_write(
         state / "cleanup-artifacts.json",
@@ -355,10 +359,10 @@ def recover_locked(
         except ValueError as error:
             reason = str(error)[:160] or "inspection failed"
         except OSError, RuntimeError:
-            reason = "inspection failed: provider filesystem or Git check unavailable"
+            reason = "inspection failed: cache filesystem or Git check unavailable"
             stop = True
         except cleanup.LiveInspectionFailedError, cleanup.InspectionDeferredError:
-            reason = "inspection failed or deferred; provider retained"
+            reason = "inspection failed or deferred; cache retained"
             stop = True
         reasons[reason] += 1
         outcomes.append({"path": str(target), "reason": reason})
