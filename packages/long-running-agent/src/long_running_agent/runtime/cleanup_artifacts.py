@@ -33,6 +33,7 @@ MAX_ROOTS: Final = 8192
 MAX_CANDIDATES: Final = 16
 MAX_ENTRIES: Final = 4096
 MOUNT_FIELDS: Final = 6
+GIT_FATAL: Final = 128
 MOUNT_BYTES: Final = 1024 * 1024
 CURSOR: Final = "cleanup-artifact-cursor.json"
 TEMPORARY_ROOT: Final = Path("/var/tmp")  # ruff: ignore[hardcoded-temp-file] — Inventory only; removals require ownership and fresh identity, mount and activity proofs.
@@ -198,6 +199,14 @@ def git_arguments(root: Path) -> tuple[str, ...]:
     return (f"--work-tree={root}",)
 
 
+def require_no_git_repository(root: Path) -> None:
+    observed = cleanup.git_process(root, "rev-parse", "--show-toplevel", check=False)
+    absent = "fatal: not a git repository (or any of the parent directories): .git"
+    if observed.returncode != GIT_FATAL or observed.stdout or observed.stderr.strip() != absent:
+        message = "Webpack cache parent Git status is unverified"
+        raise ValueError(message)
+
+
 def inspect(root: Path, target: Path, *, now: float) -> Cache:
     observed = fingerprint(root, target, now=now)
     node_cache = target == root / "node-compile-cache"
@@ -233,8 +242,7 @@ def inspect(root: Path, target: Path, *, now: float) -> Cache:
             message = "Git operation is in progress"
             raise ValueError(message)
     elif webpack_cache:
-        message = "Webpack cache parent is not a Git checkout"
-        raise ValueError(message)
+        require_no_git_repository(root)
     elif not node_cache and not root.name.startswith(("sarj-", "lra-")):
         message = "temporary directory has no recognized fixture owner"
         raise ValueError(message)
