@@ -17,6 +17,52 @@ if TYPE_CHECKING:
 HEAD = "a" * 40
 
 
+@pytest.mark.parametrize("repository_complete", [False, True])
+def test_existing_inventory_checkpoints_resume_without_rewriting_evidence(
+    tmp_path: Path, repository_complete: bool
+) -> None:
+    root = tmp_path / "code"
+    repository = root / "org/repo"
+    worktree = None if repository_complete else root / "worktrees/held"
+    payload = json.dumps(
+        {
+            "version": 1,
+            "repository": str(repository),
+            "worktree": None if worktree is None else str(worktree),
+            "errors": 2,
+        }
+    )
+    path = tmp_path / "cleanup-inventory-cursor.json"
+    private_write(path, payload)
+    cursor = cleanup_state.inventory_cursor(tmp_path, root)
+    assert cursor is not None
+    assert cursor.repository == repository
+    assert cursor.worktree == worktree
+    assert cursor.errors == 2
+    assert isinstance(
+        cursor, cleanup_state.CompleteRepositoryCursor if repository_complete else cleanup_state.VisitedWorktreeCursor
+    )
+    cleanup_state.save_inventory_cursor(tmp_path, root, cursor)
+    assert path.read_text() == payload
+    assert not (tmp_path / "cleanup-attempts.json").exists()
+
+
+@pytest.mark.parametrize("invalid_worktree", [1, True, "relative", "/another-user/checkout"])
+def test_invalid_inventory_checkpoint_is_quarantined_without_authorizing_cleanup(
+    tmp_path: Path, invalid_worktree: int | bool | str
+) -> None:
+    root = tmp_path / "code"
+    payload = json.dumps(
+        {"version": 1, "repository": str(root / "org/repo"), "worktree": invalid_worktree, "errors": 0}
+    )
+    path = tmp_path / "cleanup-inventory-cursor.json"
+    private_write(path, payload)
+    assert cleanup_state.inventory_cursor(tmp_path, root) is None
+    assert not path.exists()
+    assert path.with_name(path.name + ".invalid").read_text() == payload
+    assert not (tmp_path / "cleanup-attempts.json").exists()
+
+
 @pytest.fixture
 def stamp() -> cleanup_state.AttemptStamp:
     return cleanup_state.AttemptStamp(wall=1000000.0, uptime=1000.0, boot_id=UUID(int=1))

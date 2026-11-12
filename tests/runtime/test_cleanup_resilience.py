@@ -141,7 +141,7 @@ def test_disappearing_cursor_and_untrusted_progress_cannot_authorize_removal(pat
     assert [entry.path for entry in page.entries] == [checkout]
     assert cursor_path.with_name(cursor_path.name + ".invalid").read_text() == payload
     cleanup_state.save_inventory_cursor(
-        state, paths.code, cleanup_state.InventoryCursor(repository=paths.code / "org/previously-deleted")
+        state, paths.code, cleanup_state.CompleteRepositoryCursor(repository=paths.code / "org/previously-deleted")
     )
     assert [entry.path for entry in cleanup.candidate_page(paths).entries] == [checkout]
     assert (checkout / "source.txt").is_file()
@@ -379,7 +379,9 @@ def test_saved_summary_rejects_inconsistent_partial_inventory() -> None:
 
 def test_transient_reference_failure_retries_before_normal_cadence() -> None:
     report = cleanup_daemon.WorkerReport.model_validate_json(worker_payload())
-    report.worktrees[0].reason = "live reference inspection failed; retained"
+    report.worktrees[0] = report.worktrees[0].model_validate(
+        {**report.worktrees[0].model_dump(), "reason": "live reference inspection failed; retained"}
+    )
     report.inventory_pending = False
     result = cleanup_daemon.summarize(report)
     schedule = cleanup_daemon.Schedule.new()
@@ -456,7 +458,7 @@ def test_zero_review_budget_preserves_the_existing_inventory_checkpoint(
         cleanup.git(main, "worktree", "add", "-q", "--detach", str(paths.code / f"worktrees/{name}"), "HEAD")
     state = cleanup.state_directory(paths)
     first = cleanup.candidate_page(paths).entries[0]
-    cursor = cleanup_state.InventoryCursor(repository=main, worktree=first.path)
+    cursor = cleanup_state.VisitedWorktreeCursor(repository=main, worktree=first.path)
     cleanup_state.save_inventory_cursor(state, paths.code, cursor)
     before = (state / "cleanup-inventory-cursor.json").read_bytes()
     batch = cleanup.candidate_page(paths)
@@ -479,7 +481,9 @@ def test_zero_review_budget_preserves_the_existing_inventory_checkpoint(
 
 def test_deferred_sweep_is_blocked_and_retries_without_claiming_retention() -> None:
     report = cleanup_daemon.WorkerReport.model_validate_json(worker_payload())
-    report.worktrees[0].reason = cleanup.DEFERRED
+    report.worktrees[0] = report.worktrees[0].model_validate(
+        {**report.worktrees[0].model_dump(), "reason": cleanup.DEFERRED}
+    )
     report.inventory_pending = False
     summary = cleanup_daemon.summarize(report)
     schedule = cleanup_daemon.Schedule.new()
@@ -495,7 +499,9 @@ def test_live_heartbeat_never_masks_an_incomplete_inspection(
     monkeypatch.setenv("HOME", str(paths.home))
     report = cleanup_daemon.WorkerReport.model_validate_json(worker_payload())
     if deferred:
-        report.worktrees[0].reason = cleanup.DEFERRED
+        report.worktrees[0] = report.worktrees[0].model_validate(
+            {**report.worktrees[0].model_dump(), "reason": cleanup.DEFERRED}
+        )
     outcome = cleanup_daemon.summarize(report)
     schedule = cleanup_daemon.Schedule.new()
     space = cleanup_daemon.Space(total=100, available=99)

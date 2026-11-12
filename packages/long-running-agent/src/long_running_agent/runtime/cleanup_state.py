@@ -134,28 +134,43 @@ def quarantine_advisory(path: Path, *, limit: int = PRIVATE_LIMIT) -> None:
     path.replace(backup)
 
 
-class InventoryCursor(BaseModel):
+class _InventoryCursorDetails(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
     version: Annotated[int, Field(ge=1, le=1)] = 1
     repository: Path
-    worktree: Path | None = None
     errors: Annotated[int, Field(ge=0, le=4096)] = 0
 
-    def within(self, root: Path) -> None:
-        if self.worktree == root:
-            message = "Primary code root is not a candidate worktree"
+
+class CompleteRepositoryCursor(_InventoryCursorDetails):
+    worktree: None = None
+
+
+class VisitedWorktreeCursor(_InventoryCursorDetails):
+    worktree: Path
+
+
+type InventoryCursor = CompleteRepositoryCursor | VisitedWorktreeCursor
+
+
+class InventoryCheckpoint(RootModel[InventoryCursor]):
+    model_config = ConfigDict(strict=True, frozen=True)
+
+
+def validate_inventory_cursor(cursor: InventoryCursor, root: Path) -> None:
+    if cursor.worktree == root:
+        message = "Primary code root is not a candidate worktree"
+        raise ValueError(message)
+    for path in (cursor.repository, cursor.worktree):
+        if path is None:
+            continue
+        if (
+            not path.is_absolute()
+            or not path.is_relative_to(root)
+            or ".." in path.parts
+            or len(os.fsencode(path)) > CURSOR_LIMIT // 2
+        ):
+            message = "Unknown candidate-discovery progress path"
             raise ValueError(message)
-        for path in (self.repository, self.worktree):
-            if path is None:
-                continue
-            if (
-                not path.is_absolute()
-                or not path.is_relative_to(root)
-                or ".." in path.parts
-                or len(os.fsencode(path)) > CURSOR_LIMIT // 2
-            ):
-                message = "Unknown candidate-discovery progress path"
-                raise ValueError(message)
 
 
 def inventory_cursor(state: Path, root: Path) -> InventoryCursor | None:
@@ -165,8 +180,8 @@ def inventory_cursor(state: Path, root: Path) -> InventoryCursor | None:
     except FileNotFoundError:
         return None
     try:
-        cursor = InventoryCursor.model_validate_json(payload)
-        cursor.within(root)
+        cursor = InventoryCheckpoint.model_validate_json(payload).root
+        validate_inventory_cursor(cursor, root)
     except ValueError:
         quarantine_advisory(path, limit=CURSOR_LIMIT)
         return None
@@ -175,11 +190,12 @@ def inventory_cursor(state: Path, root: Path) -> InventoryCursor | None:
 
 def save_inventory_cursor(state: Path, root: Path, cursor: InventoryCursor | None) -> None:
     path = state / "cleanup-inventory-cursor.json"
-    inventory_cursor(state, root)
+    if inventory_cursor(state, root) == cursor:
+        return
     if cursor is None:
         path.unlink(missing_ok=True)
         return
-    cursor.within(root)
+    validate_inventory_cursor(cursor, root)
     payload = cursor.model_dump_json() + "\n"
     if len(payload.encode()) > CURSOR_LIMIT:
         message = "Candidate-discovery progress exceeds its private limit"
