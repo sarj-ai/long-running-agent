@@ -11,7 +11,7 @@ import sys
 import time
 from typing import TYPE_CHECKING
 
-from long_running_agent.runtime import cleanup, cleanup_artifacts, cleanup_node_cache
+from long_running_agent.runtime import cleanup, cleanup_artifacts, cleanup_daemon, cleanup_node_cache
 from long_running_agent.runtime.settings import RuntimePaths
 import pytest
 
@@ -291,6 +291,46 @@ def test_qualified_node_native_layouts(tmp_path: Path, version: str) -> None:
 def test_recent_node_cache_is_retained(node_cache: Fixture) -> None:
     with pytest.raises(ValueError, match="too recent"):
         cleanup_artifacts.inspect(node_cache.root, node_cache.target, now=time.time())
+
+
+@pytest.mark.parametrize("corrupt", [False, True], ids=["native", "corrupted"])
+def test_expired_native_validation_reports_deferred_cleanup(
+    node_cache: Fixture, monkeypatch: pytest.MonkeyPatch, corrupt: bool
+) -> None:
+    fixture = node_cache
+    payload = NATIVE_CACHE[:-1] + bytes([NATIVE_CACHE[-1] ^ 1]) if corrupt else NATIVE_CACHE
+    fixture.payload.write_bytes(payload)
+    state = fixture.paths.home / "state"
+    state.mkdir()
+    elapsed = 0.0
+    native_read = os.pread
+
+    def clock() -> float:
+        return elapsed
+
+    def slow_read(descriptor: int, size: int, offset: int) -> bytes:
+        nonlocal elapsed
+        block = native_read(descriptor, size, offset)
+        elapsed = cleanup_node_cache.SECONDS + 1.0
+        return block
+
+    census(fixture, monkeypatch, cleanup.References(frozenset()))
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Advance only elapsed time during a genuine native file read; do not wait for the production timeout.
+        time, "monotonic", clock
+    )
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Read actual native cache bytes and simulate the observed slow filesystem boundary.
+        os, "pread", slow_read
+    )
+    report = cleanup_artifacts.recover(fixture.paths, state, deadline=60, temporary=fixture.paths.home / "temporary")
+    assert report.inspected == 1
+    assert report.removed == report.reclaimed_bytes == 0
+    assert "inspection failed or deferred; cache retained" in report.reasons
+    assert "unrecognized Node compile cache contents" not in report.reasons
+    summary = cleanup_daemon.Summary(worktrees=0, attempted=0, removed=0, reasons={}, cache="", artifacts=report)
+    assert cleanup_daemon.incomplete_inspection(summary)
+    assert fixture.payload.read_bytes() == payload
+    assert (fixture.root / "source.txt").read_text() == "committed authored source\n"
+    assert (state / cleanup_artifacts.CURSOR).read_text().strip() == str(fixture.target)
 
 
 def test_genuine_native_cache_reads_with_one_available_descriptor(node_cache: Fixture) -> None:
