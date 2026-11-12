@@ -158,6 +158,72 @@ def test_live_references_retain_native_webpack_cache(
     assert (fixture.target / "index.pack").is_file()
 
 
+@pytest.mark.parametrize("kind", ["disposable", "process", "workspace", "terminal", "container", "queued"])
+def test_native_webpack_cache_without_git_preserves_private_and_active_parent_work(
+    webpack_cache: Fixture, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    root = webpack_cache.root.parent / "completed-build"
+    target = root / cleanup_webpack_cache.PATHS[0]
+    cache_files(target)
+    private = root / "private.env"
+    private.write_text("private authored data stays")
+    source = root / "source.txt"
+    source.write_text("authored build source stays")
+    fixture = Fixture(webpack_cache.paths, root, target, webpack_cache.now)
+    references = {
+        "disposable": cleanup.References(frozenset()),
+        "process": cleanup.References(frozenset({target / "0.pack"})),
+        "workspace": cleanup.References(frozenset(), workspaces=frozenset({root})),
+        "terminal": cleanup.References(frozenset(), arguments=(str(root),)),
+        "container": cleanup.References(frozenset(), mounted=frozenset({root})),
+        "queued": cleanup.References(frozenset(), arguments=(f"check --cwd={root}",)),
+    }
+    observed = cleanup_artifacts.inspect(root, target, now=fixture.now)
+    census(fixture, monkeypatch, references[kind])
+    reason = cleanup_artifacts.remove(fixture.paths, observed)
+    if kind == "disposable":
+        assert reason == "removed"
+        assert not target.exists()
+    else:
+        assert "referenced" in reason
+        assert (target / "index.pack").is_file()
+    assert private.read_text() == "private authored data stays"
+    assert source.read_text() == "authored build source stays"
+
+
+@pytest.mark.parametrize("kind", ["index", "head", "broken"])
+def test_native_webpack_cache_with_ancestor_or_unresolved_git_stays_protected(
+    webpack_cache: Fixture, kind: str
+) -> None:
+    parent = webpack_cache.root / "nested-parent"
+    root = parent / "completed-build"
+    target = root / cleanup_webpack_cache.PATHS[0]
+    cache_files(target)
+    relative = str((target / "index.pack").relative_to(webpack_cache.root))
+    if kind == "broken":
+        (parent / ".git").write_text(f"gitdir: {parent / 'missing-metadata'}\n")
+    else:
+        cleanup.git(webpack_cache.root, "add", "-f", "--", relative)
+        if kind == "head":
+            cleanup.git(
+                webpack_cache.root,
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+                "commit",
+                "-qm",
+                "tracked native fixture",
+            )
+            cleanup.git(webpack_cache.root, "rm", "--cached", "--", relative)
+    with pytest.raises(ValueError, match="Git status is unverified"):
+        cleanup_artifacts.inspect(root, target, now=webpack_cache.now)
+    assert (target / "index.pack").is_file()
+    assert (webpack_cache.root / "source.txt").read_text() == "committed authored source\n"
+
+
 @pytest.mark.parametrize(
     "kind",
     [
