@@ -43,6 +43,23 @@ NATIVE_CACHE = base64.b64decode(
 )
 
 
+NODE_26_CACHE = base64.b64decode(
+    "stvfikQAAACIAwAAKSkq2VghSnepBt7AUr3/l0QAACCz9UTPMiY/5GgDAAAAAAAAAAAAAAEkUQMwB8RgAAAAAB8AAAABCAch"
+    "DwQEIQMQB7UBYgAAAAANAAAAAgQHRBIYPgAaHxfQAQAAACEHhREhAxwHrQFgAAAAAAUAAAAHSQkHyQoBGAcZAWIAAAAAAgAA"
+    "AAAAAAABAAAAAAAAAAgAAABIYAAAAAAKAAAAASRRAwwHzQFFYCoAAABBAAAAYAAAAAD/////RVkBTAdlDwgAATRQa9pwYUxR"
+    "AAAAL3Zhci90bXAvbHJhLWRpc2stbWFpbnRlbmFuY2UtMjAyNjExMTIvbm9kZTI2LW5hdGl2ZS1maXh0dXJlLXkyb2ZlZmU1"
+    "L2ZpeHR1cmUuY2pzAAAAAAAAAGEAAAAAAAAAAAAAAAAAAAAAQGIAAAAAAgAAAAAAAAAAAAAAAAAAAF8AAAABHEpgAAAAAAUA"
+    "AAAFGKLQAQEMUGGOY+nGBwAAAHJlcXVpcmUAAQxQYVqI6bEGAAAAbW9kdWxlAAABEFBintIWXAoAAABfX2ZpbGVuYW1lAAAA"
+    "AAAAARBQYt5X4z0JAAAAX19kaXJuYW1lAAAAAAAAAGAAAAAAAAAAAAEUV2AAAAAAAwAAABgBJFEDJAfEYAAAAAAFAAAAAQgH"
+    "IQ8ERCEDDAe1AWEAAAAABwAAAAIEBgATkAIAIQeFESEDDAetAWAAAAAAAQAAAAQAYgAAAAABAAAAAAAAAAAAAACLAAAAtwAA"
+    "AGAAAAAA/////wEgBz0BZEMwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEQAAABFYAAAAAD/////AQwH4GEA"
+    "AAAAAQAAAAYAAAAAAAAABCBiAAABAAAAAgAAEAAIAAAAAPkaAAAAAAAAGJEYBBhAYAAAAAAKAAAAgQBbQGICAAMAAAAAAAvQ"
+    "AQACAAAA+xoAAAAAAAAFGKLQAWUoAAAABgACAAAAAAAAAAAAIwAA0DP3AQLRhwIEKc+LAwACzmj49/b1BTkFBAcOtwBgAAAA"
+    "AP////8BKJJkxHEBwAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARAAAAEVgAAAAAP////9AYAAAAAAbAAAAARCT"
+    "YgkAAAABAAAABhQwCUAAAAADAAAAAAAAAJRiBQAGAAAAAgAAEgAAAQAAAPoaAAAAAAAACwoKCgoKCgoK"
+)
+
+
 @dataclass(frozen=True)
 class NativeCache:
     target: Path
@@ -237,6 +254,45 @@ def test_qualified_node_native_layouts(tmp_path: Path, version: str) -> None:
 def test_recent_node_cache_is_retained(node_cache: Fixture) -> None:
     with pytest.raises(ValueError, match="too recent"):
         cleanup_artifacts.inspect(node_cache.root, node_cache.target, now=time.time())
+
+
+@pytest.mark.parametrize("tag", ["310b2ce3", "e5074b9b"])
+def test_genuine_node26_cache_uses_the_verified_native_format(tmp_path: Path, tag: str) -> None:
+    root = tmp_path / "node26-private"
+    target = root / "node-compile-cache"
+    namespace = target / f"v26.12.1-x64-{tag}-{os.getuid()}"
+    namespace.mkdir(parents=True)
+    payload = namespace / "4f68eddf"
+    payload.write_bytes(NODE_26_CACHE)
+    assert (
+        hashlib.sha256(NODE_26_CACHE).hexdigest() == "16e77c4aa7ec02008e15bd47590c0a775237372e3ddb1eecd2c8e7b0cbe600f5"
+    )
+    observed = cleanup_artifacts.inspect(root, target, now=time.time() + 3 * cleanup.DAY)
+    assert observed.allocated == payload.stat().st_blocks * 512
+
+
+@pytest.mark.parametrize("kind", ["newer", "uidless"])
+def test_unqualified_node26_namespace_variants_stay_protected(tmp_path: Path, kind: str) -> None:
+    root = tmp_path / "node26-private"
+    target = root / "node-compile-cache"
+    name = f"v26.12.2-x64-310b2ce3-{os.getuid()}" if kind == "newer" else "v26.12.1-x64-310b2ce3"
+    namespace = target / name
+    namespace.mkdir(parents=True)
+    payload = namespace / "4f68eddf"
+    payload.write_bytes(NODE_26_CACHE)
+    with pytest.raises(ValueError, match="unrecognized"):
+        cleanup_artifacts.inspect(root, target, now=time.time() + 3 * cleanup.DAY)
+    assert payload.read_bytes() == NODE_26_CACHE
+
+
+def test_native_cache_larger_than_the_original_entry_limit_is_completely_inspected(tmp_path: Path) -> None:
+    root = tmp_path / "large-native-cache"
+    native = native_cache(root)
+    for index in range(9000):
+        (native.payload.parent / f"{index:08x}").write_bytes(NATIVE_CACHE)
+    observed = cleanup_artifacts.inspect(root, native.target, now=time.time() + 3 * cleanup.DAY)
+    assert observed.allocated > 0
+    assert native.payload.read_bytes() == NATIVE_CACHE
 
 
 def test_oversized_node_cache_file_is_retained_without_reading_it(node_cache: Fixture) -> None:
