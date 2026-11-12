@@ -22,7 +22,7 @@ import typer
 
 from long_running_agent.process import CommandError, environment_snapshot, run
 
-from . import cleanup_activity, cleanup_capacity, cleanup_inspection, cleanup_publication
+from . import cleanup_activity, cleanup_artifacts, cleanup_capacity, cleanup_inspection, cleanup_publication
 from .cleanup_state import (
     CAPACITY_ATTEMPTS,
     MAX_ATTEMPTS,
@@ -178,6 +178,7 @@ class Worktree:
     branch: str
     blocked: bool
     detached: bool = False
+    bare: bool = False
 
 
 @dataclass(frozen=True)
@@ -467,9 +468,36 @@ def git(path: Path, *arguments: str, timeout: float = 15) -> str:
     return result.stdout
 
 
+def complete_bare_inventory(text: str, repository: Path) -> str:
+    records = text.split("\0\0")
+    pairs = [field.partition(" ") for field in records[0].split("\0") if field]
+    fields = {key: value for key, _, value in pairs}
+    if "bare" not in fields or fields.get("HEAD"):
+        return text
+    if len(fields) != len(pairs) or set(fields) != {"worktree", "bare"} or fields["bare"]:
+        message = "Unrecognized bare-primary inventory record; retained"
+        raise RuntimeError(message)
+    primary = Path(fields["worktree"])
+    if not primary.is_absolute() or git(repository, "rev-parse", "--is-bare-repository").strip() != "true":
+        message = "Bare-primary repository identity is unverified; retained"
+        raise RuntimeError(message)
+    common = Path(git(repository, "rev-parse", "--path-format=absolute", "--git-common-dir").strip())
+    if primary.resolve() not in {repository.resolve(), common.resolve()}:
+        message = "Bare-primary path does not match its repository; retained"
+        raise RuntimeError(message)
+    head = git(repository, "rev-parse", "--verify", "HEAD").strip()
+    if re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", head) is None:
+        message = "Bare repository HEAD is unavailable; retained"
+        raise RuntimeError(message)
+    records[0] += "\0HEAD " + head
+    return "\0\0".join(records)
+
+
 def parse_worktrees(text: str, repository: Path) -> list[Worktree]:
+    normalized = complete_bare_inventory(text, repository)
+    bare_primary = normalized != text
     entries: list[Worktree] = []
-    for record in text.split("\0\0"):
+    for record in normalized.split("\0\0"):
         if not record:
             continue
         fields: dict[str, str] = {}
@@ -502,6 +530,7 @@ def parse_worktrees(text: str, repository: Path) -> list[Worktree]:
                 or ("detached" in fields and (bool(fields["detached"]) or "branch" in fields))
                 or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", fields["HEAD"]) is None,
                 "detached" in fields,
+                bare=bare_primary and not entries,
             )
         )
     return entries
@@ -1398,7 +1427,7 @@ def local_files(path: Path) -> str:
         relative = Path(record[3:])
         if not record.startswith("!! ") or relative.is_absolute() or ".." in relative.parts:
             return "tracked, untracked, or non-disposable ignored local files"
-        if generated_install_state(path, relative):
+        if generated_install_state(path, relative) or cleanup_artifacts.empty_provider_parent(path, relative):
             continue
         generated_parts = next((index + 1 for index, part in enumerate(relative.parts) if part in GENERATED), None)
         if generated_parts is None:
@@ -1542,7 +1571,7 @@ def registered_candidate(entry: Worktree, root: Path) -> Worktree | None:
         (left.st_dev, left.st_ino) != (right.st_dev, right.st_ino) for left, right in zip(before, after, strict=True)
     ):
         return None
-    if not entries or entries[0].path != entry.repository or entries[0].blocked:
+    if not entries or entries[0].path != entry.repository or (entries[0].blocked and not entries[0].bare):
         return None
     matches = [item for item in entries[1:] if item.path == entry.path]
     return matches[0] if len(matches) == 1 else None
@@ -2049,6 +2078,7 @@ def cleanup_run(
     apply: bool = False,
     capacity_recovery: bool = False,
     paged: bool = False,
+    artifacts: bool = False,
     min_age_days: Annotated[
         int,
         typer.Option(
@@ -2064,6 +2094,13 @@ def cleanup_run(
     paths = RuntimePaths.current()
     with cleanup_lock(paths) as state:
         started = time.monotonic()
+        # Cache recovery has its own inventory and budget. Worktree retention
+        # and a slow source review must not starve validated download cleanup.
+        recovered = (
+            cleanup_artifacts.recover(paths, state, deadline=started + cleanup_artifacts.SWEEP_SECONDS)
+            if apply and artifacts
+            else None
+        )
         try:
             batch = candidate_page(paths) if paged else None
             progress = ReviewProgress() if apply and batch is not None else None
@@ -2092,6 +2129,7 @@ def cleanup_run(
                     "max_removals": MAX_REMOVALS,
                     "worktrees": [asdict(item) for item in decisions],
                     "cache": cache,
+                    "artifacts": None if recovered is None else recovered.model_dump(),
                     "inventory_paged": paged,
                     "inventory_pending": False if batch is None else batch.pending,
                     "inventory_errors": 0 if batch is None else batch.errors,
