@@ -345,6 +345,54 @@ def test_bare_inventory_keeps_native_linked_worktree_lock(
     assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
 
 
+@pytest.mark.parametrize(
+    "relative",
+    [
+        ".cache/terraform/providers",
+        ".terraform/providers",
+        "terraform/.terraform/providers",
+        "terraform-data/providers",
+    ],
+)
+def test_empty_provider_directory_allows_native_retirement_without_losing_branch(
+    repository: Repository, monkeypatch: pytest.MonkeyPatch, relative: str
+) -> None:
+    entry = repository.linked("empty-provider")
+    exclude = repository.main / ".git/info/exclude"
+    exclude.write_text(exclude.read_text() + ".cache/\n.terraform/\nterraform-data/\n")
+    (entry.path / relative).mkdir(parents=True)
+    isolate_native_git(repository, monkeypatch)
+    decisions = cleanup.reap(repository.paths, apply=True)
+    assert any(row.path == str(entry.path) and row.removed for row in decisions)
+    assert not entry.path.exists()
+    assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
+    assert (repository.main / "source.txt").read_text() == "committed\n"
+
+
+@pytest.mark.parametrize("payload", ["private-file", "unknown-directory", "symlink"])
+def test_known_provider_directory_with_payload_keeps_checkout_and_source(
+    repository: Repository, monkeypatch: pytest.MonkeyPatch, payload: str
+) -> None:
+    entry = repository.linked("provider-payload")
+    exclude = repository.main / ".git/info/exclude"
+    exclude.write_text(exclude.read_text() + ".cache/\n")
+    target = entry.path / ".cache/terraform/providers"
+    target.mkdir(parents=True)
+    match payload:
+        case "private-file":
+            (target / ".env").write_text("private fixture data\n")
+        case "unknown-directory":
+            (target / "authored-directory").mkdir()
+        case _:
+            (target / "source-link").symlink_to(repository.main / "source.txt")
+    isolate_native_git(repository, monkeypatch)
+    decisions = cleanup.reap(repository.paths, apply=True)
+    assert not any(row.removed for row in decisions)
+    assert target.is_dir()
+    assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
+    assert (repository.main / "source.txt").read_text() == "committed\n"
+
+
 def full_filesystem(_path: str | Path) -> os.statvfs_result:
     return os.statvfs_result((4096, 4096, 1000, 150, 150, 1000, 900, 900, 0, 255))
 

@@ -42,10 +42,10 @@ PROVIDER_PATHS: Final = (
     "terraform/.terraform/providers",
     "terraform-data/providers",
 )
-PROVIDER_PARENTS: Final = frozenset(
+PROVIDER_DIRECTORIES: Final = frozenset(
     parent
     for relative in PROVIDER_PATHS
-    for parent in Path(relative).parents
+    for parent in (Path(relative), *Path(relative).parents)
     if parent not in {Path(), Path("terraform")}
 )
 
@@ -97,8 +97,8 @@ def mounted(target: Path, *, root: Path, table: Path = Path("/proc/self/mountinf
     return False
 
 
-def empty_provider_parent(root: Path, relative: Path) -> bool:
-    if relative not in PROVIDER_PARENTS:
+def empty_provider_directory(root: Path, relative: Path) -> bool:
+    if relative not in PROVIDER_DIRECTORIES:
         return False
     pending = [relative]
     while pending:
@@ -109,7 +109,7 @@ def empty_provider_parent(root: Path, relative: Path) -> bool:
         with os.scandir(target) as entries:
             for entry in entries:
                 child = Path(entry.path).relative_to(root)
-                if child not in PROVIDER_PARENTS or not entry.is_dir(follow_symlinks=False):
+                if child not in PROVIDER_DIRECTORIES or not entry.is_dir(follow_symlinks=False):
                     return False
                 pending.append(child)
     return True
@@ -183,20 +183,37 @@ def fingerprint(root: Path, target: Path, *, now: float) -> Cache:
     )
 
 
+def git_arguments(root: Path) -> tuple[str, ...]:
+    bare = cleanup.git(root, "rev-parse", "--is-bare-repository").strip()
+    if bare == "false":
+        return ()
+    entries = cleanup.parse_worktrees(cleanup.git(root, "worktree", "list", "--porcelain", "-z"), root)
+    if bare != "true" or not entries or not entries[0].bare or entries[0].path != root:
+        message = "Bare-primary provider root is unverified"
+        raise ValueError(message)
+    # Inspect this verified primary's downloads without changing core.bare or
+    # making its shared Git storage eligible for checkout retirement.
+    return (f"--work-tree={root}",)
+
+
 def inspect(root: Path, target: Path, *, now: float) -> Cache:
     observed = fingerprint(root, target, now=now)
     if not cleanup_providers.installed(target):
         message = "unrecognized provider package contents"
         raise ValueError(message)
     if cleanup_activity.present(root / ".git"):
-        if Path(cleanup.git(root, "rev-parse", "--show-toplevel").strip()) != root:
+        arguments = git_arguments(root)
+        if Path(cleanup.git(root, *arguments, "rev-parse", "--show-toplevel").strip()) != root:
             message = "Git checkout root differs"
             raise ValueError(message)
         relative = str(target.relative_to(root))
-        if cleanup.git_process(root, "check-ignore", "-q", "--", relative, check=False).returncode:
+        if cleanup.git_process(root, *arguments, "check-ignore", "-q", "--", relative, check=False).returncode:
             message = "provider directory is not ignored"
             raise ValueError(message)
-        if cleanup.git(root, "ls-files", "-z", "--", f":(literal){relative}"):
+        literal = f":(literal){relative}"
+        if cleanup.git(root, *arguments, "ls-files", "-z", "--", literal) or cleanup.git(
+            root, *arguments, "ls-tree", "-r", "--name-only", "-z", "HEAD", "--", literal
+        ):
             message = "provider directory contains tracked files"
             raise ValueError(message)
         directory = Path(cleanup.git(root, "rev-parse", "--absolute-git-dir").strip())
