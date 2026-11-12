@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 
-# Native Node 24/26 format: src/compile_cache.{cc,h}, Persist()/ReadCacheFile().
+# Native Node 22/24/26 format: src/compile_cache.{cc,h}, Persist()/ReadCacheFile().
 # The magic, exact payload length and CRC validate each file independently of the minor version.
 MAGIC: Final = 0x8ADF_DBB2
 HEADER: Final = struct.Struct("=5I")
@@ -85,7 +85,7 @@ def directory(path: Path) -> bool:
 
 
 def cache_files(target: Path, deadline: float) -> Generator[Path]:
-    pattern = rf"v(?:24|26)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-x64-[0-9a-f]{{8}}-{os.getuid()}"
+    pattern = rf"v(?:22|24|26)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-x64-[0-9a-f]{{8}}-{os.getuid()}"
     with os.scandir(target) as roots:
         for index, root in enumerate(roots):
             cleanup.inspection_check()

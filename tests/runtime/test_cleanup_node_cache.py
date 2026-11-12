@@ -77,6 +77,24 @@ NODE_26_13_CACHE = base64.b64decode(
 )
 
 
+# Produced by Node v22.23.4 from the same 68-byte source as NATIVE_CACHE.
+NODE_22_CACHE = base64.b64decode(
+    "stvfikQAAABgAwAAKSkq2dTBhC8oBt7AdP7aeUQAAACDXHdLh1HjmUADAAAAAAAAAAAAAAEgVAMwB7RgAAAAAB8AAAABDAed"
+    "CgQEYAAAAAAAAAAAHgMQB3UBYgAAAAANAAAAAQQCRAkYHwANHwrQAQAAAB4H9QweAxwHcQFgAAAAAAUAAAAHBQUHdQYBGAew"
+    "YgAAAAACAAAAAAAAAAEAAAAAAAAACAAAAAeRAmAAAAAACgAAAAEgVAEMBwkLSWAqAAAAQQAAAElcAUgH4QoIAAEwUmpK/7EA"
+    "SQAAAC92YXIvdG1wL2xyYS1kaXNrLW1haW50ZW5hbmNlLTIwMjYxMTEyL25vZGUyMi1uYXRpdmUtMGt1bzdnaXUvZml4dHVy"
+    "ZS5janMAAAAAAAAAYQAAAAAAAAAAAAAAAAAAAABEYgAAAAACAAAAAAAAAAAAAAAAAAAATgAAAAEcTGAAAAAABQAAAAUAQgIE"
+    "AQxSYbagdu8HAAAAcmVxdWlyZQABDFJhdmkNggYAAABtb2R1bGUAAAEQUmKumYfbCgAAAF9fZmlsZW5hbWUAAAAAAAABEFJi"
+    "5jWrSgkAAABfX2Rpcm5hbWUAAAAAAAAAYAAAAAAAAAAAARQHWQFgAAAAAAMAAAAXASBUAyQHtGAAAAAABQAAAAEMB50KBERg"
+    "AAAAAAAAAAAeAwwHdQFhAAAAAAcAAAABBAMACJACAB4H9QweAwwHcQFgAAAAAAEAAAAEAGIAAAAACAAAAAAAAAAAAAAAhQAA"
+    "AK4AAAABIFNiAAAAAEEwAAAAAAAAAAAAAAAAAAAAAAAASWIAAAAA/////wAAAAAAAAAAAAAAAEQAAAABCAekYAAAAAABAAAA"
+    "BCBiAAABAAAAAgAAEAAIAAAAAJYMAAAAAAAAF5MXBBhEYAAAAAAKAAAAgERdRGICAAMAAAAAAAvQAQACAAAAmAwAAAAAAAAF"
+    "AEICBGUoAAAAMAAAAAAAAAAAAAAAIQAAxy/3AQLIgQIEKcaFAwACxWL49/b1BTUFBAcOrgABJFNiAAAAAMJxAQAAAAAABQAA"
+    "AAAAAAAAAAAASWAAAAAA/////0RhAAAAAAAAAAAAAAAARAAAAAEMlGEJAAAAAQAAAAYUMAlAAAAAlWIFAAYAAAACAAASAAAB"
+    "AAAAlwwAAAAAAAALCgoKCgoKCgo="
+)
+
+
 @dataclass(frozen=True)
 class NativeCache:
     target: Path
@@ -305,6 +323,8 @@ def test_unknown_node_major_and_uidless_namespaces_stay_protected(tmp_path: Path
 @pytest.mark.parametrize(
     ("version", "payload"),
     [
+        ("v22.0.0", NODE_22_CACHE),
+        ("v22.24.0", NODE_22_CACHE),
         ("v24.0.0", NATIVE_CACHE),
         ("v24.23.0", NATIVE_CACHE),
         ("v26.13.0", NODE_26_13_CACHE),
@@ -326,7 +346,9 @@ def test_verified_node_format_survives_minor_version_changes(tmp_path: Path, ver
     assert observed.allocated == file.stat().st_blocks * 512
 
 
-@pytest.mark.parametrize("version", ["v26.013.0", "v26.13.00", "v26.13.0-rc.1"])
+@pytest.mark.parametrize(
+    "version", ["v22.023.4", "v22.23.04", "v22.23.4-rc.1", "v26.013.0", "v26.13.00", "v26.13.0-rc.1"]
+)
 def test_noncanonical_node_version_names_remain_protected(tmp_path: Path, version: str) -> None:
     root = tmp_path / "native-family-private"
     target = root / "node-compile-cache"
@@ -337,6 +359,51 @@ def test_noncanonical_node_version_names_remain_protected(tmp_path: Path, versio
     with pytest.raises(ValueError, match="unrecognized"):
         cleanup_artifacts.inspect(root, target, now=time.time() + 3 * cleanup.DAY)
     assert file.read_bytes() == NODE_26_13_CACHE
+
+
+@pytest.mark.parametrize("kind", ["disposable", "crc", "private", "referenced"])
+def test_genuine_node22_cache_keeps_native_disposal_guards(
+    node_cache: Fixture, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    fixture = node_cache
+    namespace = fixture.payload.parent.with_name(f"v22.23.4-x64-23a69f65-{os.getuid()}")
+    fixture.payload.parent.rename(namespace)
+    payload = (namespace / fixture.payload.name).rename(namespace / "5d71ad14")
+    payload.write_bytes(NODE_22_CACHE)
+    fixture = Fixture(fixture.paths, fixture.root, fixture.target, payload, fixture.now)
+    assert (
+        hashlib.sha256(NODE_22_CACHE).hexdigest() == "74b76cf13db7039c9c9c373154ab0688afcbe172893a3694b8c3cbc4cbbac3b0"
+    )
+    match kind:
+        case "crc":
+            payload.write_bytes(NODE_22_CACHE[:-1] + bytes([NODE_22_CACHE[-1] ^ 1]))
+            assert not cleanup_node_cache.installed(fixture.target)
+            assert payload.is_file()
+            return
+        case "private":
+            private = namespace / ".env"
+            private.write_text("private data stays")
+            assert not cleanup_node_cache.installed(fixture.target)
+            assert private.read_text() == "private data stays"
+            return
+        case "referenced" | "disposable":
+            pass
+        case _:
+            pytest.fail(f"Unrecognized native fixture case: {kind}")
+    source = (fixture.root / "source.txt").read_bytes()
+    head = cleanup.git(fixture.root, "rev-parse", "HEAD")
+    observed = cleanup_artifacts.inspect(fixture.root, fixture.target, now=fixture.now)
+    references = cleanup.References(frozenset({payload}) if kind == "referenced" else frozenset())
+    census(fixture, monkeypatch, references)
+    reason = cleanup_artifacts.remove(fixture.paths, observed)
+    if kind == "referenced":
+        assert "referenced" in reason
+        assert payload.read_bytes() == NODE_22_CACHE
+    else:
+        assert reason == "removed"
+        assert not fixture.target.exists()
+    assert (fixture.root / "source.txt").read_bytes() == source
+    assert cleanup.git(fixture.root, "rev-parse", "HEAD") == head
 
 
 def test_native_cache_larger_than_the_original_entry_limit_is_completely_inspected(tmp_path: Path) -> None:
