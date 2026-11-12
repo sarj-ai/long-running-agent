@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import json
 import os
 from pathlib import Path
 
@@ -67,6 +68,97 @@ def test_uncalibrated_full_host_does_not_adopt_current_usage(capacity_fixture: C
     for now in (0.0, 900.0, 1800.0):
         assert not capacity_fixture.observe(now)
     assert not (capacity_fixture.state / cleanup_capacity.BASELINE_FILE).exists()
+
+
+@pytest.mark.parametrize("calibrated", [False, True])
+def test_existing_explicit_target_caps_usage_without_rewriting_clean_footprint(
+    capacity_fixture: CapacityFixture, calibrated: bool
+) -> None:
+    if calibrated:
+        cleanup_capacity.calibrate(capacity_fixture.home, apply=True)
+    baseline = capacity_fixture.state / cleanup_capacity.BASELINE_FILE
+    before = baseline.read_bytes() if baseline.exists() else None
+    target = capacity_fixture.state / "cleanup-capacity-target.json"
+    private_write(target, '{"version":1,"provenance":"explicit-user-target","used_percent":20,"requested_at":1000.0}\n')
+    target_before = target.read_bytes()
+    current = cleanup_capacity.policy(capacity_fixture.home)
+    assert current.thresholds.enter == 200 * GIB
+    assert current.thresholds.stop < current.thresholds.enter
+    assert current.thresholds.mode == "user-target"
+    assert current.thresholds.baseline_allocated == (300 * GIB if calibrated else None)
+    assert (baseline.read_bytes() if baseline.exists() else None) == before
+    assert target.read_bytes() == target_before
+
+
+def test_explicit_target_never_relaxes_a_stricter_confirmed_footprint(capacity_fixture: CapacityFixture) -> None:
+    original = cleanup_capacity.calibrate(capacity_fixture.home, apply=True)
+    private_write(
+        capacity_fixture.state / "cleanup-capacity-target.json",
+        '{"version":1,"provenance":"explicit-user-target","used_percent":90,"requested_at":1000.0}\n',
+    )
+    assert cleanup_capacity.policy(capacity_fixture.home) == original
+
+
+def test_calibration_preserves_target_without_claiming_the_target_as_clean(capacity_fixture: CapacityFixture) -> None:
+    target = capacity_fixture.state / "cleanup-capacity-target.json"
+    private_write(target, '{"version":1,"provenance":"explicit-user-target","used_percent":20,"requested_at":1000.0}\n')
+    before = target.read_bytes()
+    preview = cleanup_capacity.calibrate(capacity_fixture.home)
+    assert preview.thresholds.enter == 200 * GIB
+    assert preview.thresholds.baseline_allocated == 300 * GIB
+    assert not (capacity_fixture.state / cleanup_capacity.BASELINE_FILE).exists()
+    applied = cleanup_capacity.calibrate(capacity_fixture.home, apply=True)
+    assert applied.thresholds.enter == 200 * GIB
+    assert applied.thresholds.baseline_allocated == 300 * GIB
+    assert capacity_fixture.record().allocated == 300 * GIB
+    assert target.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("version", 0),
+        ("provenance", "automatic"),
+        ("used_percent", 0),
+        ("used_percent", 100),
+        ("used_percent", "20"),
+        ("used_percent", True),
+        ("requested_at", -1.0),
+        ("extra", "private-fixture"),
+    ],
+)
+def test_invalid_explicit_target_fails_closed_without_rewriting_state(
+    capacity_fixture: CapacityFixture, field: str, value: float | str | bool
+) -> None:
+    payload = {"version": 1, "provenance": "explicit-user-target", "used_percent": 20, "requested_at": 1000.0}
+    payload[field] = value
+    target = capacity_fixture.state / "cleanup-capacity-target.json"
+    private_write(target, json.dumps(payload))
+    before = target.read_bytes()
+    with pytest.raises(ValueError, match="UsageTarget"):
+        cleanup_capacity.policy(capacity_fixture.home)
+    assert target.read_bytes() == before
+    assert not (capacity_fixture.state / cleanup_capacity.BASELINE_FILE).exists()
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink", "readable"])
+def test_explicit_target_keeps_existing_private_file_guards(capacity_fixture: CapacityFixture, kind: str) -> None:
+    target = capacity_fixture.state / "cleanup-capacity-target.json"
+    source = capacity_fixture.home / "target-source"
+    private_write(source, '{"version":1,"provenance":"explicit-user-target","used_percent":20,"requested_at":1000.0}\n')
+    match kind:
+        case "symlink":
+            target.symlink_to(source)
+        case "hardlink":
+            target.hardlink_to(source)
+        case "readable":
+            target.write_bytes(source.read_bytes())
+            target.chmod(0o644)
+        case _:
+            raise AssertionError(kind)
+    with pytest.raises((OSError, RuntimeError), match=r"private|symbolic|links"):
+        cleanup_capacity.policy(capacity_fixture.home)
+    assert source.exists()
 
 
 def test_preview_computes_real_footprint_without_initializing_state(capacity_fixture: CapacityFixture) -> None:

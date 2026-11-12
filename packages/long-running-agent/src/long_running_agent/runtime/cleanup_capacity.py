@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 
 BASELINE_FILE: Final = "cleanup-capacity.json"
+TARGET_FILE: Final = "cleanup-capacity-target.json"
 INITIALIZED_FILE: Final = "cleanup-capacity-initialized"
 STATE_LIMIT: Final = 8192
 SAMPLE_SECONDS: Final = 15 * 60
@@ -97,6 +98,14 @@ class LowerObservation(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
     at: Timestamp
     allocated: Annotated[int, Field(ge=0)]
+
+
+class UsageTarget(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True, hide_input_in_errors=True)
+    version: Literal[1]
+    provenance: Literal["explicit-user-target"]
+    used_percent: Annotated[int, Field(ge=1, le=99)]
+    requested_at: Timestamp
 
 
 class Calibration(BaseModel):
@@ -272,17 +281,60 @@ def stale_reason(volume: VolumeReading, calibration: Calibration) -> str | None:
     return None
 
 
+def load_target(home: Path) -> UsageTarget | None:
+    state = state_directory(home)
+    if state is None:
+        return None
+    try:
+        payload = private_payload(state / TARGET_FILE, STATE_LIMIT)
+    except FileNotFoundError:
+        return None
+    return UsageTarget.model_validate_json(payload)
+
+
+def targeted_policy(current: Policy, target: UsageTarget | None) -> Policy:
+    if target is None:
+        return current
+    previous = current.thresholds
+    enter = current.volume.total * target.used_percent // 100
+    # A maximum can tighten cleanup scheduling, never relax the clean footprint.
+    if enter >= previous.enter:
+        return current
+    headroom = headroom_bytes(current.volume)
+    reason = f"explicit user maximum of {target.used_percent}% used"
+    if previous.reason is not None:
+        reason += f"; {previous.reason}"
+    return Policy(
+        current.volume,
+        Thresholds(
+            current.volume.total,
+            enter,
+            min(previous.stop, max(0, enter - headroom)),
+            "user-target",
+            previous.baseline_allocated,
+            headroom,
+            reason,
+        ),
+    )
+
+
 def policy(home: Path) -> Policy:
     volume = read_volume(home)
     calibration = load_calibration(home)
+    target = load_target(home)
     bootstrap = bootstrap_thresholds(volume.total)
     if calibration is None:
         reason = "filesystem identity is unavailable" if volume.key is None else bootstrap.reason
-        return Policy(volume, Thresholds(volume.total, bootstrap.enter, bootstrap.stop, "bootstrap", None, 0, reason))
+        return targeted_policy(
+            Policy(volume, Thresholds(volume.total, bootstrap.enter, bootstrap.stop, "bootstrap", None, 0, reason)),
+            target,
+        )
     reason = stale_reason(volume, calibration)
     if reason is not None:
-        return Policy(volume, Thresholds(volume.total, bootstrap.enter, bootstrap.stop, "stale", None, 0, reason))
-    return Policy(volume, calibrated_thresholds(volume, calibration.allocated))
+        return targeted_policy(
+            Policy(volume, Thresholds(volume.total, bootstrap.enter, bootstrap.stop, "stale", None, 0, reason)), target
+        )
+    return targeted_policy(Policy(volume, calibrated_thresholds(volume, calibration.allocated)), target)
 
 
 def save_calibration(state: Path, calibration: Calibration) -> None:
@@ -297,22 +349,26 @@ def calibrate(home: Path, *, apply: bool = False, replace: bool = False) -> Poli
     # Writes require the caller's cleanup flock and explicit post-cleanup attestation.
     volume = read_volume(home)
     previous = load_calibration(home)
+    target = load_target(home)
     if volume.key is None:
         if apply:
             message = "Filesystem identity is unavailable; calibration was not written"
             raise RuntimeError(message)
         bootstrap = bootstrap_thresholds(volume.total)
-        return Policy(
-            volume,
-            Thresholds(
-                volume.total,
-                bootstrap.enter,
-                bootstrap.stop,
-                "bootstrap",
-                None,
-                0,
-                "filesystem identity is unavailable",
+        return targeted_policy(
+            Policy(
+                volume,
+                Thresholds(
+                    volume.total,
+                    bootstrap.enter,
+                    bootstrap.stop,
+                    "bootstrap",
+                    None,
+                    0,
+                    "filesystem identity is unavailable",
+                ),
             ),
+            target,
         )
     reason = stale_reason(volume, previous) if previous is not None else None
     if apply and reason is not None and not replace:
@@ -320,7 +376,7 @@ def calibrate(home: Path, *, apply: bool = False, replace: bool = False) -> Poli
         raise RuntimeError(message)
     thresholds = calibrated_thresholds(volume, volume.allocated, mode="calibrated" if apply else "preview")
     if not apply:
-        return Policy(volume, thresholds)
+        return targeted_policy(Policy(volume, thresholds), target)
     state = state_directory(home, required=True)
     if state is None:
         message = "The private cleanup state directory is unavailable"
@@ -340,7 +396,7 @@ def calibrate(home: Path, *, apply: bool = False, replace: bool = False) -> Poli
     save_calibration(state, calibration)
     if previous is None:
         private_write(state / INITIALIZED_FILE, "1\n")
-    return Policy(volume, thresholds)
+    return targeted_policy(Policy(volume, thresholds), target)
 
 
 def lower_observations(
