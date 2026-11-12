@@ -22,7 +22,14 @@ import typer
 
 from long_running_agent.process import CommandError, environment_snapshot, run
 
-from . import cleanup_activity, cleanup_artifacts, cleanup_capacity, cleanup_inspection, cleanup_publication
+from . import (
+    cleanup_activity,
+    cleanup_artifacts,
+    cleanup_capacity,
+    cleanup_inspection,
+    cleanup_probe,
+    cleanup_publication,
+)
 from .cleanup_state import (
     CAPACITY_ATTEMPTS,
     MAX_ATTEMPTS,
@@ -753,6 +760,9 @@ def process_snapshot(process: Path, inspection: cleanup_activity.InventoryBudget
     paths.add(cwd)
     words = os.fsdecode(bounded_bytes(process / "cmdline", budget=inspection)).split("\0")
     arguments.extend(words)
+    paths.update(
+        cleanup_probe.environment_paths(bounded_bytes(process / "environ", budget=inspection), cwd, inspection.check)
+    )
     package_writer = any(
         Path(word.partition(" ")[0]).name in {"uv", "uvx", "pip", "pip3", "pnpm", "npm", "npx", "yarn", "bun"}
         or "pnpm.cjs" in word

@@ -59,6 +59,7 @@ def native_process(proc: Path, number: int, cwd: Path, command: bytes) -> Path:
     (process / "stat").write_bytes(process_stat())
     (process / "cwd").symlink_to(cwd, target_is_directory=True)
     (process / "cmdline").write_bytes(command)
+    (process / "environ").write_bytes(b"")
     (process / "fd").mkdir()
     (process / "maps").write_bytes(b"")
     return process
