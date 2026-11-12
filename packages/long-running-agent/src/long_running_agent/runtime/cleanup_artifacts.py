@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Annotated, Final, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from . import cleanup, cleanup_activity, cleanup_node_cache, cleanup_providers
+from . import cleanup, cleanup_activity, cleanup_node_cache, cleanup_providers, cleanup_webpack_cache
 from .cleanup_state import private_payload
 from .settings import private_write
 
@@ -42,7 +42,7 @@ PROVIDER_PATHS: Final = (
     "terraform/.terraform/providers",
     "terraform-data/providers",
 )
-CACHE_PATHS: Final = (*PROVIDER_PATHS, "node-compile-cache")
+CACHE_PATHS: Final = (*PROVIDER_PATHS, "node-compile-cache", *cleanup_webpack_cache.PATHS)
 PROVIDER_DIRECTORIES: Final = frozenset(
     parent
     for relative in PROVIDER_PATHS
@@ -201,9 +201,17 @@ def git_arguments(root: Path) -> tuple[str, ...]:
 def inspect(root: Path, target: Path, *, now: float) -> Cache:
     observed = fingerprint(root, target, now=now)
     node_cache = target == root / "node-compile-cache"
-    recognized = cleanup_node_cache.installed(target) if node_cache else cleanup_providers.installed(target)
+    webpack_cache = str(target.relative_to(root)) in cleanup_webpack_cache.PATHS
+    if node_cache:
+        recognized = cleanup_node_cache.installed(target)
+        message = "unrecognized Node compile cache contents"
+    elif webpack_cache:
+        recognized = cleanup_webpack_cache.installed(target)
+        message = "unrecognized Webpack cache contents"
+    else:
+        recognized = cleanup_providers.installed(target)
+        message = "unrecognized provider package contents"
     if not recognized:
-        message = "unrecognized Node compile cache contents" if node_cache else "unrecognized provider package contents"
         raise ValueError(message)
     if cleanup_activity.present(root / ".git"):
         arguments = git_arguments(root)
@@ -224,6 +232,9 @@ def inspect(root: Path, target: Path, *, now: float) -> Cache:
         if any(cleanup_activity.present(directory / marker) for marker in cleanup.OPERATIONS):
             message = "Git operation is in progress"
             raise ValueError(message)
+    elif webpack_cache:
+        message = "Webpack cache parent is not a Git checkout"
+        raise ValueError(message)
     elif not node_cache and not root.name.startswith(("sarj-", "lra-")):
         message = "temporary directory has no recognized fixture owner"
         raise ValueError(message)
