@@ -826,6 +826,7 @@ def test_sweep_selects_guarded_capacity_worker_arguments(
         "--apply",
     ]
     assert "--paged" in calls[0]
+    assert "--artifacts" in calls[0]
     assert calls[0][8:10] == ["--min-age-days", "7"]
     assert ("--capacity-recovery" in calls[0]) is capacity_argument
     published = cleanup_daemon.Heartbeat.model_validate_json((state / cleanup_daemon.STATUS_FILE).read_bytes())

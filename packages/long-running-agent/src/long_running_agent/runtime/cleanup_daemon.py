@@ -21,7 +21,7 @@ import typer
 
 from long_running_agent.process import DEVNULL, PIPE, ChildProcess, ProcessTimeout, environment_snapshot, run, spawn
 
-from . import cleanup, cleanup_capacity
+from . import cleanup, cleanup_artifacts, cleanup_capacity
 from .cleanup_state import CAPACITY_ATTEMPTS, MAX_ATTEMPTS, Timestamp, private_payload, quarantine_advisory, valid_time
 from .settings import RuntimePaths, private_write, systemd_value, user_environment
 
@@ -176,6 +176,7 @@ class WorkerReport(BaseModel):
     max_removals: Literal[2]
     worktrees: Annotated[list[WorktreeResult], Field(max_length=1024)]
     cache: Annotated[str, Field(max_length=512)]
+    artifacts: cleanup_artifacts.Report | None = None
     inventory_paged: bool = False
     inventory_pending: bool = False
     inventory_errors: Annotated[int, Field(ge=0, le=cleanup.MAX_DIRECTORIES)] = 0
@@ -205,6 +206,7 @@ class Summary(BaseModel):
     removed: Annotated[int, Field(ge=0, le=2)]
     reasons: Annotated[dict[str, Annotated[int, Field(ge=1)]], Field(max_length=MAX_REASONS)]
     cache: Annotated[str, Field(max_length=512)]
+    artifacts: cleanup_artifacts.Report | None = None
     inventory_paged: bool = False
     inventory_pending: bool = False
     inventory_errors: Annotated[int, Field(ge=0, le=cleanup.MAX_DIRECTORIES)] = 0
@@ -432,7 +434,7 @@ class Schedule:
         if incomplete:
             delay = min(delay, PRESSURE_SECONDS)
         self.due = now + delay
-        if result.removed:
+        if result.removed or (result.artifacts is not None and result.artifacts.removed):
             self.phase = "cleaned"
         elif incomplete:
             self.phase = "blocked"
@@ -447,7 +449,8 @@ class Schedule:
 
 def incomplete_inspection(result: Summary) -> bool:
     return bool(
-        result.inventory_errors
+        (result.artifacts is not None and any("inspection" in reason for reason in result.artifacts.reasons))
+        or result.inventory_errors
         or cleanup.DEFERRED in result.reasons
         or any("inspection failed" in reason for reason in result.reasons)
     )
@@ -515,6 +518,7 @@ def summarize(report: WorkerReport) -> Summary:
         removed=sum(row.removed for row in report.worktrees),
         reasons=retained,
         cache=report.cache,
+        artifacts=report.artifacts,
         inventory_paged=report.inventory_paged,
         inventory_pending=report.inventory_pending,
         inventory_errors=report.inventory_errors,
@@ -742,6 +746,7 @@ def sweep(paths: RuntimePaths, state: Path, schedule: Schedule, stopped: Event) 
                 "--min-age-days",
                 "7",
                 "--paged",
+                "--artifacts",
             ]
             if schedule.capacity_recovery:
                 arguments.append("--capacity-recovery")

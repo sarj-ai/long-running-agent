@@ -281,6 +281,70 @@ def eligible(repository: Repository, entry: cleanup.Worktree, protected: cleanup
     )
 
 
+@pytest.mark.parametrize("apply", [False, True], ids=["inventory", "native-removal"])
+def test_native_bare_primary_preserves_storage_and_qualifies_only_linked_checkout(
+    repository: Repository, monkeypatch: pytest.MonkeyPatch, apply: bool
+) -> None:
+    entry = repository.linked("bare-linked")
+    head = cleanup.git(repository.main, "rev-parse", "HEAD").strip()
+    cleanup.git(repository.main, "config", "core.bare", "true")
+    raw = cleanup.git(repository.main, "worktree", "list", "--porcelain", "-z")
+    assert "bare" in raw.split("\0\0")[0]
+    assert "HEAD " not in raw.split("\0\0")[0]
+    assert cleanup.inventory(repository.paths.code) == [entry]
+    assert cleanup.candidate_page(repository.paths).entries == [entry]
+    assert cleanup.registered_candidate(entry, repository.paths.code) == entry
+    primary = cleanup.parse_worktrees(raw, repository.main)[0]
+    assert primary.blocked
+    assert primary.bare
+    assert primary.head == head
+    if apply:
+        isolate_native_git(repository, monkeypatch)
+        decisions = cleanup.reap(repository.paths, apply=True)
+        assert any(row.path == str(entry.path) and row.removed for row in decisions)
+        assert not entry.path.exists()
+    else:
+        assert entry.path.is_dir()
+    assert (repository.main / ".git/objects").is_dir()
+    assert (repository.main / "source.txt").read_text() == "committed\n"
+    assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == head
+
+
+@pytest.mark.parametrize("state", ["not-bare", "different-path", "locked-primary", "duplicate-field"])
+def test_bare_inventory_retains_unverified_or_ambiguous_primary(repository: Repository, state: str) -> None:
+    entry = repository.linked("bare-protected")
+    cleanup.git(repository.main, "config", "core.bare", "true")
+    raw = cleanup.git(repository.main, "worktree", "list", "--porcelain", "-z")
+    primary, remainder = raw.split("\0\0", 1)
+    match state:
+        case "not-bare":
+            cleanup.git(repository.main, "config", "core.bare", "false")
+        case "different-path":
+            primary = primary.replace(str(repository.main), str(entry.path), 1)
+        case "locked-primary":
+            primary += "\0locked protected storage"
+        case _:
+            primary += "\0bare"
+    with pytest.raises(RuntimeError, match=r"[Bb]are"):
+        cleanup.parse_worktrees(primary + "\0\0" + remainder, repository.main)
+    assert (repository.main / ".git/objects").is_dir()
+    assert entry.path.is_dir()
+    assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
+
+
+def test_bare_inventory_keeps_native_linked_worktree_lock(
+    repository: Repository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entry = repository.linked("bare-locked")
+    cleanup.git(repository.main, "worktree", "lock", "--reason", "active fixture", str(entry.path))
+    cleanup.git(repository.main, "config", "core.bare", "true")
+    isolate_native_git(repository, monkeypatch)
+    decisions = cleanup.reap(repository.paths, apply=True)
+    assert decisions == [cleanup.Decision(str(entry.path), "locked, prunable, or unknown worktree")]
+    assert entry.path.is_dir()
+    assert cleanup.git(repository.main, "rev-parse", entry.branch).strip() == entry.head
+
+
 def full_filesystem(_path: str | Path) -> os.statvfs_result:
     return os.statvfs_result((4096, 4096, 1000, 150, 150, 1000, 900, 900, 0, 255))
 
