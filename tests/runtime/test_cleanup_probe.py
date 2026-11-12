@@ -88,6 +88,7 @@ def process(tmp_path: Path) -> ProcessFixture:
     (entry / "cwd").symlink_to(candidates[0], target_is_directory=True)
     (entry / "stat").write_text(stat_line(123))
     (entry / "cmdline").write_bytes(b"python\0" + os.fsencode(candidates[1]) + b"\0npm install\0zellij\0")
+    (entry / "environ").write_bytes(b"")
     (descriptors / "3").symlink_to(candidates[2] / "held (deleted)")
     (entry / "maps").write_text(f"1000-2000 r--p 00000000 00:00 1 {candidates[3]}/mapped file\n")
     return ProcessFixture(proc, home, entry, candidates)
@@ -120,7 +121,59 @@ def test_other_uid_is_skipped_before_reading_process_references(process: Process
     assert found == probe.ProcessReferences()
 
 
-@pytest.mark.parametrize("missing", ["cwd", "cmdline", "maps", "stat", "fd"])
+@pytest.mark.parametrize("key", ["NODE_COMPILE_CACHE", "TMPDIR", "TMP", "TEMP", "TF_PLUGIN_CACHE_DIR", "TF_DATA_DIR"])
+@pytest.mark.parametrize("relative", [False, True])
+def test_cache_environment_paths_protect_unused_candidate_without_returning_private_values(
+    process: ProcessFixture, key: str, relative: bool
+) -> None:
+    value = "../unused" if relative else str(process.candidates[4])
+    (process.process / "environ").write_bytes(
+        os.fsencode(key + "=" + value) + b"\0PRIVATE_TOKEN=private-canary-value\0"
+    )
+    found = probe.collect(process.candidates, os.getuid(), process.proc)
+    assert found.protected == set(process.candidates)
+    response = probe.success(probe.Request(NONCE, process.candidates), found, os.getuid())
+    assert b"PRIVATE_TOKEN" not in response
+    assert b"private-canary-value" not in response
+    assert probe.decode(response)["protected"] == sorted(map(str, process.candidates))
+
+
+def test_unrelated_environment_values_do_not_expand_the_probe_response(process: ProcessFixture) -> None:
+    (process.process / "environ").write_bytes(b"PRIVATE_TOKEN=" + os.fsencode(process.candidates[4]) + b"\0")
+    found = probe.collect(process.candidates, os.getuid(), process.proc)
+    assert found.protected == set(process.candidates[:4])
+
+
+def test_environment_symlink_keeps_literal_and_resolved_candidate_protection(process: ProcessFixture) -> None:
+    holder = process.home / "code/alias-holder"
+    holder.mkdir()
+    alias = holder / "cache"
+    alias.symlink_to(process.candidates[4], target_is_directory=True)
+    (process.process / "environ").write_bytes(b"NODE_COMPILE_CACHE=" + os.fsencode(alias) + b"\0")
+    candidates = (*process.candidates, holder)
+    assert probe.collect(candidates, os.getuid(), process.proc).protected == set(candidates)
+
+
+def test_truncated_environment_never_yields_a_partial_reference_inventory(process: ProcessFixture) -> None:
+    (process.process / "environ").write_bytes(b"NODE_COMPILE_CACHE=" + os.fsencode(process.candidates[4]))
+    with pytest.raises(probe.InspectionError, match="inspection incomplete"):
+        probe.collect(process.candidates, os.getuid(), process.proc)
+
+
+def test_environment_path_normalization_keeps_the_inspection_deadline(process: ProcessFixture) -> None:
+    calls = 0
+
+    def expired() -> None:
+        nonlocal calls
+        calls += 1
+        raise probe.InspectionDeadlineError
+
+    with pytest.raises(probe.InspectionDeadlineError):
+        probe.environment_paths(b"TMPDIR=../unused\0", process.candidates[0], expired)
+    assert calls == 1
+
+
+@pytest.mark.parametrize("missing", ["cwd", "cmdline", "environ", "maps", "stat", "fd"])
 def test_missing_live_reference_never_yields_a_partial_result(process: ProcessFixture, missing: str) -> None:
     selected = process.process / missing
     if selected.is_dir() and not selected.is_symlink():
@@ -433,8 +486,18 @@ def test_request_cannot_select_another_uid_or_exceed_candidate_bounds(process: P
         probe.request(b'{"schema":1,"schema":1,"nonce":"' + NONCE.encode() + b'","candidates":[]}', process.home)
 
 
-@pytest.mark.parametrize("value", [None, [], True, {1: "private-invalid-field"}])
-def test_probe_boundary_rejects_nonobjects_and_nontext_keys_without_echoing_values(value: object) -> None:
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(None, id="null"),
+        pytest.param([], id="array"),
+        pytest.param(True, id="boolean"),
+        pytest.param({1: "private-invalid-field"}, id="nontext-key"),
+    ],
+)
+def test_probe_boundary_rejects_nonobjects_and_nontext_keys_without_echoing_values(
+    value: list[probe.JsonValue] | bool | dict[int, str] | None,
+) -> None:
     with pytest.raises(probe.InspectionError, match="inspection incomplete") as caught:
         probe.fields(value)
     assert "private-invalid-field" not in str(caught.value)
@@ -447,8 +510,18 @@ def test_probe_decoder_preserves_native_json_encodings_and_duplicate_key_rejecti
         probe.decode('{"schema":1,"schema":1}'.encode(encoding))
 
 
-@pytest.mark.parametrize("candidates", [None, {}, "path", True, [1], [None]])
-def test_probe_request_rejects_invalid_candidate_types(candidates: object) -> None:
+@pytest.mark.parametrize(
+    "candidates",
+    [
+        pytest.param(None, id="null"),
+        pytest.param({}, id="mapping"),
+        pytest.param("path", id="scalar-path"),
+        pytest.param(True, id="boolean"),
+        pytest.param([1], id="integer-item"),
+        pytest.param([None], id="null-item"),
+    ],
+)
+def test_probe_request_rejects_invalid_candidate_types(candidates: probe.JsonValue) -> None:
     payload = json.dumps({"schema": 1, "nonce": NONCE, "candidates": candidates}).encode()
     with pytest.raises(probe.InspectionError, match="inspection incomplete"):
         probe.request(payload, Path("/home/registered-inspection-user"))
@@ -630,6 +703,29 @@ def stop_child(child: ChildProcess) -> None:
         for stream in (child.stdout, child.stderr):
             if stream is not None:
                 stream.close()
+
+
+@pytest.mark.parametrize("key", ["NODE_COMPILE_CACHE", "TMPDIR", "TF_PLUGIN_CACHE_DIR"])
+def test_native_child_environment_only_cache_reference_is_preserved(process: ProcessFixture, key: str) -> None:
+    candidate = process.candidates[4]
+    child = spawn(
+        [sys.executable, "-c", "import sys;print('ready',flush=True);sys.stdin.buffer.read()"],
+        env={key: str(candidate), "PRIVATE_CANARY": "private-value-never-returned"},
+        stdin=PIPE,
+        stdout=PIPE,
+        stderr=PIPE,
+    )
+    try:
+        assert child.stdout is not None
+        assert select.select([child.stdout], [], [], 5)[0]
+        assert child.stdout.readline() == b"ready\n"
+        found = probe.inspect_process(Path("/proc") / str(child.pid), (candidate,), os.getuid(), new_budget())
+        assert found.protected == {candidate}
+        assert b"private-value-never-returned" not in probe.success(
+            probe.Request(NONCE, (candidate,)), found, os.getuid()
+        )
+    finally:
+        stop_child(child)
 
 
 @contextmanager

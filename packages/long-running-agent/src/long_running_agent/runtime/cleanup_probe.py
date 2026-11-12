@@ -41,6 +41,9 @@ REQUEST_SECONDS: Final = 70
 PROCESS_ATTEMPTS: Final = 2
 PROCESS_EXIT_WAIT_SECONDS: Final = 0.1
 PACKAGE_MANAGERS: Final = frozenset({"uv", "uvx", "pip", "pip3", "pnpm", "npm", "npx", "yarn", "bun"})
+CACHE_ENVIRONMENT: Final = frozenset(
+    {b"NODE_COMPILE_CACHE", b"TMPDIR", b"TMP", b"TEMP", b"TF_PLUGIN_CACHE_DIR", b"TF_DATA_DIR"}
+)
 
 
 type InspectionCode = Literal[
@@ -401,6 +404,21 @@ def arguments(payload: bytes, candidates: AbstractSet[Path], result: ProcessRefe
         result.protected.update(candidate for candidate in candidates if str(candidate) in word)
 
 
+def environment_paths(payload: bytes, directory: Path, check: Callable[[], None]) -> frozenset[Path]:
+    if payload and not payload.endswith(b"\0"):
+        raise InspectionError
+    paths: set[Path] = set()
+    for entry in payload.split(b"\0"):
+        check()
+        key, separator, value = entry.partition(b"=")
+        if separator and key in CACHE_ENVIRONMENT and value:
+            paths.add(directory / Path(os.fsdecode(value)))
+    for path in tuple(paths):
+        check()
+        paths.add(path.resolve())
+    return frozenset(paths)
+
+
 def descriptors(directory: int, candidates: AbstractSet[Path], budget: Budget, result: ProcessReferences) -> None:
     folder = os.open("fd", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory)
     try:
@@ -460,8 +478,12 @@ def inspect_process(
             return ProcessReferences()
         result = ProcessReferences(process_count=1)
         selected = frozenset(candidates)
-        protect(str(cwd(directory, proc)), selected, result)
+        working = cwd(directory, proc)
+        protect(str(working), selected, result)
         arguments(budget.read(directory, "cmdline"), selected, result)
+        for path in environment_paths(budget.read(directory, "environ"), working, budget.check):
+            budget.check()
+            protect(str(path), selected, result)
         descriptors(directory, selected, budget, result)
         mappings(budget.read(directory, "maps"), selected, budget, result)
         after = identity(directory, budget)

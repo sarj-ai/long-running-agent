@@ -9,6 +9,7 @@ import gzip
 import json
 import os
 from pathlib import Path
+import select
 import shutil
 import subprocess
 import sys
@@ -2949,6 +2950,32 @@ def test_actual_child_open_file_is_retained_when_its_cwd_is_elsewhere(repository
             process.stdout.close()
 
 
+@pytest.mark.parametrize("key", ["NODE_COMPILE_CACHE", "TMPDIR", "TF_PLUGIN_CACHE_DIR"])
+def test_actual_child_cache_environment_protects_checkout_without_cwd_or_file_references(
+    repository: Repository, key: str
+) -> None:
+    entry = repository.linked("environment-only")
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import sys;print('ready',flush=True);sys.stdin.buffer.read()"],
+        env={key: str(entry.path), "PRIVATE_TOKEN": "private-value-never-returned"},
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+    )
+    try:
+        assert child.stdout is not None
+        assert select.select([child.stdout], [], [], 5)[0]
+        assert child.stdout.readline() == b"ready\n"
+        references = cleanup.process_reference(Path("/proc") / str(child.pid))
+        assert references.contains(entry.path)
+        assert not any("private-value-never-returned" in value for value in references.arguments)
+    finally:
+        if child.stdin is not None:
+            child.stdin.close()
+        child.wait(timeout=5)
+        if child.stdout is not None:
+            child.stdout.close()
+
+
 def test_live_process_with_missing_cwd_does_not_silently_disappear(tmp_path: Path) -> None:
     proc = tmp_path / "proc"
     process = proc / "1234"
@@ -2966,6 +2993,7 @@ def test_npm_process_titles_are_recognized_as_active_package_managers(tmp_path: 
     (process / "stat").write_bytes(b"1234 (npm) S " + b"0 " * 18 + b"100\n")
     (process / "cwd").symlink_to(tmp_path, target_is_directory=True)
     (process / "cmdline").write_bytes(os.fsencode(title) + b"\0")
+    (process / "environ").write_bytes(b"")
     (process / "fd").mkdir()
     (process / "maps").write_bytes(b"")
     assert cleanup.process_references(tmp_path).package_writer
@@ -2977,6 +3005,7 @@ def test_ambiguous_mapped_file_paths_fail_closed(tmp_path: Path) -> None:
     (process / "stat").write_bytes(b"1234 (fixture) S " + b"0 " * 18 + b"100\n")
     (process / "cwd").symlink_to(tmp_path, target_is_directory=True)
     (process / "cmdline").write_bytes(b"fixture\0")
+    (process / "environ").write_bytes(b"")
     (process / "fd").mkdir()
     (process / "maps").write_text("1000-2000 r--p 00000000 00:00 1 /worktree\\012name/source.txt\n")
     with pytest.raises(RuntimeError, match="Mapped-file path is ambiguous"):
