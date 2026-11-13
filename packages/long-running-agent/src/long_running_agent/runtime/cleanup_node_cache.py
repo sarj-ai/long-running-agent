@@ -7,8 +7,10 @@ import stat
 import struct
 import sys
 import time
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Annotated, Final
 import zlib
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from . import cleanup
 
@@ -27,6 +29,12 @@ MAX_FILE_BYTES: Final = 64 * 1024 * 1024
 MAX_BYTES: Final = 256 * 1024 * 1024
 SECONDS: Final = 10
 CHUNK: Final = 1024 * 1024
+
+
+class ValidationProgress(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    fingerprint: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    validated: Annotated[int, Field(ge=0, le=MAX_ENTRIES)] = 0
 
 
 def valid_payload(descriptor: int, size: int, deadline: float) -> bool:
@@ -55,7 +63,7 @@ def valid_payload(descriptor: int, size: int, deadline: float) -> bool:
     return checksum == cache_crc and (size < CHUNK or not os.pread(descriptor, 1, size))
 
 
-def regular_file(path: Path, deadline: float) -> int:
+def regular_file(path: Path, deadline: float, *, previously_validated: bool = False) -> int:
     before = path.lstat()
     if (
         not stat.S_ISREG(before.st_mode)
@@ -64,6 +72,10 @@ def regular_file(path: Path, deadline: float) -> int:
         or not HEADER.size < before.st_size <= MAX_FILE_BYTES
     ):
         return -1
+    # Only the artifact transaction may supply this proof, after matching the
+    # entire tree's identities and nanosecond metadata to its previous CRC pass.
+    if previously_validated:
+        return before.st_size
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
         if os.fstat(descriptor) != before:
@@ -92,6 +104,7 @@ def directory(path: Path) -> bool:
 
 def cache_files(target: Path, deadline: float) -> Generator[Path]:
     pattern = rf"v(?:22|24|26)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-x64-[0-9a-f]{{8}}-{os.getuid()}"
+    namespaces: list[os.DirEntry[str]] = []
     with os.scandir(target) as roots:
         for index, root in enumerate(roots):
             cleanup.inspection_check()
@@ -103,32 +116,48 @@ def cache_files(target: Path, deadline: float) -> Generator[Path]:
             ):
                 message = "Unrecognized or incomplete Node cache namespace"
                 raise ValueError(message)
-            with os.scandir(root.path) as entries:
-                yield from (Path(entry.path) for entry in entries)
+            namespaces.append(root)
+    count = 0
+    for root in sorted(namespaces, key=lambda entry: entry.name):
+        files: list[str] = []
+        with os.scandir(root.path) as entries:
+            for entry in entries:
+                cleanup.inspection_check()
+                count += 1
+                if count > MAX_ENTRIES or time.monotonic() >= deadline:
+                    message = "Unrecognized or incomplete Node cache entries"
+                    raise ValueError(message)
+                files.append(entry.path)
+        yield from (Path(name) for name in sorted(files))
 
 
-def valid_files(target: Path, deadline: float) -> bool:
+def valid_files(target: Path, deadline: float, progress: ValidationProgress | None = None) -> bool:
     if not directory(target):
         return False
     count = size = 0
+    previously_validated = progress.validated if progress is not None else 0
     for path in cache_files(target, deadline):
         cleanup.inspection_check()
         count += 1
         if count > MAX_ENTRIES or time.monotonic() >= deadline or re.fullmatch(r"[0-9a-f]{8}", path.name) is None:
             return False
-        observed = regular_file(path, deadline)
+        observed = regular_file(path, deadline, previously_validated=count <= previously_validated)
         if observed < 0:
             return False
         size += observed
         if size > MAX_BYTES:
             return False
-    return count > 0 and time.monotonic() < deadline
+        if progress is not None:
+            progress.validated = max(  # sarj-noqa: SARJ481 -- Intentionally advance the caller-owned CRC checkpoint so completed reads survive a local timeout.
+                progress.validated, count
+            )
+    return count > 0 and count >= previously_validated and time.monotonic() < deadline
 
 
-def installed(target: Path) -> bool:
+def installed(target: Path, *, progress: ValidationProgress | None = None) -> bool:
     deadline = time.monotonic() + SECONDS
     try:
-        recognized = valid_files(target, deadline)
+        recognized = valid_files(target, deadline, progress)
     except OSError, ValueError:
         recognized = False
     cleanup.inspection_check()

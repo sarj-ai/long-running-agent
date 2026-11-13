@@ -386,6 +386,267 @@ def test_local_cache_timeout_does_not_end_the_remaining_sweep(
     assert any("inspection" in reason for reason in report.reasons)
 
 
+def test_slow_native_validation_resumes_without_restarting_completed_files(
+    node_cache: Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = node_cache
+    for index in range(4):
+        (fixture.payload.parent / f"{index:08x}").write_bytes(NATIVE_CACHE)
+    private = fixture.root / "private.env"
+    private.write_text("authored sibling stays\n")
+    state = fixture.paths.home / "state"
+    state.mkdir(mode=0o700)
+    elapsed = 0.0
+    reads: list[int] = []
+    native_read = os.pread
+
+    def clock() -> float:
+        return elapsed
+
+    def slow_read(descriptor: int, size: int, offset: int) -> bytes:
+        nonlocal elapsed
+        block = native_read(descriptor, size, offset)
+        reads.append(os.fstat(descriptor).st_ino)
+        elapsed += cleanup_node_cache.SECONDS / 2 + 1
+        return block
+
+    census(fixture, monkeypatch, cleanup.References(frozenset()))
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Advance elapsed time only after reading genuine native cache bytes, reproducing repeated bounded validation under throttling.
+        time, "monotonic", clock
+    )
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Preserve actual file reads, checksums, metadata and removal; simulate only the observed read latency.
+        os, "pread", slow_read
+    )
+    reports = [
+        cleanup_artifacts.recover(fixture.paths, state, deadline=elapsed + 60, temporary=fixture.paths.home / "unused")
+        for _ in range(3)
+    ]
+    assert [report.removed for report in reports] == [0, 0, 1]
+    assert len(reads) == len(set(reads)) == 5
+    assert not fixture.target.exists()
+    assert private.read_text() == "authored sibling stays\n"
+    assert (fixture.root / "source.txt").read_text() == "committed authored source\n"
+
+
+@dataclass(frozen=True)
+class ValidatedCache:
+    fixture: Fixture
+    state: Path
+
+
+def test_native_validation_continues_across_python_process_restarts(node_cache: Fixture) -> None:
+    fixture = node_cache
+    for index in range(4):
+        (fixture.payload.parent / f"{index:08x}").write_bytes(NATIVE_CACHE)
+    state = fixture.paths.home / "state"
+    state.mkdir(mode=0o700)
+    script = """
+import os,sys,time
+from pathlib import Path
+from long_running_agent.runtime import cleanup,cleanup_artifacts,cleanup_node_cache
+from long_running_agent.runtime.settings import RuntimePaths
+paths=RuntimePaths(Path(sys.argv[1]))
+root=paths.code/'worktrees/project'
+elapsed=0.0
+native_read=os.pread
+def read(descriptor,size,offset):
+    global elapsed
+    block=native_read(descriptor,size,offset)
+    elapsed+=cleanup_node_cache.SECONDS/2+1
+    return block
+def references(current,candidates=None):
+    assert current==paths and candidates==(root,)
+    return cleanup.References(frozenset())
+cleanup.references=references
+time.time=lambda:float(sys.argv[2])
+time.monotonic=lambda:elapsed
+os.pread=read
+report=cleanup_artifacts.recover(paths,paths.home/'state',deadline=60,temporary=paths.home/'unused')
+print(report.model_dump_json())
+"""
+    reports = [
+        cleanup_artifacts.Report.model_validate_json(
+            subprocess.run(
+                [sys.executable, "-I", "-c", script, str(fixture.paths.home), str(fixture.now)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            ).stdout
+        )
+        for _ in range(3)
+    ]
+    assert [report.removed for report in reports] == [0, 0, 1]
+    assert not fixture.target.exists()
+    assert (fixture.root / "source.txt").read_text() == "committed authored source\n"
+
+
+def test_changed_tree_during_partial_validation_does_not_save_a_continuation(
+    node_cache: Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = node_cache
+    for index in range(4):
+        (fixture.payload.parent / f"{index:08x}").write_bytes(NATIVE_CACHE)
+    state = fixture.paths.home / "state"
+    state.mkdir(mode=0o700)
+    elapsed = 0.0
+    reads = 0
+    native_read = os.pread
+
+    def read(descriptor: int, size: int, offset: int) -> bytes:
+        nonlocal elapsed, reads
+        block = native_read(descriptor, size, offset)
+        reads += 1
+        elapsed += cleanup_node_cache.SECONDS / 2 + 1
+        if reads == 2:
+            first = fixture.payload.parent / "00000000"
+            metadata = first.stat()
+            first.write_bytes(NATIVE_CACHE[:-1] + bytes([NATIVE_CACHE[-1] ^ 1]))
+            os.utime(first, ns=(metadata.st_atime_ns, metadata.st_mtime_ns))
+        return block
+
+    census(fixture, monkeypatch, cleanup.References(frozenset()))
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Advance elapsed time after genuine reads to exercise partial validation without waiting for the production deadline.
+        time, "monotonic", lambda: elapsed
+    )
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Change an already-read file during the real native inspection; post-validation metadata must invalidate the whole continuation.
+        os, "pread", read
+    )
+    report = cleanup_artifacts.recover(fixture.paths, state, deadline=60, temporary=fixture.paths.home / "unused")
+    assert report.removed == 0
+    assert fixture.target.exists()
+    assert not (state / "node-cache-validation").exists()
+
+
+@pytest.fixture
+def validated_node_cache(node_cache: Fixture, monkeypatch: pytest.MonkeyPatch) -> ValidatedCache:
+    fixture = node_cache
+    state = fixture.paths.home / "state"
+    state.mkdir(mode=0o700)
+    census(fixture, monkeypatch, cleanup.References(frozenset({fixture.root})))
+    report = cleanup_artifacts.recover(
+        fixture.paths, state, deadline=time.monotonic() + 60, temporary=fixture.paths.home / "unused"
+    )
+    assert report.removed == 0
+    assert report.reasons == {"referenced by process, workspace, terminal, or container": 1}
+    records = list((state / "node-cache-validation").glob("*.json"))
+    assert len(records) == 1
+    assert cleanup_node_cache.ValidationProgress.model_validate_json(records[0].read_bytes()).validated == 1
+    census(fixture, monkeypatch, cleanup.References(frozenset()))
+    return ValidatedCache(fixture, state)
+
+
+@pytest.mark.parametrize("change", ["checksum", "restored-mtime", "authored", "symlink", "recent", "writable", "major"])
+def test_completed_validation_does_not_bypass_changed_native_cache_guards(
+    validated_node_cache: ValidatedCache, change: str
+) -> None:
+    fixture = validated_node_cache.fixture
+    state = validated_node_cache.state
+    private = fixture.root / "private.env"
+    private.write_text("authored sibling stays\n")
+    match change:
+        case "checksum" | "restored-mtime":
+            metadata = fixture.payload.stat()
+            fixture.payload.write_bytes(NATIVE_CACHE[:-1] + bytes([NATIVE_CACHE[-1] ^ 1]))
+            if change == "restored-mtime":
+                os.utime(fixture.payload, ns=(metadata.st_atime_ns, metadata.st_mtime_ns))
+        case "authored":
+            (fixture.payload.parent / "notes.txt").write_text("authored file stays\n")
+        case "symlink":
+            fixture.payload.unlink()
+            fixture.payload.symlink_to(private)
+        case "recent":
+            os.utime(fixture.payload, (fixture.now, fixture.now))
+        case "writable":
+            fixture.payload.chmod(0o620)
+        case "major":
+            fixture.payload.parent.rename(fixture.payload.parent.with_name(f"v28.0.0-x64-964aae3f-{os.getuid()}"))
+        case _:
+            message = "Unknown cache mutation"
+            raise AssertionError(message)
+    report = cleanup_artifacts.recover(
+        fixture.paths, state, deadline=time.monotonic() + 60, temporary=fixture.paths.home / "unused"
+    )
+    assert report.removed == report.reclaimed_bytes == 0
+    assert fixture.target.exists()
+    assert private.read_text() == "authored sibling stays\n"
+    assert (fixture.root / "source.txt").read_text() == "committed authored source\n"
+
+
+@pytest.mark.parametrize("kind", ["schema", "permission", "symlink", "hardlink"])
+def test_unknown_or_nonprivate_validation_progress_is_retained(validated_node_cache: ValidatedCache, kind: str) -> None:
+    fixture = validated_node_cache.fixture
+    state = validated_node_cache.state
+    record = next((state / "node-cache-validation").glob("*.json"))
+    private = fixture.root / "private.env"
+    private.write_text("authored sibling stays\n")
+    match kind:
+        case "schema":
+            record.write_text('{"validated": true, "fingerprint": "unknown"}\n')
+        case "permission":
+            record.chmod(0o644)
+        case "symlink":
+            record.unlink()
+            record.symlink_to(private)
+        case "hardlink":
+            record.unlink()
+            os.link(private, record)
+        case _:
+            message = "Unknown progress mutation"
+            raise AssertionError(message)
+    report = cleanup_artifacts.recover(
+        fixture.paths, state, deadline=time.monotonic() + 60, temporary=fixture.paths.home / "unused"
+    )
+    assert report.removed == report.reclaimed_bytes == 0
+    assert fixture.payload.read_bytes() == NATIVE_CACHE
+    assert private.read_text() == "authored sibling stays\n"
+
+
+def test_changed_validator_rechecks_native_payload_before_removal(
+    validated_node_cache: ValidatedCache, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = validated_node_cache.fixture
+    state = validated_node_cache.state
+    native_read = os.pread
+    reads: list[int] = []
+
+    def read(descriptor: int, size: int, offset: int) -> bytes:
+        reads.append(os.fstat(descriptor).st_ino)
+        return native_read(descriptor, size, offset)
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Change only the validator identity; prior native CRC proofs must be invalidated after implementation changes.
+        cleanup_artifacts, "NODE_VALIDATOR_ID", b"different qualified validator"
+    )
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Observe genuine native reads to prove an old implementation's proof cannot bypass current CRC validation.
+        os, "pread", read
+    )
+    report = cleanup_artifacts.recover(
+        fixture.paths, state, deadline=time.monotonic() + 60, temporary=fixture.paths.home / "unused"
+    )
+    assert report.removed == 1
+    assert reads
+    assert not fixture.target.exists()
+
+
+def test_completed_validation_still_requires_fresh_active_work_protection(
+    validated_node_cache: ValidatedCache, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = validated_node_cache.fixture
+    state = validated_node_cache.state
+    census(fixture, monkeypatch, cleanup.References(frozenset({fixture.root})))
+    protected = cleanup_artifacts.recover(
+        fixture.paths, state, deadline=time.monotonic() + 60, temporary=fixture.paths.home / "unused"
+    )
+    assert protected.removed == 0
+    assert fixture.payload.read_bytes() == NATIVE_CACHE
+    census(fixture, monkeypatch, cleanup.References(frozenset()))
+    completed = cleanup_artifacts.recover(
+        fixture.paths, state, deadline=time.monotonic() + 60, temporary=fixture.paths.home / "unused"
+    )
+    assert completed.removed == 1
+    assert not fixture.target.exists()
+
+
 def test_genuine_native_cache_reads_with_one_available_descriptor(node_cache: Fixture) -> None:
     script = (
         "from pathlib import Path\n"
