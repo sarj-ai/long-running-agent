@@ -45,6 +45,7 @@ PROVIDER_PATHS: Final = (
 )
 SHARED_PROVIDER_PATHS: Final = (".cache/terraform/providers", ".terraform.d/plugin-cache")
 CACHE_PATHS: Final = (*PROVIDER_PATHS, "node-compile-cache", *cleanup_webpack_cache.PATHS)
+NODE_VALIDATOR_ID: Final = hashlib.sha256(Path(cleanup_node_cache.__file__).read_bytes()).digest()
 PROVIDER_DIRECTORIES: Final = frozenset(
     parent
     for relative in PROVIDER_PATHS
@@ -235,12 +236,62 @@ def require_git_cache(root: Path, target: Path) -> None:
         raise ValueError(message)
 
 
-def inspect(root: Path, target: Path, *, now: float) -> Cache:
+def node_progress_path(state: Path, target: Path) -> Path:
+    return state / "node-cache-validation" / (hashlib.sha256(os.fsencode(target)).hexdigest() + ".json")
+
+
+def read_node_progress(path: Path) -> cleanup_node_cache.ValidationProgress | None:
+    try:
+        return cleanup_node_cache.ValidationProgress.model_validate_json(private_payload(path, 8192))
+    except FileNotFoundError:
+        return None
+    except ValueError as error:
+        message = "Node validation progress is invalid; cache retained"
+        raise ValueError(message) from error
+
+
+def node_progress(state: Path, target: Path, observed: Cache) -> cleanup_node_cache.ValidationProgress:
+    fingerprint = hashlib.sha256(NODE_VALIDATOR_ID + observed.digest).hexdigest()
+    path = node_progress_path(state, target)
+    try:
+        if not cleanup.owned_path(path.parent, state, require_private=True):
+            message = "Node validation progress directory is unsafe"
+            raise RuntimeError(message)
+        progress = read_node_progress(path)
+    except FileNotFoundError:
+        return cleanup_node_cache.ValidationProgress(fingerprint=fingerprint)
+    if progress is None or progress.fingerprint != fingerprint:
+        return cleanup_node_cache.ValidationProgress(fingerprint=fingerprint)
+    return progress
+
+
+def save_node_progress(state: Path, target: Path, progress: cleanup_node_cache.ValidationProgress) -> None:
+    path = node_progress_path(state, target)
+    path.parent.mkdir(exist_ok=True, mode=0o700)
+    if not cleanup.owned_path(path.parent, state, require_private=True):
+        message = "Node validation progress directory is unsafe"
+        raise RuntimeError(message)
+    read_node_progress(path)
+    private_write(path, progress.model_dump_json() + "\n")
+
+
+def inspect(root: Path, target: Path, *, now: float, state: Path | None = None) -> Cache:
     observed = fingerprint(root, target, now=now)
     node_cache = target == root / "node-compile-cache"
     webpack_cache = str(target.relative_to(root)) in cleanup_webpack_cache.PATHS
+    progress = node_progress(state, target, observed) if node_cache and state is not None else None
     if node_cache:
-        recognized = cleanup_node_cache.installed(target)
+        try:
+            recognized = cleanup_node_cache.installed(target, progress=progress)
+        except ValueError:
+            if (
+                state is not None
+                and progress is not None
+                and progress.validated
+                and fingerprint(root, target, now=now) == observed
+            ):
+                save_node_progress(state, target, progress)
+            raise
         message = "unrecognized Node compile cache contents"
     elif webpack_cache:
         recognized = cleanup_webpack_cache.installed(target)
@@ -260,13 +311,15 @@ def inspect(root: Path, target: Path, *, now: float) -> Cache:
     if fingerprint(root, target, now=now) != observed:
         message = "cache contents changed during inspection"
         raise ValueError(message)
+    if state is not None and progress is not None:
+        save_node_progress(state, target, progress)
     return observed
 
 
-def remove(paths: RuntimePaths, observed: Cache) -> str:
+def remove(paths: RuntimePaths, observed: Cache, *, state: Path | None = None) -> str:
     # Worktree locks, source edits and unmerged commits protect the checkout;
     # they do not describe whether these validated downloads are disposable.
-    if inspect(observed.root, observed.path, now=time.time()) != observed:
+    if inspect(observed.root, observed.path, now=time.time(), state=state) != observed:
         return "cache contents changed before removal"
     protected = cleanup.fresh_references(paths, observed.root)
     if protected.contains(observed.root):
@@ -396,8 +449,8 @@ def recover_locked(
         report.inspected += 1
         stop = False
         try:
-            observed = inspect(root, target, now=time.time())
-            reason = remove(paths, observed)
+            observed = inspect(root, target, now=time.time(), state=state)
+            reason = remove(paths, observed, state=state)
             if reason == "removed":
                 report.removed += 1
                 report.reclaimed_bytes += observed.allocated
