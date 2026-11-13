@@ -23,7 +23,7 @@ MAGIC: Final = 0x8ADF_DBB2
 HEADER: Final = struct.Struct("=5I")
 MAX_ENTRIES: Final = 65536
 MAX_NAMESPACES: Final = 32
-MAX_FILE_BYTES: Final = 16 * 1024 * 1024
+MAX_FILE_BYTES: Final = 64 * 1024 * 1024
 MAX_BYTES: Final = 256 * 1024 * 1024
 SECONDS: Final = 10
 CHUNK: Final = 1024 * 1024
