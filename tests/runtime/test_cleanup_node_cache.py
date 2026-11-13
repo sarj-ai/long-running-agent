@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 from typing import TYPE_CHECKING
+import zlib
 
 from long_running_agent.runtime import cleanup, cleanup_artifacts, cleanup_daemon, cleanup_node_cache
 from long_running_agent.runtime.settings import RuntimePaths
@@ -541,7 +542,57 @@ def test_native_cache_larger_than_the_original_entry_limit_is_completely_inspect
     assert native.payload.read_bytes() == NATIVE_CACHE
 
 
-def test_oversized_node_cache_file_is_retained_without_reading_it(node_cache: Fixture) -> None:
+@pytest.mark.parametrize("kind", ["native", "checksum", "truncated", "total-budget"])
+def test_genuine_large_native_cache_keeps_content_and_total_size_guards(
+    node_cache: Fixture, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    # Node 24.22.1 enableCompileCache()/flushCompileCache() on a module exporting
+    # a 20 MiB ASCII literal. Keep the native serialized bytes in a small zlib file.
+    payload = zlib.decompress((Path(__file__).parent / "fixtures/node24-large-constant.bin.zlib").read_bytes())
+    assert hashlib.sha256(payload).hexdigest() == "7bbe4d2840eb62c226b6675999a23b53698b0f937d20a51a6b588a340a433d56"
+    assert len(payload) > 16 * 1024 * 1024
+    fixture = node_cache
+    match kind:
+        case "checksum":
+            offset = cleanup_node_cache.CHUNK + 1
+            payload = payload[:offset] + bytes([payload[offset] ^ 1]) + payload[offset + 1 :]
+        case "truncated":
+            payload = payload[:-1]
+        case "total-budget":
+            monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Lower only the total-byte budget; genuine native bytes, ownership, age and checksum inspection remain real.
+                cleanup_node_cache, "MAX_BYTES", len(payload) - 1
+            )
+        case "native":
+            pass
+        case _:
+            message = "Unknown large-cache test case"
+            raise AssertionError(message)
+    fixture.payload.write_bytes(payload)
+    private = fixture.root / "private.env"
+    private.write_text("authored sibling stays")
+    if kind != "native":
+        with pytest.raises(ValueError, match="unrecognized"):
+            cleanup_artifacts.inspect(fixture.root, fixture.target, now=fixture.now)
+        assert fixture.payload.exists()
+    else:
+        observed = cleanup_artifacts.inspect(fixture.root, fixture.target, now=fixture.now)
+        census(fixture, monkeypatch, cleanup.References(frozenset()))
+        assert cleanup_artifacts.remove(fixture.paths, observed) == "removed"
+        assert not fixture.target.exists()
+    assert private.read_text() == "authored sibling stays"
+    assert (fixture.root / "source.txt").read_text() == "committed authored source\n"
+
+
+def test_oversized_node_cache_file_is_retained_without_reading_it(
+    node_cache: Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unexpected_read(_descriptor: int, _size: int, _offset: int) -> bytes:
+        message = "Oversized cache payload must not be read"
+        raise AssertionError(message)
+
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Prove that the file-size guard rejects an oversized native path before payload reads; the real sparse file and metadata checks remain intact.
+        os, "pread", unexpected_read
+    )
     with node_cache.payload.open("r+b") as stream:
         stream.truncate(cleanup_node_cache.MAX_FILE_BYTES + 1)
     assert not cleanup_node_cache.installed(node_cache.target)
