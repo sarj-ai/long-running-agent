@@ -774,6 +774,35 @@ def test_native_queued_commands_report_shared_cache_writers(queued: str, *, writ
         stop_child(child)
 
 
+@pytest.mark.parametrize(
+    ("relative", "writer"),
+    [
+        pytest.param("sarj/local-checks/run-local-check.py", True, id="installed-frontend"),
+        pytest.param("unrelated/run-local-check.py", False, id="unrelated-frontend-name"),
+    ],
+)
+def test_execed_admission_frontend_reports_shared_cache_writer(tmp_path: Path, relative: str, *, writer: bool) -> None:
+    background = tmp_path / "sarj/local-checks/background-check.py"
+    frontend = tmp_path / relative
+    background.parent.mkdir(parents=True)
+    frontend.parent.mkdir(parents=True, exist_ok=True)
+    background.write_text("import os,sys\nos.execv(sys.executable,[sys.executable,sys.argv[1]])\n")
+    frontend.write_text("import sys\nprint('ready',flush=True)\nsys.stdin.buffer.read()\n")
+    child = spawn([sys.executable, str(background), str(frontend)], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    try:
+        assert child.stdout is not None
+        assert select.select([child.stdout], [], [], 5)[0]
+        assert child.stdout.readline() == b"ready\n"
+        process = Path("/proc") / str(child.pid)
+        arguments = (process / "cmdline").read_bytes().split(b"\0")
+        assert os.fsencode(frontend) in arguments
+        assert os.fsencode(background) not in arguments
+        found = probe.inspect_process(process, (), os.getuid(), new_budget())
+        assert found.package_writer is writer
+    finally:
+        stop_child(child)
+
+
 @contextmanager
 def native_process(
     process: ProcessFixture,
