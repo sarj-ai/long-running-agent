@@ -405,7 +405,7 @@ def arguments(payload: bytes, candidates: AbstractSet[Path], result: ProcessRefe
             title in PACKAGE_MANAGERS
             or "pnpm.cjs" in word
             or "npm-cli.js" in word
-            or word.endswith("/sarj/local-checks/background-check.py")
+            or word.endswith(("/sarj/local-checks/background-check.py", "/sarj/local-checks/run-local-check.py"))
         )
         result.zellij_running |= title == "zellij"
         result.protected.update(candidate for candidate in candidates if str(candidate) in word)
