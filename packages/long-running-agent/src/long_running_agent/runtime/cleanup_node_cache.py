@@ -131,7 +131,8 @@ def installed(target: Path) -> bool:
         recognized = valid_files(target, deadline)
     except OSError, ValueError:
         recognized = False
+    cleanup.inspection_check()
     if time.monotonic() >= deadline:
-        message = "Node cache inspection time budget exhausted"
-        raise cleanup.InspectionDeferredError(message)
+        message = "inspection deferred: Node cache time budget"
+        raise ValueError(message)
     return recognized

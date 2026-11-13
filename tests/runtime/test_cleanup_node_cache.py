@@ -324,13 +324,65 @@ def test_expired_native_validation_reports_deferred_cleanup(
     report = cleanup_artifacts.recover(fixture.paths, state, deadline=60, temporary=fixture.paths.home / "temporary")
     assert report.inspected == 1
     assert report.removed == report.reclaimed_bytes == 0
-    assert "inspection failed or deferred; cache retained" in report.reasons
+    assert "inspection deferred: Node cache time budget" in report.reasons
     assert "unrecognized Node compile cache contents" not in report.reasons
     summary = cleanup_daemon.Summary(worktrees=0, attempted=0, removed=0, reasons={}, cache="", artifacts=report)
     assert cleanup_daemon.incomplete_inspection(summary)
     assert fixture.payload.read_bytes() == payload
     assert (fixture.root / "source.txt").read_text() == "committed authored source\n"
     assert (state / cleanup_artifacts.CURSOR).read_text().strip() == str(fixture.target)
+
+
+@pytest.mark.parametrize(
+    ("deadline", "continues"),
+    [pytest.param(60, True, id="local-cache-budget"), pytest.param(5, False, id="whole-sweep-budget")],
+)
+def test_local_cache_timeout_does_not_end_the_remaining_sweep(
+    node_cache: Fixture, monkeypatch: pytest.MonkeyPatch, deadline: int, *, continues: bool
+) -> None:
+    fixture = node_cache
+    later_root = fixture.root.with_name("z-unrelated")
+    later = native_cache(later_root)
+    private = later_root / "private.env"
+    private.write_text("authored sibling stays\n")
+    state = fixture.paths.home / "state"
+    state.mkdir()
+    elapsed = 0.0
+    native_read = os.pread
+
+    def clock() -> float:
+        return elapsed
+
+    def slow_first_read(descriptor: int, size: int, offset: int) -> bytes:
+        nonlocal elapsed
+        result = native_read(descriptor, size, offset)
+        elapsed = cleanup_node_cache.SECONDS + 1.0
+        return result
+
+    def boundary(paths: RuntimePaths, candidates: Sequence[Path] | None = None) -> cleanup.References:
+        assert paths == fixture.paths
+        assert candidates
+        assert len(candidates) == 1
+        assert candidates[0] in {fixture.root, later_root}
+        return cleanup.References(frozenset())
+
+    census(fixture, monkeypatch, cleanup.References(frozenset()))
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Only the external host census is replaced; real native files, validation and inode-scoped removal execute unchanged.
+        cleanup, "references", boundary
+    )
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Advance elapsed time once during a real native payload read to distinguish candidate and whole-sweep deadlines deterministically.
+        time, "monotonic", clock
+    )
+    monkeypatch.setattr(  # sarj-noqa: SARJ445 -- Read genuine payload bytes while simulating the observed first-cache filesystem delay.
+        os, "pread", slow_first_read
+    )
+    report = cleanup_artifacts.recover(fixture.paths, state, deadline=deadline, temporary=fixture.paths.home / "unused")
+    assert report.inspected == (2 if continues else 1)
+    assert report.removed == int(continues)
+    assert later.target.exists() is not continues
+    assert fixture.payload.read_bytes() == NATIVE_CACHE
+    assert private.read_text() == "authored sibling stays\n"
+    assert any("inspection" in reason for reason in report.reasons)
 
 
 def test_genuine_native_cache_reads_with_one_available_descriptor(node_cache: Fixture) -> None:
