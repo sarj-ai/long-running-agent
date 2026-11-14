@@ -15,13 +15,20 @@ from typing import TYPE_CHECKING, Annotated, Final, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from . import cleanup, cleanup_activity, cleanup_node_cache, cleanup_providers, cleanup_webpack_cache
+from . import (
+    cleanup,
+    cleanup_activity,
+    cleanup_dependencies,
+    cleanup_node_cache,
+    cleanup_providers,
+    cleanup_webpack_cache,
+)
 from .cleanup_state import private_payload
 from .settings import private_write
 
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Sequence
+    from collections.abc import Generator, Iterator, Sequence
 
     from .settings import RuntimePaths
 
@@ -44,7 +51,7 @@ PROVIDER_PATHS: Final = (
     "terraform-data/providers",
 )
 SHARED_PROVIDER_PATHS: Final = (".cache/terraform/providers", ".terraform.d/plugin-cache")
-CACHE_PATHS: Final = (*PROVIDER_PATHS, "node-compile-cache", *cleanup_webpack_cache.PATHS)
+CACHE_PATHS: Final = (*PROVIDER_PATHS, "node-compile-cache", *cleanup_webpack_cache.PATHS, *cleanup_dependencies.PATHS)
 NODE_VALIDATOR_ID: Final = hashlib.sha256(Path(cleanup_node_cache.__file__).read_bytes()).digest()
 PROVIDER_DIRECTORIES: Final = frozenset(
     parent
@@ -119,20 +126,32 @@ def empty_provider_directory(root: Path, relative: Path) -> bool:
     return True
 
 
-def checked_metadata(item: Path, *, device: int, now: float) -> os.stat_result:
+def checked_metadata(item: Path, *, device: int, now: float, dependency: bool = False) -> os.stat_result:
     metadata = item.lstat()
+    link = dependency and stat.S_ISLNK(metadata.st_mode)
     if (
         metadata.st_uid != os.getuid()
-        or metadata.st_mode & (0o022 | stat.S_ISUID | stat.S_ISGID)
+        or (not link and metadata.st_mode & (0o022 | stat.S_ISUID | stat.S_ISGID))
         or metadata.st_dev != device
-        or not (stat.S_ISDIR(metadata.st_mode) or stat.S_ISREG(metadata.st_mode))
+        or not (stat.S_ISDIR(metadata.st_mode) or stat.S_ISREG(metadata.st_mode) or link)
     ):
         message = "unsafe cache contents"
         raise ValueError(message)
     if max(metadata.st_mtime, metadata.st_ctime) > now - RETENTION_SECONDS:
         message = "cache contents are too recent"
         raise ValueError(message)
+    if dependency and cleanup_dependencies.private(item):
+        message = "dependency cache contains private configuration"
+        raise ValueError(message)
     return metadata
+
+
+def entry_limit(root: Path, target: Path) -> int:
+    if str(target.relative_to(root)) in cleanup_dependencies.PATHS:
+        return cleanup_dependencies.MAX_ENTRIES
+    if target == root / "node-compile-cache":
+        return cleanup_node_cache.MAX_ENTRIES
+    return MAX_ENTRIES
 
 
 def fingerprint(root: Path, target: Path, *, now: float) -> Cache:
@@ -143,16 +162,19 @@ def fingerprint(root: Path, target: Path, *, now: float) -> Cache:
     digest = hashlib.sha256()
     pending = [target]
     count = allocated = 0
-    maximum = cleanup_node_cache.MAX_ENTRIES if target == root / "node-compile-cache" else MAX_ENTRIES
+    dependency = str(target.relative_to(root)) in cleanup_dependencies.PATHS
+    maximum = entry_limit(root, target)
     while pending:
         cleanup.inspection_check()
         item = pending.pop()
-        metadata = checked_metadata(item, device=observed.st_dev, now=now)
+        metadata = checked_metadata(item, device=observed.st_dev, now=now, dependency=dependency)
         count += 1
         if count > maximum:
             message = "inspection deferred: cache entry budget"
             raise ValueError(message)
         digest.update(os.fsencode(item.relative_to(target)))
+        if stat.S_ISLNK(metadata.st_mode):
+            digest.update(os.fsencode(item.readlink()))
         digest.update(
             str(
                 (
@@ -275,10 +297,26 @@ def save_node_progress(state: Path, target: Path, progress: cleanup_node_cache.V
     private_write(path, progress.model_dump_json() + "\n")
 
 
+def require_installed_contents(root: Path, target: Path) -> None:
+    relative = str(target.relative_to(root))
+    if relative in cleanup_dependencies.PATHS:
+        recognized = cleanup_dependencies.installed(target)
+        message = "unrecognized managed dependency cache contents"
+    elif relative in cleanup_webpack_cache.PATHS:
+        recognized = cleanup_webpack_cache.installed(target)
+        message = "unrecognized Webpack cache contents"
+    else:
+        recognized = cleanup_providers.installed(target)
+        message = "unrecognized provider package contents"
+    if not recognized:
+        raise ValueError(message)
+
+
 def inspect(root: Path, target: Path, *, now: float, state: Path | None = None) -> Cache:
     observed = fingerprint(root, target, now=now)
     node_cache = target == root / "node-compile-cache"
     webpack_cache = str(target.relative_to(root)) in cleanup_webpack_cache.PATHS
+    dependency_cache = str(target.relative_to(root)) in cleanup_dependencies.PATHS
     progress = node_progress(state, target, observed) if node_cache and state is not None else None
     if node_cache:
         try:
@@ -293,17 +331,13 @@ def inspect(root: Path, target: Path, *, now: float, state: Path | None = None) 
                 save_node_progress(state, target, progress)
             raise
         message = "unrecognized Node compile cache contents"
-    elif webpack_cache:
-        recognized = cleanup_webpack_cache.installed(target)
-        message = "unrecognized Webpack cache contents"
+        if not recognized:
+            raise ValueError(message)
     else:
-        recognized = cleanup_providers.installed(target)
-        message = "unrecognized provider package contents"
-    if not recognized:
-        raise ValueError(message)
+        require_installed_contents(root, target)
     if cleanup_activity.present(root / ".git"):
         require_git_cache(root, target)
-    elif webpack_cache or shared_provider_cache(root, target):
+    elif webpack_cache or dependency_cache or shared_provider_cache(root, target):
         require_no_git_repository(root)
     elif not node_cache and not root.name.startswith(("sarj-", "lra-")):
         message = "temporary directory has no recognized fixture owner"
@@ -321,6 +355,10 @@ def remove(paths: RuntimePaths, observed: Cache, *, state: Path | None = None) -
     # they do not describe whether these validated downloads are disposable.
     if inspect(observed.root, observed.path, now=time.time(), state=state) != observed:
         return "cache contents changed before removal"
+    if str(observed.path.relative_to(observed.root)) in cleanup_dependencies.PATHS and cleanup_dependencies.shared(
+        owned_roots((paths.code / "worktrees", paths.code / "sarj-ai", TEMPORARY_ROOT)), observed.path
+    ):
+        return "dependency cache is shared through a checkout alias"
     protected = cleanup.fresh_references(paths, observed.root)
     if protected.contains(observed.root):
         return "referenced by process, workspace, terminal, or container"
@@ -359,10 +397,8 @@ def remove(paths: RuntimePaths, observed: Cache, *, state: Path | None = None) -
     return "removed"
 
 
-def candidates(parents: Sequence[Path]) -> list[tuple[Path, Path]]:
-    found: list[tuple[Path, Path]] = []
+def owned_roots(parents: Sequence[Path]) -> Iterator[Path]:
     inspected = 0
-    # Fixed depth avoids traversing source, dependency trees and private stores.
     for parent in parents:
         if not parent.is_dir():
             continue
@@ -373,17 +409,24 @@ def candidates(parents: Sequence[Path]) -> list[tuple[Path, Path]]:
                 if inspected > MAX_ROOTS:
                     message = "inspection deferred: cache root budget"
                     raise ValueError(message)
-                if (
-                    entry.name.startswith(".")
-                    or not entry.is_dir(follow_symlinks=False)
-                    or entry.stat(follow_symlinks=False).st_uid != os.getuid()
-                ):
+                if entry.name.startswith(".") or entry.stat(follow_symlinks=False).st_uid != os.getuid():
                     continue
-                root = Path(entry.path)
-                for relative in CACHE_PATHS:
-                    target = root / relative
-                    if cleanup_activity.present(target):
-                        found.append((root, target))
+                if entry.is_symlink() or entry.is_dir(follow_symlinks=False):
+                    yield Path(entry.path)
+
+
+def candidates(parents: Sequence[Path]) -> list[tuple[Path, Path]]:
+    found: list[tuple[Path, Path]] = []
+    # Fixed depth avoids traversing source, dependency trees and private stores.
+    for root in owned_roots(parents):
+        if root.is_symlink():
+            continue
+        for relative in CACHE_PATHS:
+            target = root / relative
+            if cleanup_dependencies.aliased(root, target):
+                continue
+            if cleanup_activity.present(target):
+                found.append((root, target))
     return sorted(found, key=lambda item: str(item[1]))
 
 
