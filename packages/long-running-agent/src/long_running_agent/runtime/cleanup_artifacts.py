@@ -237,6 +237,16 @@ def shared_provider_cache(root: Path, target: Path) -> bool:
     )
 
 
+def historical_rebase_ref(root: Path, arguments: tuple[str, ...]) -> bool:
+    ref = cleanup.git_process(root, *arguments, "rev-parse", "--verify", "REBASE_HEAD^{commit}", check=False)
+    if ref.returncode:
+        return False
+    native = cleanup.git_process(root, *arguments, "rebase", "--show-current-patch", check=False)
+    return (
+        native.returncode == GIT_FATAL and not native.stdout and native.stderr.strip() == "fatal: no rebase in progress"
+    )
+
+
 def require_git_cache(root: Path, target: Path) -> None:
     arguments = git_arguments(root)
     if Path(cleanup.git(root, *arguments, "rev-parse", "--show-toplevel").strip()) != root:
@@ -253,9 +263,12 @@ def require_git_cache(root: Path, target: Path) -> None:
         message = "cache directory contains tracked files"
         raise ValueError(message)
     directory = Path(cleanup.git(root, "rev-parse", "--absolute-git-dir").strip())
-    if any(cleanup_activity.present(directory / marker) for marker in cleanup.OPERATIONS):
-        message = "Git operation is in progress"
-        raise ValueError(message)
+    for marker in cleanup.OPERATIONS:
+        if cleanup_activity.present(directory / marker):
+            if marker == "REBASE_HEAD" and historical_rebase_ref(root, arguments):
+                continue
+            message = "Git operation is in progress"
+            raise ValueError(message)
 
 
 def node_progress_path(state: Path, target: Path) -> Path:

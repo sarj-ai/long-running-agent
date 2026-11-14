@@ -487,3 +487,58 @@ def test_astro_cache_retains_unrecognized_or_authored_content(dependency: Depend
         cleanup_artifacts.inspect(dependency.root, dependency.target, now=dependency.now)
     assert metadata.is_file()
     assert (dependency.root / "source.txt").read_text() == "authored source\n"
+
+
+def test_historical_rebase_ref_does_not_pin_idle_native_dependencies(
+    dependency: Dependency, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    head = cleanup.git(dependency.root, "rev-parse", "HEAD").strip()
+    cleanup.git(dependency.root, "update-ref", "REBASE_HEAD", head)
+    native = cleanup.git_process(dependency.root, "rebase", "--show-current-patch", check=False)
+    assert native.returncode == 128
+    assert native.stderr.strip() == "fatal: no rebase in progress"
+    observed = cleanup_artifacts.inspect(dependency.root, dependency.target, now=dependency.now)
+    census(dependency, monkeypatch, cleanup.References(frozenset()))
+    assert cleanup_artifacts.remove(dependency.paths, observed) == "removed"
+    assert cleanup.git(dependency.root, "rev-parse", "REBASE_HEAD").strip() == head
+    assert cleanup.git(dependency.root, "rev-parse", "HEAD").strip() == head
+    assert (dependency.root / "source.txt").is_file()
+
+
+def test_native_conflicted_rebase_still_protects_dependencies(dependency: Dependency) -> None:
+    source = dependency.root / "source.txt"
+    cleanup.git(dependency.root, "switch", "-q", "-c", "native-rebase-upstream")
+    source.write_text("upstream authored change\n")
+    cleanup.git(dependency.root, "add", "source.txt")
+    cleanup.git(
+        dependency.root,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "-qm",
+        "upstream",
+    )
+    cleanup.git(dependency.root, "switch", "-q", "unmerged")
+    source.write_text("topic authored change\n")
+    cleanup.git(dependency.root, "add", "source.txt")
+    cleanup.git(
+        dependency.root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "topic"
+    )
+    native = cleanup.git_process(dependency.root, "rebase", "native-rebase-upstream", check=False)
+    assert native.returncode == 1
+    assert cleanup.git(dependency.root, "diff", "--name-only", "--diff-filter=U").strip() == "source.txt"
+    with pytest.raises(ValueError, match="Git operation is in progress"):
+        cleanup_artifacts.inspect(dependency.root, dependency.target, now=dependency.now)
+    assert dependency.target.is_dir()
+    assert cleanup.git(dependency.root, "rev-parse", "--verify", "REBASE_HEAD").strip()
+
+
+def test_malformed_rebase_ref_stays_protected(dependency: Dependency) -> None:
+    directory = Path(cleanup.git(dependency.root, "rev-parse", "--absolute-git-dir").strip())
+    marker = directory / "REBASE_HEAD"
+    marker.write_text("unrecognized operation state\n")
+    with pytest.raises(ValueError, match="Git operation is in progress"):
+        cleanup_artifacts.inspect(dependency.root, dependency.target, now=dependency.now)
+    assert marker.read_text() == "unrecognized operation state\n"
