@@ -501,8 +501,10 @@ def test_changed_tree_during_partial_validation_does_not_save_a_continuation(
         if reads == 2:
             first = fixture.payload.parent / "00000000"
             metadata = first.stat()
+            time.sleep(0.02)
             first.write_bytes(NATIVE_CACHE[:-1] + bytes([NATIVE_CACHE[-1] ^ 1]))
             os.utime(first, ns=(metadata.st_atime_ns, metadata.st_mtime_ns))
+            assert first.stat().st_ctime_ns != metadata.st_ctime_ns
         return block
 
     census(fixture, monkeypatch, cleanup.References(frozenset()))
