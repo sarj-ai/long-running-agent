@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -349,4 +351,139 @@ def test_nested_environment_exceeds_provider_budget_without_deleting_source(
     observed = cleanup_artifacts.inspect(dependency.root, target, now=dependency.now)
     census(dependency, monkeypatch, cleanup.References(frozenset()))
     assert cleanup_artifacts.remove(dependency.paths, observed) == "removed"
+    assert (dependency.root / "source.txt").read_text() == "authored source\n"
+
+
+VITE_8_3_5_NATIVE_FILES = (
+    (
+        "_metadata.json",
+        (
+            "ewogICJoYXNoIjogIjgyZWEyYTBhIiwKICAiY29uZmlnSGFzaCI6ICJiNmE0NDJiZCIsCiAgImxvY2tmaWxlSGFzaCI6ICJl"
+            "M2IwYzQ0MiIsCiAgImJyb3dzZXJIYXNoIjogIjc5ZjAxMGU0IiwKICAib3B0aW1pemVkIjogewogICAgImNhY2hlLWZpeHR1"
+            "cmUiOiB7CiAgICAgICJzcmMiOiAiLi4vLi4vLi4vY2FjaGUtZml4dHVyZS9pbmRleC5qcyIsCiAgICAgICJmaWxlIjogImNh"
+            "Y2hlLWZpeHR1cmUuanMiLAogICAgICAiZmlsZUhhc2giOiAiM2RiYzk4MzMiLAogICAgICAibmVlZHNJbnRlcm9wIjogZmFs"
+            "c2UKICAgIH0KICB9LAogICJjaHVua3MiOiB7CiAgICAiZHluYW1pYy1EazhCU21DcSI6IHsKICAgICAgImZpbGUiOiAiZHlu"
+            "YW1pYy1EazhCU21DcS5qcyIsCiAgICAgICJpc0R5bmFtaWNFbnRyeSI6IHRydWUKICAgIH0sCiAgICAic2hhcmVkLUNESHRi"
+            "aGNhIjogewogICAgICAiZmlsZSI6ICJzaGFyZWQtQ0RIdGJoY2EuanMiLAogICAgICAiaXNEeW5hbWljRW50cnkiOiBmYWxz"
+            "ZQogICAgfQogIH0KfQ=="
+        ),
+        "1bdc24ca248034bd59809376228d4d498ac87bc2d737f81c112e5fbe8deca855",
+    ),
+    (
+        "cache-fixture.js",
+        (
+            "aW1wb3J0IHsgdCBhcyB2YWx1ZSB9IGZyb20gIi4vc2hhcmVkLUNESHRiaGNhLmpzIjsKLy8gLi4vLi4vLi4vLi4vLi4vLi4v"
+            "Li4vLi4vLi4vdmFyL3RtcC9scmEtYXN0cm8tZGVwZW5kZW5jeS1jYWNoZS0yMDI2MTExNC9wcm9kdWNlci9ub2RlX21vZHVs"
+            "ZXMvY2FjaGUtZml4dHVyZS9pbmRleC5qcwphc3luYyBmdW5jdGlvbiBsYXp5KCkgewoJcmV0dXJuIGltcG9ydCgiLi9keW5h"
+            "bWljLURrOEJTbUNxLmpzIik7Cn0KZXhwb3J0IHsgbGF6eSwgdmFsdWUgfTsK"
+        ),
+        "6291e22b69772c96f47d4342f429bc7d450ef634383fa4bd58593849a26cca00",
+    ),
+    (
+        "cache-fixture.js.map",
+        (
+            "eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY2FjaGUtZml4dHVyZS5qcyIsIm5hbWVzIjpbXSwic291cmNlcyI6WyIuLi8uLi8uLi9j"
+            "YWNoZS1maXh0dXJlL2luZGV4LmpzIl0sInNvdXJjZXNDb250ZW50IjpbImV4cG9ydCB7IHZhbHVlIH0gZnJvbSAnLi9zaGFy"
+            "ZWQuanMnOyBleHBvcnQgYXN5bmMgZnVuY3Rpb24gbGF6eSgpIHsgcmV0dXJuIGltcG9ydCgnLi9keW5hbWljLmpzJyk7IH1c"
+            "biJdLCJtYXBwaW5ncyI6Ijs7QUFBcUMsZUFBc0IsT0FBTztDQUFFLE9BQU8sT0FBTztBQUFpQiJ9"
+        ),
+        "a612913819168c96f181f9a651ebd0783a22a88c1a4c65881f5ea4b57f3a1835",
+    ),
+    (
+        "dynamic-Dk8BSmCq.js",
+        ("ZXhwb3J0IHsgdCBhcyB2YWx1ZSB9IGZyb20gIi4vc2hhcmVkLUNESHRiaGNhLmpzIjsK"),
+        "698c0e73d80742143d9067e729c95890b24e76e92d1edf0a15a6e4b0bacc61a2",
+    ),
+    (
+        "package.json",
+        ("ewogICJ0eXBlIjogIm1vZHVsZSIKfQo="),
+        "3ca9d4afd21425087cf31893b8f9f63c81b0b8408db5e343ca76e5f8aa26ab9a",
+    ),
+    (
+        "shared-CDHtbhca.js",
+        (
+            "Ly8gLi4vLi4vLi4vLi4vLi4vLi4vLi4vLi4vLi4vdmFyL3RtcC9scmEtYXN0cm8tZGVwZW5kZW5jeS1jYWNoZS0yMDI2MTEx"
+            "NC9wcm9kdWNlci9ub2RlX21vZHVsZXMvY2FjaGUtZml4dHVyZS9zaGFyZWQuanMKdmFyIHZhbHVlID0gNDI7CmV4cG9ydCB7"
+            "IHZhbHVlIGFzIHQgfTsK"
+        ),
+        "14c10cb5cc034bccc780f79f587a18a7d144a9cd6398246e6e55bbc0e5b0aac8",
+    ),
+    (
+        "shared-CDHtbhca.js.map",
+        (
+            "eyJ2ZXJzaW9uIjozLCJmaWxlIjoic2hhcmVkLUNESHRiaGNhLmpzIiwibmFtZXMiOltdLCJzb3VyY2VzIjpbIi4uLy4uLy4u"
+            "L2NhY2hlLWZpeHR1cmUvc2hhcmVkLmpzIl0sInNvdXJjZXNDb250ZW50IjpbImV4cG9ydCBjb25zdCB2YWx1ZSA9IDQyO1xu"
+            "Il0sIm1hcHBpbmdzIjoiO0FBQUEsSUFBYSxRQUFRIn0="
+        ),
+        "ef0c3f4af71b75480732968f5e5b58075509f73456b3ba1f6c1cdc8aba7b9d31",
+    ),
+)
+
+
+def native_astro_cache(target: Path) -> Path:
+    cache = target / ".astro/vite-sync/deps"
+    cache.mkdir(parents=True)
+    for name, encoded, expected in VITE_8_3_5_NATIVE_FILES:
+        payload = base64.b64decode(encoded)
+        assert hashlib.sha256(payload).hexdigest() == expected
+        (cache / name).write_bytes(payload)
+    return cache
+
+
+@pytest.mark.parametrize("dependency", ["npm"], indirect=True)
+@pytest.mark.parametrize("kind", ["idle", "process", "workspace", "terminal", "container", "queued"])
+def test_native_astro_cache_preserves_parent_work_and_fresh_usage(
+    dependency: Dependency, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    native_astro_cache(dependency.target)
+    source = dependency.root / "source.txt"
+    source.write_text("uncommitted authored work stays\n")
+    private = dependency.root / ".env"
+    private.write_text("PRIVATE_FIXTURE=true\n")
+    head = cleanup.git(dependency.root, "rev-parse", "HEAD")
+    references = {
+        "idle": cleanup.References(frozenset()),
+        "process": cleanup.References(frozenset({dependency.target / ".astro/vite-sync/deps/cache-fixture.js"})),
+        "workspace": cleanup.References(frozenset(), workspaces=frozenset({dependency.root})),
+        "terminal": cleanup.References(frozenset(), arguments=(str(dependency.root),)),
+        "container": cleanup.References(frozenset(), mounted=frozenset({dependency.root})),
+        "queued": cleanup.References(frozenset(), arguments=(f"check --cwd={dependency.root}",)),
+    }
+    observed = cleanup_artifacts.inspect(dependency.root, dependency.target, now=dependency.now)
+    census(dependency, monkeypatch, references[kind])
+    reason = cleanup_artifacts.remove(dependency.paths, observed)
+    if kind == "idle":
+        assert reason == "removed"
+        assert not dependency.target.exists()
+    else:
+        assert "referenced" in reason
+        assert (dependency.target / ".astro/vite-sync/deps/_metadata.json").is_file()
+    assert source.read_text() == "uncommitted authored work stays\n"
+    assert private.read_text() == "PRIVATE_FIXTURE=true\n"
+    assert cleanup.git(dependency.root, "rev-parse", "HEAD") == head
+
+
+@pytest.mark.parametrize("dependency", ["npm"], indirect=True)
+@pytest.mark.parametrize(
+    "kind", ["receipt", "path-escape", "missing-output", "invalid-metadata", "missing-native-hash", "unknown-wrapper"]
+)
+def test_astro_cache_retains_unrecognized_or_authored_content(dependency: Dependency, kind: str) -> None:
+    cache = native_astro_cache(dependency.target)
+    metadata = cache / "_metadata.json"
+    if kind == "receipt":
+        (cache / "qualification-receipt.txt").write_text("authored qualification evidence\n")
+    elif kind == "path-escape":
+        payload = metadata.read_text()
+        metadata.write_text(payload.replace('"file": "cache-fixture.js"', '"file": "../../source.txt"', 1))
+    elif kind == "missing-output":
+        (cache / "cache-fixture.js").unlink()
+    elif kind == "invalid-metadata":
+        metadata.write_text('{"optimized": false}')
+    elif kind == "missing-native-hash":
+        metadata.write_text(metadata.read_text().replace('"fileHash"', '"unknownFileHash"'))
+    elif kind == "unknown-wrapper":
+        (dependency.target / ".astro/private-notes.txt").write_text("authored notes stay\n")
+    with pytest.raises(ValueError, match="unrecognized managed dependency cache contents"):
+        cleanup_artifacts.inspect(dependency.root, dependency.target, now=dependency.now)
+    assert metadata.is_file()
     assert (dependency.root / "source.txt").read_text() == "authored source\n"
