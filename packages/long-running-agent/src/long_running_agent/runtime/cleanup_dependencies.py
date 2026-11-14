@@ -3,9 +3,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import stat
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Annotated, Final
 
-from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
 from . import cleanup
 
@@ -63,6 +63,25 @@ MARKER_BYTES: Final = 1024 * 1024
 class PackageLock(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
     packages: dict[str, JsonValue]
+
+
+class ViteFile(BaseModel):
+    model_config = ConfigDict(strict=True, extra="ignore")
+    file: Annotated[str, Field(pattern=r"^[A-Za-z0-9_$.-]+\.js$")]
+
+
+class ViteDependencyFile(ViteFile):
+    file_hash: Annotated[str, Field(alias="fileHash", pattern=r"^[0-9a-f]{8}$")]
+
+
+class ViteMetadata(BaseModel):
+    model_config = ConfigDict(strict=True, extra="ignore")
+    hash: Annotated[str, Field(pattern=r"^[0-9a-f]{8}$")]
+    config_hash: Annotated[str, Field(alias="configHash", pattern=r"^[0-9a-f]{8}$")]
+    lockfile_hash: Annotated[str, Field(alias="lockfileHash", pattern=r"^[0-9a-f]{8}$")]
+    browser_hash: Annotated[str, Field(alias="browserHash", pattern=r"^[0-9a-f]{8}$")]
+    optimized: dict[str, ViteDependencyFile]
+    chunks: dict[str, ViteFile]
 
 
 def private(path: Path) -> bool:
@@ -162,10 +181,46 @@ def native_marker(target: Path, name: str) -> bool:
     )
 
 
+def vite_cache(target: Path) -> bool:
+    # Vite 8.3.5 writes this marker and a manifest of optimized files/chunks.
+    if metadata_payload(target / "package.json") != b'{\n  "type": "module"\n}\n':
+        return False
+    payload = metadata_payload(target / "_metadata.json")
+    if payload is None:
+        return False
+    try:
+        metadata = ViteMetadata.model_validate_json(payload)
+    except ValidationError:
+        return False
+    files = {entry.file for entry in (*metadata.optimized.values(), *metadata.chunks.values())}
+    required = {"package.json", "_metadata.json", *files}
+    allowed = required | {name + ".map" for name in files}
+    found: set[str] = set()
+    for entry in target.iterdir():
+        cleanup.inspection_check()
+        if entry.name not in allowed or not stat.S_ISREG(entry.lstat().st_mode):
+            return False
+        found.add(entry.name)
+    return required <= found
+
+
+def astro_cache(target: Path) -> bool:
+    # Astro's native sync isolates optimizer output in this fixed layout.
+    for directory, child in ((target, "vite-sync"), (target / "vite-sync", "deps")):
+        if directory.is_symlink() or not directory.is_dir():
+            return False
+        if any(entry.name != child for entry in directory.iterdir()):
+            return False
+    cache = target / "vite-sync/deps"
+    return not cache.is_symlink() and cache.is_dir() and vite_cache(cache)
+
+
 def native_package(entry: Path) -> bool:
     cleanup.inspection_check()
     if entry.name in {*MARKERS, ".bin", ".pnpm", ".store"} or entry.is_symlink():
         return True
+    if entry.name == ".astro":
+        return astro_cache(entry)
     if not entry.is_dir() or entry.name.startswith("."):
         return False
     packages = entry.iterdir() if entry.name.startswith("@") else (entry,)
