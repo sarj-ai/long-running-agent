@@ -444,725 +444,1026 @@
   "applicationOwnedTables": 0,
   "nativeTables": [
     {
+      "database": "state_5.sqlite",
       "table": "_sqlx_migrations",
       "columns": [
         {
           "name": "version",
           "nullable": true,
+          "primaryKey": true,
           "type": "BIGINT"
         },
         {
           "name": "description",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "installed_on",
           "nullable": false,
+          "primaryKey": false,
           "type": "TIMESTAMP"
         },
         {
           "name": "success",
           "nullable": false,
+          "primaryKey": false,
           "type": "BOOLEAN"
         },
         {
           "name": "checksum",
           "nullable": false,
+          "primaryKey": false,
           "type": "BLOB"
         },
         {
           "name": "execution_time",
           "nullable": false,
+          "primaryKey": false,
           "type": "BIGINT"
         }
       ],
-      "rows": 62,
+      "ddlSha256": "9e366fd739e7dc3a191f76ccf3a0c9fc2bab8edd141202c8174aa067427ffac5",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "backfill_state",
       "columns": [
         {
           "name": "id",
           "nullable": true,
+          "primaryKey": true,
           "type": "INTEGER"
         },
         {
           "name": "status",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "last_watermark",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "last_success_at",
           "nullable": true,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "updated_at",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         }
       ],
-      "rows": 1,
+      "ddlSha256": "6d0d28ff4f42b8dabddd5acafd1dd54a8784b66601cf7b425a07193828bf2ca1",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "external_agent_config_imports",
       "columns": [
         {
           "name": "import_id",
           "nullable": true,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "completed_at_ms",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "successes",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "failures",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "provider_id",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         }
       ],
-      "rows": 0,
+      "ddlSha256": "b2abac38eebfc5adda0120b464082bc520b857fd97bbee3d20ed878c1f1a9fce",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "guardian_review_feedback",
       "columns": [
         {
           "name": "id",
           "nullable": false,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "thread_id",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "record",
           "nullable": false,
+          "primaryKey": false,
           "type": "BLOB"
         }
       ],
-      "rows": 12,
+      "ddlSha256": "d9669354767b39d81057697ebcad1a6c0eac1e3c970952397935e412dc6a4b26",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "project_idempotency_keys",
       "columns": [
         {
           "name": "key",
           "nullable": true,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "project_id",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "created_at_ms",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         }
       ],
-      "rows": 0,
+      "ddlSha256": "4589600c000382797d84fd0b748e634c22611ed10040479c3b36d4b1b3ed7fea",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "project_roots",
       "columns": [
         {
           "name": "project_id",
           "nullable": false,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "position",
           "nullable": false,
+          "primaryKey": true,
           "type": "INTEGER"
         },
         {
           "name": "path",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         }
       ],
-      "rows": 0,
+      "ddlSha256": "f349040962a4af2e6f729178e94b2a0070266839285eef662299ad7b5185c4cc",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "projects",
       "columns": [
         {
           "name": "id",
           "nullable": true,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "name",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "metadata",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "position",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "created_at_ms",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "updated_at_ms",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         }
       ],
-      "rows": 0,
+      "ddlSha256": "d3742f7e03eaffd0acde79353f8e0a80f1224a60a0720372a585c5dbf31d5880",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "remote_control_enrollments",
       "columns": [
         {
           "name": "websocket_url",
           "nullable": false,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "account_id",
           "nullable": false,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "app_server_client_name",
           "nullable": false,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "server_id",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "environment_id",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "server_name",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "updated_at",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "remote_control_enabled",
           "nullable": true,
+          "primaryKey": false,
           "type": "INTEGER"
         }
       ],
-      "rows": 0,
+      "ddlSha256": "6e45813ebc81216fe71c467a037b3ab5c30d6e1daf053a0cafac4f0fc3dd60fc",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "rollout_migration_skipped_rollouts",
       "columns": [
         {
           "name": "migration_id",
           "nullable": false,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "rollout_path",
           "nullable": false,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "rollout_size_bytes",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "rollout_modified_at_ns",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "skip_reason",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "skipped_at",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         }
       ],
-      "rows": 0,
+      "ddlSha256": "4a725e4a38c8b4068d90a9d8ec03c2de9c9a350d4df7dcf14aacf05c8d83091a",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "rollout_migration_state",
       "columns": [
         {
           "name": "migration_id",
           "nullable": true,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "last_checked_thread_created_at",
           "nullable": true,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "last_checked_thread_id",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "updated_at",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         }
       ],
-      "rows": 0,
+      "ddlSha256": "fc1683db25b68aec2f9881198c96a12a915f6b269c66419a4a80d47868b6d475",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "sqlite_sequence",
       "columns": [
         {
           "name": "name",
           "nullable": true,
+          "primaryKey": false,
           "type": ""
         },
         {
           "name": "seq",
           "nullable": true,
+          "primaryKey": false,
           "type": ""
         }
       ],
-      "rows": 0,
+      "ddlSha256": "4cb1eaf14467f226196148cb5688569660cb290d414bae4c1c450b149b62befd",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "thread_attachments",
       "columns": [
         {
           "name": "id",
           "nullable": true,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "thread_id",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "attachment_type",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "identity_key",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "payload",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "created_at",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         }
       ],
-      "rows": 0,
+      "ddlSha256": "dc1866355be9cebc243317b275de02d829b2c75a772fdafe284021d682b40511",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "thread_dynamic_tools",
       "columns": [
         {
           "name": "thread_id",
           "nullable": false,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "position",
           "nullable": false,
+          "primaryKey": true,
           "type": "INTEGER"
         },
         {
           "name": "name",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "description",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "input_schema",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "defer_loading",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "namespace",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         }
       ],
-      "rows": 0,
+      "ddlSha256": "2ac98d9a49758a658e517fc21d3c58e0363bf9c5f4b076f716d99a4d325c4290",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "thread_read_receipts",
       "columns": [
         {
           "name": "thread_id",
           "nullable": false,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "first_unread_turn",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "revision",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "last_published_turn",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         }
       ],
-      "rows": 295,
+      "ddlSha256": "8b5831ff8d846d3d5a733952e31f7ce2ab01cdd0b3f3738a016c79c578d2cca1",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "thread_sections",
       "columns": [
         {
           "name": "id",
           "nullable": true,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "name",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "appearance",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         }
       ],
-      "rows": 1,
+      "ddlSha256": "e09a4237a98f4e39f01580cf798132ec7c7102b402e8778925f28a5c7e4b66eb",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "thread_spawn_edges",
       "columns": [
         {
           "name": "parent_thread_id",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "child_thread_id",
           "nullable": false,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "status",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         }
       ],
-      "rows": 2307,
+      "ddlSha256": "670c51f138a45a2e298ebaae874eb5f9d953e74a13d288562a3c299c31f1ba0d",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
     },
     {
+      "database": "state_5.sqlite",
       "table": "threads",
       "columns": [
         {
           "name": "id",
           "nullable": true,
+          "primaryKey": true,
           "type": "TEXT"
         },
         {
           "name": "rollout_path",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "created_at",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "updated_at",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "source",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "model_provider",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "cwd",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "title",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "sandbox_policy",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "approval_mode",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "tokens_used",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "has_user_event",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "archived",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "archived_at",
           "nullable": true,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "git_sha",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "git_branch",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "git_origin_url",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "cli_version",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "first_user_message",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "agent_nickname",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "agent_role",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "memory_mode",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "model",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "reasoning_effort",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "agent_path",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "created_at_ms",
           "nullable": true,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "updated_at_ms",
           "nullable": true,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "thread_source",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "preview",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "recency_at",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "recency_at_ms",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "history_mode",
           "nullable": false,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "name",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "is_pinned",
           "nullable": false,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "thread_section_id",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "section_position",
           "nullable": true,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "section_entered_at_ms",
           "nullable": true,
+          "primaryKey": false,
           "type": "INTEGER"
         },
         {
           "name": "project_id",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "originator",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "daybreak_enabled",
           "nullable": true,
+          "primaryKey": false,
           "type": "BOOLEAN"
         },
         {
           "name": "creator_user_id",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "creator_account_id",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         },
         {
           "name": "attached_thread_parent_id",
           "nullable": true,
+          "primaryKey": false,
           "type": "TEXT"
         }
       ],
-      "rows": 12022,
+      "ddlSha256": "9e9cf1c58fd8eb2a28537e28e3e71d7ba727f365e9cd56933b08a21567671f44",
       "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
       "reason": "Native Codex is the sole SQL reader/writer and migration owner. LRA reads bounded activity/checkpoint evidence but must never rewrite provider tool/job state."
+    },
+    {
+      "database": "logs_2.sqlite",
+      "table": "_sqlx_migrations",
+      "columns": [
+        {
+          "name": "version",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "BIGINT"
+        },
+        {
+          "name": "description",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "installed_on",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "success",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "checksum",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "BLOB"
+        },
+        {
+          "name": "execution_time",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "BIGINT"
+        }
+      ],
+      "ddlSha256": "9e366fd739e7dc3a191f76ccf3a0c9fc2bab8edd141202c8174aa067427ffac5",
+      "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
+      "reason": "Native Codex diagnostic log retention, migration history and SQLite sequence allocation are provider-owned. Deleting them would discard recovery/diagnostic evidence or bypass native retention."
+    },
+    {
+      "database": "logs_2.sqlite",
+      "table": "logs",
+      "columns": [
+        {
+          "name": "id",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "INTEGER"
+        },
+        {
+          "name": "ts",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "ts_nanos",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "level",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "target",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "feedback_log_body",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "module_path",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "file",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "line",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "INTEGER"
+        },
+        {
+          "name": "thread_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "process_uuid",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "TEXT"
+        },
+        {
+          "name": "estimated_bytes",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "INTEGER"
+        }
+      ],
+      "ddlSha256": "28f825035f162b5efd6bcf13897997e1390ee5d053c93e590e68ced7938e0241",
+      "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
+      "reason": "Native Codex diagnostic log retention, migration history and SQLite sequence allocation are provider-owned. Deleting them would discard recovery/diagnostic evidence or bypass native retention."
+    },
+    {
+      "database": "logs_2.sqlite",
+      "table": "sqlite_sequence",
+      "columns": [
+        {
+          "name": "name",
+          "nullable": true,
+          "primaryKey": false,
+          "type": ""
+        },
+        {
+          "name": "seq",
+          "nullable": true,
+          "primaryKey": false,
+          "type": ""
+        }
+      ],
+      "ddlSha256": "4cb1eaf14467f226196148cb5688569660cb290d414bae4c1c450b149b62befd",
+      "decision": "retain-external-provider-state",
+      "readerWriter": "Native Codex and its migration engine; LRA reads bounded checkpoint/activity evidence and owns no SQL writes.",
+      "reason": "Native Codex diagnostic log retention, migration history and SQLite sequence allocation are provider-owned. Deleting them would discard recovery/diagnostic evidence or bypass native retention."
     }
   ],
   "coordination": "Wiki and Google automation credentials and execution leases are tenant/service-owned. LRA uses neither application database; no shared coordination daemon or new generic engine is required.",
@@ -1368,5 +1669,52 @@
     "tests/test_infra.py",
     "uv.lock",
     "zizmor.yml"
-  ]
+  ],
+  "nativeStorageAccounting": {
+    "observedAt": "2026-11-16T09:55:17.464558+00:00",
+    "databases": [
+      {
+        "name": "state_5.sqlite",
+        "physicalTables": 17
+      },
+      {
+        "name": "logs_2.sqlite",
+        "physicalTables": 3
+      }
+    ],
+    "applicationOwnedTables": 0,
+    "readOnly": true,
+    "correction": "The earlier inventory covered state_5.sqlite only. This census also includes the separate logs_2.sqlite provider database. Table identity is database plus table name, including SQLite-owned tables; no data or provider migrations were altered."
+  },
+  "productionVerification": {
+    "observedAt": "2026-11-16T09:52:09.421057+00:00",
+    "qualifiedSource": "fa54d01666b4222362025f0676f9a9fcae51146d",
+    "installedVersion": "0.7.3",
+    "pythonFiles": 50,
+    "sourceManifestSha256": "9847c4147a78b87726be724dad73d47bb56ce8bdfbb0f843d29dfc55b2f1a178",
+    "wheelSha256": "105840904b4a78390b2348a9c2147159a59b2fa6f7055884241088182fa1202e",
+    "runtimeQualification": {
+      "run": 43553219799,
+      "passed": 1741,
+      "skipped": 3,
+      "conclusion": "success"
+    },
+    "standardsQualification": {
+      "run": 43553219802,
+      "conclusion": "success"
+    },
+    "recovery": "Private fsynced pre-install package/metadata/entrypoint archive; dependency equality and unchanged previous source checked before install. Every installed Python file matched the qualified wheel. Only existing cleanup daemon restarted; Codex sessions and checkpoints untouched.",
+    "cleanupDaemonAlive": true,
+    "cleanupHealthy": false,
+    "inspectionBlocked": true,
+    "existingFailedUnitsPreserved": {
+      "system": 51,
+      "user": 105
+    },
+    "unresolvedProductionEvidence": [
+      "Explicit owner disk target remains 20% used; current use exceeds it. The daemon reports pressure, not healthy.",
+      "Latest sample retains a cache because its filesystem or Git inspection is unavailable and its worktree inventory is still paged. No inspection guard, target, failed-unit record or historical failure receipt was changed."
+    ],
+    "checkpointVerification": "Previously verified durable checkpoint, interrupted tool, ownership and same-thread resumption behavior remains applicable: all codex/checkpoint modules are unchanged in 0.7.3. A crash remains uncertain about external effects; no exactly-once claim."
+  }
 }
