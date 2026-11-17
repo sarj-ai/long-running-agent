@@ -5,6 +5,7 @@ import { defineConfig } from "astro/config";
 import cloudflareArtifacts, {
   ENGINEERING_ROUTE,
   WIKI_ROUTE,
+  INTERNAL_APPS_ROUTE,
 } from "./src/integrations/cloudflare-artifacts";
 import { SITE_BASE_PATH, SITE_HOMEPAGE, SITE_ORIGIN } from "./src/lib/paths";
 import { REFERENCE, SIDEBAR } from "./src/lib/reference";
@@ -47,7 +48,7 @@ export default defineConfig({
     sitemap({
       customPages: [`${SITE_ORIGIN}/`, `${SITE_ORIGIN}/projects/wiki/`],
       filter: (page) =>
-        ![ENGINEERING_ROUTE, WIKI_ROUTE].some(
+        ![ENGINEERING_ROUTE, WIKI_ROUTE, INTERNAL_APPS_ROUTE].some(
           (route) => page === new URL(route, SITE_HOMEPAGE).href,
         ),
     }),

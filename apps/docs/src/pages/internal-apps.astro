@@ -1,0 +1,90 @@
+---
+import "../styles/engineering.css";
+import "../styles/internal-apps.css";
+
+import EngineeringHeader from "../components/engineering-header.astro";
+import EngineeringTheme from "../components/engineering-theme.astro";
+import { INTERNAL_APPS } from "../lib/internal-apps";
+import { SITE_ORIGIN, siteHref } from "../lib/paths";
+
+const CATEGORIES = [...new Set(INTERNAL_APPS.map((app) => app.category))];
+const CANONICAL = `${SITE_ORIGIN}/internal/`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width,initial-scale=1" name="viewport" />
+    <meta content="light dark" name="color-scheme" />
+    <meta content="Find the internal apps and tools we use to build and run Sarj." name="description" />
+    <meta content="noindex, nofollow" name="robots" />
+    <link href={CANONICAL} rel="canonical" />
+    <link href={siteHref("/favicon.ico")} rel="icon" />
+    <title>Internal apps · Sarj Engineering</title>
+    <EngineeringTheme />
+  </head>
+  <body class="engineering-home internal-directory">
+    <a class="engineering-skip" href="#main-content">Skip to apps</a>
+    <EngineeringHeader />
+    <main data-app-directory id="main-content" tabindex="-1">
+      <section class="engineering-intro engineering-band">
+        <div class="engineering-frame engineering-intro-inner">
+          <p class="engineering-eyebrow"><a href="/">Engineering</a><span aria-hidden="true">/</span> Internal</p>
+          <h1>Internal apps</h1>
+          <p class="engineering-summary">The tools we use to build and run Sarj.</p>
+          <p class="internal-access-note">Each app keeps its own sign-in and access permissions.</p>
+        </div>
+      </section>
+      <section aria-label="Find an app" class="engineering-band">
+        <div class="engineering-frame internal-app-toolbar">
+          <div class="internal-app-search-row">
+            <label class="internal-app-search" for="app-search">
+              <svg aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-width="1.5" viewBox="0 0 24 24" width="20"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
+              <span class="internal-visually-hidden">Search apps</span>
+              <input autocomplete="off" disabled id="app-search" placeholder="Search apps, tools, or what you need to do…" type="search" />
+            </label>
+            <p aria-atomic="true" aria-live="polite" class="internal-app-count" data-app-count>{INTERNAL_APPS.length} apps</p>
+          </div>
+          <div aria-label="Filter apps by category" class="internal-app-filters" role="group">
+            <button aria-pressed="true" data-app-category="" disabled type="button">All apps</button>
+            {CATEGORIES.map((category) => <button aria-pressed="false" data-app-category={category} disabled type="button">{category}</button>)}
+          </div>
+        </div>
+      </section>
+      {CATEGORIES.map((category, index) => (
+        <section aria-labelledby={`category-${index}`} class="engineering-band internal-app-group" data-app-group>
+          <div class="engineering-frame">
+            <div class="engineering-section-heading">
+              <h2 class="engineering-eyebrow" id={`category-${index}`}>{category}</h2>
+              <span aria-hidden="true" class="internal-group-number">{String(index + 1).padStart(2, "0")}</span>
+            </div>
+            <ul aria-label={`${category} apps`} class="internal-app-list">
+              {INTERNAL_APPS.filter((app) => app.category === category).map((app) => (
+                <li data-app data-category={category} data-search={`${app.name} ${app.description} ${app.category} ${app.href}`.toLowerCase()}>
+                  <a class="internal-app-card" href={app.href}>
+                    <div class="internal-app-card-heading"><h3>{app.name}</h3><span aria-hidden="true" class="internal-app-arrow">↗</span></div>
+                    <p>{app.description}</p>
+                    <span aria-hidden="true" class="internal-app-address">{app.href.startsWith("/") ? `engineering.sarj.ai${app.href}` : app.href.replace(/^https:\/\//u, "").replace(/\/$/u, "")}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ))}
+      <section class="engineering-band" data-app-empty hidden>
+        <div class="engineering-frame internal-app-empty">
+          <h2>No apps found</h2>
+          <p>Try another search or clear the filters to see all apps.</p>
+          <button data-app-reset type="button">Clear search and filters</button>
+        </div>
+      </section>
+    </main>
+    <footer class="engineering-font-notices"><a href="/">Explore engineering projects and documentation <span aria-hidden="true">↗</span></a></footer>
+    <script>
+      import { mountAppDirectory } from "../lib/mount-app-directory";
+      mountAppDirectory();
+    </script>
+  </body>
+</html>
