@@ -6,6 +6,7 @@ import { parseArgs } from "node:util";
 
 import metadata from "../package.json" with { type: "json" };
 import { ENGINEERING_PROJECTS } from "../src/lib/engineering-projects.ts";
+import { INTERNAL_APPS } from "../src/lib/internal-apps.ts";
 import { SOURCE_REVISION } from "../src/lib/source-revision.ts";
 import { TERMINAL_STYLE_HASHES } from "../src/lib/terminal-style-hashes.ts";
 
@@ -55,6 +56,7 @@ async function main(): Promise<void> {
   );
   await verifyEngineering(mode);
   await verifyWiki(mode);
+  await verifyInternalApps(mode);
   await Promise.all(
     ["docs.css", "navigation.js", "sarj-logo.svg"].map((asset) =>
       assetBytes(mode, new URL(`ui/v1/${asset}`, SITE_URL)),
@@ -62,6 +64,49 @@ async function main(): Promise<void> {
   );
   if (mode === "artifact") await verifyTerminalStyles();
   process.stdout.write("Deployment verified.\n");
+}
+
+async function verifyInternalApps(mode: VerificationMode): Promise<void> {
+  const artifact = await readFile(
+    new URL("internal/index.html", DIST_ROOT),
+    "utf8",
+  );
+  const ownedDocument = activeDocument(artifact);
+  const response =
+    mode === "live"
+      ? await deployedResponse(new URL("/internal/", SITE_URL), "text/html")
+      : undefined;
+  const document = response
+    ? activeDocument(await response.text())
+    : ownedDocument;
+  const headers = await readFile(new URL("_headers", DIST_ROOT), "utf8");
+  const expectedPolicy =
+    /(?:^|\n\n)\/internal\/\*\n {2}Content-Security-Policy: ([^\n]+)/u.exec(
+      headers,
+    )?.[1];
+  assert.ok(expectedPolicy, "Internal app directory CSP missing");
+  const policy = response
+    ? response.headers.get("Content-Security-Policy")
+    : expectedPolicy;
+  assert.ok(policy, "Published internal app directory CSP missing");
+  verifyPolicy(policy, expectedPolicy, document);
+  assert.match(document.markup, /<h1\b[^>]*>\s*Internal apps\s*<\/h1>/u);
+  assert.ok(document.markup.includes(`href="${SITE_URL.origin}/internal/"`));
+  for (const app of INTERNAL_APPS)
+    assert.ok(
+      document.markup.includes(`href="${app.href}"`),
+      `Missing internal app: ${app.name}`,
+    );
+  assert.doesNotMatch(
+    document.markup,
+    /http-equiv="content-security-policy"|\/internal-apps\//u,
+  );
+  await verifyEngineeringAssets(mode, ownedDocument.markup, document.markup);
+  if (mode === "artifact")
+    await assert.rejects(
+      readFile(new URL("internal-apps/index.html", ARTIFACT_ROOT)),
+      { code: "ENOENT" },
+    );
 }
 
 async function verifyWiki(mode: VerificationMode): Promise<void> {
@@ -312,11 +357,11 @@ function activeDocument(document: string): ActiveDocument {
 function verifyEngineeringMarkup(document: string): void {
   assert.match(
     document,
-    /<header\b[^>]*aria-label="Sarj Engineering"/u,
+    /<header\b[^>]+aria-label="Sarj Engineering"/u,
     "Engineering header missing",
   );
   const mainContent =
-    /<main\b[^>]*id="main-content"[^>]*>([\s\S]*?)<\/main>/u.exec(
+    /<main\b[^>]+id="main-content"[^>]*>([\s\S]*?)<\/main>/u.exec(
       document,
     )?.[1];
   assert.ok(mainContent, "Engineering main landmark missing");
@@ -326,12 +371,12 @@ function verifyEngineeringMarkup(document: string): void {
     "Engineering heading missing",
   );
   const projects =
-    /<ul\b[^>]*aria-label="Engineering projects"[^>]*>([\s\S]*?)<\/ul>/u.exec(
+    /<ul\b[^>]+aria-label="Engineering projects"[^>]*>([\s\S]*?)<\/ul>/u.exec(
       mainContent,
     )?.[1];
   assert.ok(projects, "Engineering projects list missing");
   const cards = projects
-    .matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gu)
+    .matchAll(/<a\b[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gu)
     .toArray();
   assert.equal(
     cards.length,
@@ -416,11 +461,11 @@ async function verifyEngineeringAssets(
 function referencedAssets(document: string): ReadonlySet<string> {
   const assets = new Set(
     document
-      .matchAll(/<(?:script|img)\b[^>]*\bsrc="([^"]+)"[^>]*>/gu)
+      .matchAll(/<(?:script|img)\b[^>]+\bsrc="([^"]+)"[^>]*>/gu)
       .map((match) => match[1]),
   );
   for (const match of document.matchAll(
-    /<(?:source|img)\b[^>]*\bsrcset="([^"]+)"[^>]*>/gu,
+    /<(?:source|img)\b[^>]+\bsrcset="([^"]+)"[^>]*>/gu,
   )) {
     for (const source of match[1].split(","))
       assets.add(source.trim().split(/\s+/u, 1)[0]);
@@ -486,7 +531,7 @@ async function verifyTerminalStyles(): Promise<void> {
     );
   }
   const stylesheets = homepage
-    .matchAll(/<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"/gu)
+    .matchAll(/<link\b[^>]+rel="stylesheet"[^>]*href="([^"]+)"/gu)
     .toArray();
   assert.ok(stylesheets.length > 0);
   const styles = await Promise.all(

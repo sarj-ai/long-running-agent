@@ -7,6 +7,7 @@ import { SITE_BASE_PATH, SITE_HOMEPAGE, siteHref } from "../lib/paths";
 
 export const ENGINEERING_ROUTE = "engineering-home/";
 export const WIKI_ROUTE = "wiki-project/";
+export const INTERNAL_APPS_ROUTE = "internal-apps/";
 
 const POLICY_PATTERN =
   /<meta http-equiv="content-security-policy" content="([^"]+)">/u;
@@ -17,7 +18,7 @@ function securityHeader(documents: readonly string[]): string {
   const hashes = new Set<string>();
   for (const document of documents) {
     for (const match of document.matchAll(
-      /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gu,
+      /<script(?![^>]+\bsrc=)[^>]*>([\s\S]*?)<\/script>/gu,
     )) {
       hashes.add(`'sha256-${hash("sha256", match[1], "base64")}'`);
     }
@@ -99,14 +100,20 @@ export default function cloudflareArtifacts(assetRoot: URL): AstroIntegration {
         );
         if (!wiki)
           throw new Error("Astro did not render the Wiki project page");
+        const internalApps = documents.find(
+          ({ path }) => path === `${INTERNAL_APPS_ROUTE}index.html`,
+        );
+        if (!internalApps)
+          throw new Error("Astro did not render the internal app directory");
         const projectDocuments = documents.filter(
-          (page) => page !== homepage && page !== wiki,
+          (page) => page !== homepage && page !== wiki && page !== internalApps,
         );
         const header = securityHeader(
           projectDocuments.map(({ document }) => document),
         );
         const homepageHeader = securityHeader([homepage.document]);
         const wikiHeader = securityHeader([wiki.document]);
+        const internalAppsHeader = securityHeader([internalApps.document]);
         await Promise.all(
           projectDocuments.map(({ path, document }) =>
             writeFile(
@@ -136,9 +143,13 @@ export default function cloudflareArtifacts(assetRoot: URL): AstroIntegration {
           "/*\n",
           () => `/projects/wiki/*\n${wikiHeader}\n`,
         );
+        const internalAppsHeaders = globalHeaders.replace(
+          "/*\n",
+          () => `/internal/*\n${internalAppsHeader}\n`,
+        );
         await writeFile(
           new URL("_headers", assetRoot),
-          `${scoped}\n${homepageHeaders}\n\n${wikiHeaders}\n`,
+          `${scoped}\n${homepageHeaders}\n\n${wikiHeaders}\n\n${internalAppsHeaders}\n`,
           "utf8",
         );
         await writeFile(
@@ -154,6 +165,13 @@ export default function cloudflareArtifacts(assetRoot: URL): AstroIntegration {
           "utf8",
         );
         await rm(new URL(WIKI_ROUTE, dir), { recursive: true });
+        await mkdir(new URL("internal/", assetRoot), { recursive: true });
+        await writeFile(
+          new URL("internal/index.html", assetRoot),
+          internalApps.document.replace(POLICY_PATTERN, ""),
+          "utf8",
+        );
+        await rm(new URL(INTERNAL_APPS_ROUTE, dir), { recursive: true });
         await writeLegacyRedirects(dir, assetRoot);
         if (dir.href !== assetRoot.href) await rm(headersUrl);
       },
