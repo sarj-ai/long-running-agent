@@ -52,12 +52,6 @@ export const INTERNAL_APPS = [
     description: "Explore and share interface designs and prototypes.",
   },
   {
-    name: "Team Harness",
-    href: "https://team-harness.sarj.ai/",
-    category: "Engineering",
-    description: "Open the team's agent harness and testing workspace.",
-  },
-  {
     name: "Portal",
     href: "https://portal.sarj.ai/",
     category: "Operations",
@@ -115,12 +109,6 @@ export const INTERNAL_APPS = [
     description: "Open the internal Homer dashboard.",
   },
   {
-    name: "Status",
-    href: "https://status.sarj.ai/",
-    category: "Operations",
-    description: "Check service status and incidents.",
-  },
-  {
     name: "IBAN · Faris",
     href: "https://iban.sarj.ai/",
     category: "Operations",
@@ -144,12 +132,6 @@ export const INTERNAL_APPS = [
     href: "https://sarj.ai/culture/",
     category: "People",
     description: "Open Sarj's internal culture and team space.",
-  },
-  {
-    name: "Feedback & Roadmap",
-    href: "https://product.sarj.ai/",
-    category: "Content",
-    description: "Collect product feedback and follow the roadmap.",
   },
   {
     name: "Blog Editor",
@@ -186,12 +168,6 @@ export const INTERNAL_APPS = [
     href: "https://demo.sarj.ai/",
     category: "AI & testing",
     description: "Find and open Sarj's product demos.",
-  },
-  {
-    name: "Doctor",
-    href: "https://doctor.sarj.ai/",
-    category: "AI & testing",
-    description: "Open the medical transcription workspace.",
   },
   {
     name: "Hala Chat",
