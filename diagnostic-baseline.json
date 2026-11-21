@@ -1,0 +1,1543 @@
+{
+  "schemaVersion": 2,
+  "provenance": {
+    "bundleVersion": "9.75.0",
+    "consumerBaseSha": "4872c70d1f6a30a0e624a6be0dcb2feb696b3b64",
+    "catalogDigest": "ed64614f526f9b90eea29a6bdae88b2153fdfacba51fe71ba72dc8aff3ca4bb8"
+  },
+  "diagnostics": [
+    {
+      "fingerprint": "86c7a823be9200d7379502f30b7d5a6cca14d6166bb7d8c8ee7e6e31227e261f",
+      "source": "deptry",
+      "ruleId": "DEP001",
+      "path": "scripts/generate_docs.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "4813a9969f3eb01bfa9616b8b0210df6ad48091f36c0f0d941cfa957f0476d17",
+      "source": "deptry",
+      "ruleId": "DEP003",
+      "path": "scripts/generate_docs.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "8e6a8d7493eca3be0db17b7fcf5269083ed6c8a593b806553d2fa4265edf3ce6",
+      "source": "deptry",
+      "ruleId": "DEP003",
+      "path": "scripts/generate_docs.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "5ee00910dd280f97f32b8a276b847d9fb5ab0e4efc09aceb86e24828973ac848",
+      "source": "oxlint",
+      "ruleId": "@sarj/no-logical-or-fallback",
+      "path": "apps/docs/src/lib/mount-terminal-demo.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "8be10e37ff24eb05c9ac81bec5816379dc713be1b79b57a95213071695d2c832",
+      "source": "oxlint",
+      "ruleId": "@sarj/no-logical-or-fallback",
+      "path": "apps/docs/src/lib/reference.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "02f26390b0633908293288e7ca9050752efdb562e7a03d9647f4b8a34b09aae1",
+      "source": "oxlint",
+      "ruleId": "@sarj/no-logical-or-fallback",
+      "path": "apps/docs/src/lib/terminal-screen.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "3330013a4b7f50143a13d53cd7b679d4d387862b85b44b96010f13005cf665f1",
+      "source": "oxlint",
+      "ruleId": "@sarj/no-zod-parse-typed-object",
+      "path": "apps/docs/src/lib/env.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "eff7b165dccf76d8ff8519194291635bd395710ed363416a7c8e55e97b557c56",
+      "source": "oxlint",
+      "ruleId": "import/no-anonymous-default-export",
+      "path": "apps/docs/src/worker.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "d24affd8cf583d8bc69cebee1d262c7147c30015b583fbf4c6df55ec7b6084e1",
+      "source": "oxlint",
+      "ruleId": "typescript/promise-function-async",
+      "path": "apps/docs/scripts/verify-deployment.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "8ba1651b7c7677684a65e562aa61d37ae25d87d344542b4b2eabec96cc2897b0",
+      "source": "oxlint",
+      "ruleId": "typescript/promise-function-async",
+      "path": "apps/docs/scripts/worker.test.ts",
+      "count": 4
+    },
+    {
+      "fingerprint": "45c57f66abfd9fede8dc882bc423fee36e02a0b699bfcc30c4cddc7016be8fd8",
+      "source": "oxlint",
+      "ruleId": "typescript/promise-function-async",
+      "path": "apps/docs/src/integrations/cloudflare-artifacts.ts",
+      "count": 2
+    },
+    {
+      "fingerprint": "52950261f202ce25425016cc1f706cfada6a06261299a2c7ed0b0cd246499dcf",
+      "source": "oxlint",
+      "ruleId": "typescript/promise-function-async",
+      "path": "apps/docs/src/lib/mount-terminal-demo.ts",
+      "count": 1
+    },
+    {
+      "fingerprint": "1b4797c560177c295e5819de0ffb035478eadea668912ab337e671662e369055",
+      "source": "ruff",
+      "ruleId": "shared-clock-mock",
+      "path": "tests/runtime/test_cleanup.py",
+      "count": 8
+    },
+    {
+      "fingerprint": "77883372f0686aa6fdc05535c01c6366291d2edd2636c44e0ab77bcec9e02cee",
+      "source": "ruff",
+      "ruleId": "shared-clock-mock",
+      "path": "tests/runtime/test_cleanup.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "484566d9daa2e9cffdfae2cf45b5ebf8ac2f9313bdca775a589d72e8f89c94f9",
+      "source": "ruff",
+      "ruleId": "shared-clock-mock",
+      "path": "tests/runtime/test_cleanup_artifacts.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "09073123f0f8c9e1b856433419fb65fb034d91aa409698581039e15bd2350e42",
+      "source": "ruff",
+      "ruleId": "shared-clock-mock",
+      "path": "tests/runtime/test_cleanup_daemon.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "ee482d66ec348e8ad7b6157d291c36374e26062134ac7b5797d56b541b101f1e",
+      "source": "ruff",
+      "ruleId": "shared-clock-mock",
+      "path": "tests/runtime/test_cleanup_dependencies.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "16919cd82483e26448b662b1dd1b4c1297e1e3ea22648b5ad2ae3ba28159930a",
+      "source": "ruff",
+      "ruleId": "shared-clock-mock",
+      "path": "tests/runtime/test_cleanup_node_cache.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "9fba804c4bdc3acd61f0f7183d8fd90a40b8cc68524f016a8b2ad6ccfa8ea17c",
+      "source": "ruff",
+      "ruleId": "shared-clock-mock",
+      "path": "tests/runtime/test_cleanup_node_cache.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "f5448a259324c1d7145a3ec283d8cc11e40bdfd860e80b8192a4e82bad5ffa4c",
+      "source": "ruff",
+      "ruleId": "shared-clock-mock",
+      "path": "tests/runtime/test_cleanup_publication.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "fd25c2150e3eec84a148864d9416530b002b57e6fdf6d061775af6b8bf46cccf",
+      "source": "ruff",
+      "ruleId": "shared-clock-mock",
+      "path": "tests/runtime/test_cleanup_reference_recovery.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "770ba7ceb172c3d06b54033220fc6e2c7ea353a1a5afab4ab8ffb9f94a437f6c",
+      "source": "ruff",
+      "ruleId": "shared-clock-mock",
+      "path": "tests/runtime/test_cleanup_webpack_cache.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "f689d04c6515b732e4b3a2178b09d48e1f1152a2cabdd1181dc986ccd83bc599",
+      "source": "sarj-iac-lint",
+      "ruleId": "no-terraform-comments",
+      "path": "terraform/access.tf",
+      "count": 2
+    },
+    {
+      "fingerprint": "8669e22c54c840723aca734e006487311faebec8bb01f8dd775cdf0a3378d6bc",
+      "source": "sarj-iac-lint",
+      "ruleId": "no-terraform-comments",
+      "path": "terraform/backend.tf",
+      "count": 1
+    },
+    {
+      "fingerprint": "c2ec0eb1552f69d9918c72f32d95daf29a0eba7ae24a3ff85285242c322e6fb8",
+      "source": "sarj-iac-lint",
+      "ruleId": "no-terraform-comments",
+      "path": "terraform/backups.tf",
+      "count": 4
+    },
+    {
+      "fingerprint": "6d77e503885fdcc74a3e4063cc18c212a154adc526bfeb88189942df9bd4b825",
+      "source": "sarj-iac-lint",
+      "ruleId": "no-terraform-comments",
+      "path": "terraform/host.tf",
+      "count": 5
+    },
+    {
+      "fingerprint": "e899bc2f285940b520688069f0b27e7286523fb75d3b89df7f6e43d546c0fc9c",
+      "source": "sarj-iac-lint",
+      "ruleId": "no-terraform-comments",
+      "path": "terraform/main.tf",
+      "count": 1
+    },
+    {
+      "fingerprint": "e55f65306be5ae0eac7084bd373f7a08d250dadcc63fbf84350aff6e720187b8",
+      "source": "sarj-iac-lint",
+      "ruleId": "no-terraform-comments",
+      "path": "terraform/moved.tf",
+      "count": 1
+    },
+    {
+      "fingerprint": "46229050d919a6a2df143442232fcc86e96f66c1b36373d2c411199af70d3ebf",
+      "source": "sarj-iac-lint",
+      "ruleId": "no-terraform-comments",
+      "path": "terraform/versions.tf",
+      "count": 1
+    },
+    {
+      "fingerprint": "da582d370aa05572a79586b6d387d09545087b89308e56e5b870fb3669fd72bf",
+      "source": "sarj-iac-lint",
+      "ruleId": "no-terraform-guard-blocks",
+      "path": "terraform/variables.tf",
+      "count": 2
+    },
+    {
+      "fingerprint": "9d7b1b83dc84b50a279d8adcb932bb53211653b71586725572fa1564094c2158",
+      "source": "sarj-python-lint",
+      "ruleId": "no-custom-control-flow-exception",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "f3d7bc804485168bedda396489b9b4f3cbdc962ccb0c708e9a443623f64ac77d",
+      "source": "sarj-python-lint",
+      "ruleId": "no-custom-control-flow-exception",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "dd5b6d5c24482f093651d591a41ddd286f46a70805499825dd95bbf0aea08d0a",
+      "source": "sarj-python-lint",
+      "ruleId": "no-custom-control-flow-exception",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_events.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "4f8efee679745ef80397675c35eae50be2c9d62df6b100ffe9bd6acb38759bff",
+      "source": "sarj-python-lint",
+      "ruleId": "no-generic-json-parser",
+      "path": "scripts/generate_docs.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "e9b8de1811b62ef0b0c9913db731d208501d1da230e2c83ee4ab42c5787ed76b",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/client/controller.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "2ff658bd678efb992c9224d353829ddc002df3f784f264ceb040798a1f61c689",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/client/host.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "c9a99206d6722de2a27a56104399a08ec7793906a075ef743f71b98362bedec6",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/client/transfer.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "40c15cb1c02e837843d5454192fab0c731977ea4c43f45d8e9022b829048e76a",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/admin_worker.py",
+      "count": 5
+    },
+    {
+      "fingerprint": "358da11b2fec7681bf322c00cdfde500eb5d89a74a6bec5e0e0a774e2804d177",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "ff9e4520f96d6b4e0c33dda6b231cad6e6b75f46da3b64ae8d241a3293122e03",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_artifacts.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "e32e263b040f138dc15dc149b6641d657bee99a3486b31cda579badad950f454",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_capacity.py",
+      "count": 8
+    },
+    {
+      "fingerprint": "4729d04b4833019bcf0713467818a14141fe8aef8964ce2544b5a4a1ff9049a8",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_daemon.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "e38422b934b1f82216606b486bd58e1ab4c0f50d0a73b0cf21632beb6a0de998",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_node_cache.py",
+      "count": 7
+    },
+    {
+      "fingerprint": "ffb0889639041f7dd8178b4f8e1d5f0111b181d845e54574cf1063a4a7dde561",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_probe.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "ea68d273c8f8485bb9a958843e8e4e0d711f1182c02d1f5ebf86dd8b4da1ee83",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_webpack_cache.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "a55677ef4a5a0e15ad3b0eca8a4bbe1d58ea11803a828071a22d1f702176ec12",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_panes.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "d5f240b87be0829613c527fc7693b3a241a98faf267b446950acc40c2465553c",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_retry_state.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "fc56d72217d53fa4db1f386192f20f85339bee702903df0ba435d8a76514970d",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/health.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "9ceef4761a361c29f962402633e76efa062aa8c40f83d16b2d06e0993b711e11",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/maintenance_worker.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "b3b066ba7bc4422d6237a8098ad1521706f96b6f1895b8b639acefe89477ca5e",
+      "source": "sarj-python-lint",
+      "ruleId": "no-magic-arithmetic",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/worktrees.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "a73847660fd3c2348f95cb6b528356686fddbe865a39bdc0e3171811b9e352de",
+      "source": "sarj-python-lint",
+      "ruleId": "no-mutating-input-with-result",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "6b7d41c07b1eae42a7505eac7cedb55d5df69a65fbe62aefb088e77139e81c94",
+      "source": "sarj-python-lint",
+      "ruleId": "no-nonlocal-statement",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_activity.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "f2ceb1b4cee150cf6c5427dc185ebe939d9c2c98f97e3361dda820f3feceacaa",
+      "source": "sarj-python-lint",
+      "ruleId": "no-nonlocal-statement",
+      "path": "tests/runtime/test_cleanup.py",
+      "count": 12
+    },
+    {
+      "fingerprint": "e5db1a7ef7c5c0afc5ed8a81e2c2ae6fbd2c16e093fce6f004ddc9a991d9b585",
+      "source": "sarj-python-lint",
+      "ruleId": "no-nonlocal-statement",
+      "path": "tests/runtime/test_cleanup_node_cache.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "8ef4fbcf397bbbe5f61ccacdbcc688341ccc100996fbda9fc67985643e325017",
+      "source": "sarj-python-lint",
+      "ruleId": "no-nonlocal-statement",
+      "path": "tests/runtime/test_cleanup_probe.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "1b7333f347756e8d2269f86d0a0bbf84a1d2f33f34593a111e0432fde8d60f71",
+      "source": "sarj-python-lint",
+      "ruleId": "no-nonlocal-statement",
+      "path": "tests/runtime/test_cleanup_reference_recovery.py",
+      "count": 7
+    },
+    {
+      "fingerprint": "0bb31ec1af415c74c592dcd2537f9104db0323fd4dc3af3a0b95ff85990689a6",
+      "source": "sarj-python-lint",
+      "ruleId": "no-nullable-dependency-fallback",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_panes.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "37478af6d80cdd0b3b8566f1105c1791962ba7cd254cfa1548fbe5abbaf336d9",
+      "source": "sarj-python-lint",
+      "ruleId": "no-nullable-dependency-fallback",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_panes.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "8af3c0fff2fe3eb5c788dcfedc0dceab01fc782f6ae7c33f165c8e0429660d59",
+      "source": "sarj-python-lint",
+      "ruleId": "no-nullable-dependency-fallback",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_panes.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "5355ac5c3409709414d3bf96ad052e9c19829b354173f9791454b6825828c2ad",
+      "source": "sarj-python-lint",
+      "ruleId": "no-positional-tuple-record",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_panes.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "f5e4dfac8a8ccf3fed972fd21de18b8af1c3b87ae0d0861d95ca04dcccf552d5",
+      "source": "sarj-python-lint",
+      "ruleId": "no-raw-source-text-test-oracle",
+      "path": "tests/runtime/test_cleanup_artifacts.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "938a0baa5bf42d694b34712a0722c7d4cee6ea5d7b12f486077b55dd7ec572d3",
+      "source": "sarj-python-lint",
+      "ruleId": "no-raw-source-text-test-oracle",
+      "path": "tests/runtime/test_cleanup_capacity.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "11b8e8d545bec33231f487f2a3c7ea6e7e2bb2a3f52c3936493b70b7aba17fb5",
+      "source": "sarj-python-lint",
+      "ruleId": "no-raw-source-text-test-oracle",
+      "path": "tests/runtime/test_cleanup_daemon.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "44449df3d2cc2271194d7350254d241a170bd1d1e20acfb1fb88f99ad2b4b27b",
+      "source": "sarj-python-lint",
+      "ruleId": "no-raw-source-text-test-oracle",
+      "path": "tests/runtime/test_cleanup_resilience.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "a68dcee55ba04b970c6ea802834e344709e3dd25e683ced5aaa720430f3aa276",
+      "source": "sarj-python-lint",
+      "ruleId": "no-redundant-attribute-unpacking",
+      "path": "tests/client/test_connection.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "ba2ef87a655490b9a04671c8b89717f0f3177fb79827fcad1113b33143a6c26c",
+      "source": "sarj-python-lint",
+      "ruleId": "no-test-comments",
+      "path": "tests/client/test_connection.py",
+      "count": 7
+    },
+    {
+      "fingerprint": "015648665085e82594b317ea9b9302bb69cc911aab62b1047e9f466c7297d866",
+      "source": "sarj-python-lint",
+      "ruleId": "no-test-comments",
+      "path": "tests/client/test_terminal.py",
+      "count": 7
+    },
+    {
+      "fingerprint": "37b1cf2441f7f9fe3cf685dce2cd7bb1a8b3b30d967dee11a896d6c3442a3f8d",
+      "source": "sarj-python-lint",
+      "ruleId": "no-test-comments",
+      "path": "tests/runtime/test_cleanup_inspection.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "51c54ef444dec3b1ed59e772c167819f0154720585ad0220427c6dca79c68cf6",
+      "source": "sarj-python-lint",
+      "ruleId": "no-test-comments",
+      "path": "tests/runtime/test_cleanup_node_cache.py",
+      "count": 5
+    },
+    {
+      "fingerprint": "e5d6c6443fe7803dffb4351f65dfc2c298ba5e7555051ae8e6a5d9d4ea1cc1a7",
+      "source": "sarj-python-lint",
+      "ruleId": "no-test-comments",
+      "path": "tests/runtime/test_cleanup_publication.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "9235a7e575dd9b5766b54281dd89da12098591f2f166ca91481a3ff1dbecc69b",
+      "source": "sarj-python-lint",
+      "ruleId": "no-test-comments",
+      "path": "tests/runtime/test_cleanup_reference_recovery.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "35f29bb40330503eabc09723e1486e4562666b15c501f00626b652e2654e5940",
+      "source": "sarj-python-lint",
+      "ruleId": "no-test-comments",
+      "path": "tests/runtime/test_cleanup_resilience.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "31d7bacd9a86e72de96954c00137e50397121ec8a65f29484c723e3fccd24d6e",
+      "source": "sarj-python-lint",
+      "ruleId": "no-test-comments",
+      "path": "tests/runtime/test_worktrees.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "69c84829dd7e6198b38357930ad0997db5b125040d2cd01eec75be9e245333ef",
+      "source": "sarj-python-lint",
+      "ruleId": "no-value-error-forwarder",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/maintenance_worker.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "332d1308a2e57feb9efb21229cf1929ebe2a82ad54674b8ff4c1d47bb4d7ccd3",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/client/browser.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "8100b9f60d953c07cbe451fb180d30665c4eec81b958d65859e7a804cea28d04",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/client/browser.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "0eefaea4473b0a4c25c6af4e262353325b13cf0a95cf938c26a875fa9795e2f6",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/client/transfer.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "b098c7d4157185aeed99bfd783c353c0524e2b7bc3c5400d3b2634655dab662a",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/client/tunnel.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "9404f667ede4d83b77cf0eb2c31844f6f1dc904fe61294343a631d84a422caa9",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/host_connection.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "94c922e5ba06d05c992e91de2d60b717ebf5cdb57145f9e330f058ab12ad0ebc",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/admin.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "62318fae697f4c71188506f6fcca7eb78c434c326b3e6aa7967ce8b9fbd3e3d4",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/admin_worker.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "78c6d50ee38f75ef3b54428aa33474039f29c5af2b996f892c817afebcd0fc75",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/admin_worker.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "8d6426e6a3016f0e45ba7904ea56bc92be466cbd58d70b1d82f3a150e8554e13",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/admin_worker.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "952546981f7cc88758c6c3ef3aba9412b6b1d2bd3da90df2bc0a75c791c5ef33",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/admin_worker.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "ae15b5df5a877e8b3a0741ca8b6610bd13246e4c44a79127bc99fa8127038286",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/admin_worker.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "2903552af34c2baf5112c6ff2829e2517aa8e8c95fcd821813d2c0a0e2279185",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "31778466e43611a706690edbc4a7c9c7917f717515e4fd07097bd4ad6e3057df",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "7516c2295111d13426bca7fa1152291bc2d1a360026b49a4626919b925fba410",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "f06653a191c1c18d96b5db19a53624d810a27b01ab212c893ebb96f95c737ccf",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "494e6ebcef6af40dcdbce433ebd624d9e95c808041f0636759cc0a9468fa7491",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_activity.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "a456b1864a5345cb0a0f9ddd3259d2467a08aad3c537ca5e0470f88d6563c9b7",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_activity.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "55403decaa237b0e2db9983a58c448f400b6875c477c95c2b90abfd2cd7b1ffe",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_daemon.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "c96baf9eba0905af81849645a48f48c7a2d4d7bf760dcbc1703579b1b54f16f5",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_dependencies.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "039837e8f09e39114e936103882751a7ed7be378f25440eea52cdd37273e855d",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_inspection.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "56350fdbb2fa7201e6369e4b0af93cd47cd30429a69961a72f920556f37d7e34",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_inspection.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "5d1de1b6b8a25be24091c7c099f4a940aff6cc6355e7f760c9f699922e68eebf",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_node_cache.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "1bb3f134a01bda47851feae23829ee0323917c940a7244cc4f82216aa779009c",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_probe.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "b324d21f3c95cb7e1246fe4004d08e1dd8406e6afcce14ee12eb46a2bdc3f107",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_probe.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "ba3767ca31cb7af89ae615a797e8fcafc298faf641440948d85d92cba327ccb9",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_probe.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "b347730ac5ff44ee249370718bd960343657123585479a067df37360b2975a0b",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_state.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "512e76c20d01488bb335f2117540530d55940ce0a9761030e4d5c895147d9139",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/host.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "6124b624f4b942396abe6a63dfaf4dd7129a7aa3d99d56fe95d2a3398fa77276",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/transfer.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "a86c84d7b57b83a4d981fcb1af9831149e4c8cae0b570c1f843c5bcebf9f9f1e",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/transfer.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "de2d4d0195a6ea9eda6612d8d86804b20b67422ef54bfd8d6878e0ca901beec7",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/transfer.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "c4ce04a27d5c0c08efeffe18fccb868b9b903464643efb01f60889ad97bac781",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/worktrees.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "1c154d9ee425a322957fb13e1377e9c15d44f19263154b03929cf22974fbc27b",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/client/test_browser.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "5fb9ec5dd7d340fa9add83dc4817d41fdc6a7b4d5365fe1ec42080af91ab01f9",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/client/test_browser.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "64160a62d16dcb92d4851334477534fe495dfb1ae184c78246d1927cf87e3e7b",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/client/test_browser.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "99bcfe8fc560addf660078e8d09a0cc234aa2504607c929967b3e3113f683dec",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/client/test_browser.py",
+      "count": 6
+    },
+    {
+      "fingerprint": "9bab10e4fb1ca3a905e9f98491ee751fbb87f6203298dc28bde4b092d9a5cf3d",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/client/test_browser.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "c85951fb1c4aacb1c78d691218ec2df7942706a5d0b12f25b794ebe82bd377b0",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/client/test_browser.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "e258c7a876ca1ec2ee10d988298ed9d88c94e7aff64d87c3fdcd3a6ef1cd1966",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/client/test_connection.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "b3bf1bab52dc81e6381f28ecbf59b98c2c5b5ee442b01798134fac635062f3dc",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/client/test_disconnect.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "0428d2274f1b64cd5dc1bf39f8725aed175b5cd3bdafd2914f40597f71145d92",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/client/test_host.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "fda39ed0b3a792e52e6929b9911e0385a04c67788f408d0d41bc123493b19c84",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/client/test_host.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "07b2694df896d77a22abd316b200cafec9839ceb03bd89b25e6598fdbdb9a2e3",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/client/test_terminal.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "7d09219496d2f29303264279c9afb36403717b77c9a0dbaa6b5816e8691db262",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_admin.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "a824a496a35c5b2428f04461b2662ca922126d265ef565ecb354da14bee5bb67",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_admin.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "bd78bae3d1f11598e9c219af37125293062917564a6ccfe91b20b0d8936c107c",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_admin.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "c36592ed73c82ffd75c8fe0af25084775ad108c3fb285b65d9121c87ebd356c8",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_admin.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "debae02d3e0874a11ffb932e8d8fa64489862c2c7c976b6c40544ae992407faf",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_admin.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "e4afc446417afd0faca701de386f53af8563f714a8fb8fe9e61bcbd21d743b98",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_admin.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "ee78dfd65567e6b8129937a1a2532fb8b70034ef7c637760a2992370b919ad0e",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_admin.py",
+      "count": 11
+    },
+    {
+      "fingerprint": "527e1952338ba345196e3e0016c2d00328e6875baf62c7e2d61dd860dc62ed01",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "8214a5ecb85de16d80809f8f9bb33183b63205f9d5e99085bf32a65834d73630",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "b1eed12f48fd19216d01f4098e9ced3f49e963477e1a05497d96cf94bbfb53bd",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "b7bdc0e60e34f113239ae383fe06831e2e488b58fd1ca3bb1d1c067bbfb0ab8e",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "dec0b75bfcaf1c59651be17eda017a3252bcc94fe695fdd5ade654c4804f5532",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup.py",
+      "count": 6
+    },
+    {
+      "fingerprint": "21c5189d265a1380ec2b74b153c1da9a446642964c0300572161a8cabf0a515e",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup_daemon.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "20ec7003e62cc77d5b8e0fdbfbb09c366d2ee5955c88ae61eedd2f8ad51e6f8a",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup_inspection.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "c3857a26f1285bdf0c3a5726e21c567c9d2796acc94de8e7ffe27a755aea7615",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup_node_cache.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "a3cfd65abb67e9bfde731787c8412a30e8e2d4a2e305309d661751dfa3321a88",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup_probe.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "3eaf8784fcccfc50c852f56bf6ab8f1b3c7194cb3d34a43b2abb15b819bd2493",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup_resilience.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "95cc15fe0fcecd44a9d6895795f406d42e906d73b38483d74f7ebf402b5eea8c",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup_resilience.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "45b95160ebf3100c52e1215297fe66dcd30436f11ce3c75063328bdcb6c5f6ec",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup_state.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "60e7b0514ce9a0c2087e2d7b13e28b406c8246c201d6a922410895d2ca4e315e",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_cleanup_state.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "f5eef7fecada039fd9ac7dd36269d88f0704c995f8bd03307390c6d4ab44af02",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_codex_panes.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "070c248b3ff29befa5dc896bc129389b32883a9defc135baa8962cb89091dc3a",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_host.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "7d420686b1f2d5ade6e63aea8f748cd89634c20cddc0087a4c08349901fc3796",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_host.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "af1ee4b2ccc610e23c67c61802282366efc7523f09368cd9b9c49133488a6a16",
+      "source": "sarj-python-lint",
+      "ruleId": "numeric-literal-separators",
+      "path": "tests/runtime/test_host.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "82e85989fd5f4ee7c0f7287326fbbb024fe4ee55574fedaa54ffe5a5ea2fbe82",
+      "source": "sarj-python-lint",
+      "ruleId": "opaque-parametrize-case-needs-id",
+      "path": "tests/runtime/test_cleanup_node_cache.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "91b721f6d36eb45337a0ed48df7a54a861121d531e0e6c0a518a5508736cfe57",
+      "source": "sarj-python-lint",
+      "ruleId": "opaque-parametrize-case-needs-id",
+      "path": "tests/runtime/test_host.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "a0f039935a221ab416f274fef9fc24ac1dffc933c47fb17aa15b71c6db6e0e21",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-discriminated-model-union",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "8d0f303004f433b16d53211142d40cea4a79843ae5cd3ad0059fb0c44b548704",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-explicit-class-contract",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "bd91df45fa1544fdd0401951fea0802277d921e9e3baf7180b17997d9783332f",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-explicit-value-model-construction",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_capacity.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "99e8ed7ccbb546eba917d145f6c5fefcb1cc51ed9289555db3a54e10a23be3b2",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-match-value-dispatch",
+      "path": "tests/runtime/test_host.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "f9e588d16ca54b1f42f233bfabed132d75e233986ee6594788b199e99d723cf9",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-id-types",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "c536187d77eedf3076888b2c03d13c24e877d77c2ccdc6a82afcc8af9c347ad8",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-id-types",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_panes.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "7a51c8567d54527d45a1412e94c310fc438e5d192549f9fb12ea6ea57bd282a9",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/client/cloud.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "4d517cba55e8b861045ecd03bbb0b99982835484493f938966271c9d7ede5cd6",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/config.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "b83b8a7e4549f3d76bb605d6a4c5229c9ad45bbc627785478bc6f9b7966afe87",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/infra.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "b7b0bdf1fe97112bcea1e2fbce2b67fecbedc51808e12c36ae4ef40010336d4e",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/process.py",
+      "count": 5
+    },
+    {
+      "fingerprint": "1e31f31f55f41ebd9d49feb5bca5e531a82ecee3995b519356fe78ac3cbf533f",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/admin_worker.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "97d01243fc5d3795db666567db3fe45825ed807180c4ead6ae670fa48f4144db",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "530dadd199e866168451c6f6973e4b03104d5108eb666133cbbe53defc64f77d",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_artifacts.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "123b3bb942c336be5815eaa1a518457342c46ed564641b384a096ca7931a7b42",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_daemon.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "e11905718c452628baf16ae8b872f307af121d228233e52cab9a1da21a0c450f",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_publication.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "411b010407603a66e087872ee96f48d27b2c972206ae99030ff4a2fa55245615",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_webpack_cache.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "205e0e84f5cac3f801baea53c2824472abafe635996392a1cd55a081f7b07157",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "f4013c4c40fd61ce9e0c062bb4584a72bd051cb3956befc46a8b1f312c7b0523",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_panes.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "ac9b733064ccc6912e042dcd09c7fd50aff365b4b07aa02273fa2932c1f4ae13",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/doctor.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "f245d59d6166af705e58118e3389d4f4c69f97a9519e8abdd86bb8d066275ba7",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/maintenance_worker.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "b6c6837abb32cf7bece9e6f5da5921f30c358378c3273cff3b584ac879137cba",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/settings.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "47eeea5d5bb26313dd997bcaf461f66fe0856c5a7e36da8cbc99728a0238a812",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-nominal-mapping-keys",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/worktrees.py",
+      "count": 7
+    },
+    {
+      "fingerprint": "8880799a3e8a76fdef0a40d24e1b7bc5120b3a4bed9f70892fc2ce18a135c9f1",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-optional-composite",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "439e6c890f943ef10c9dba23184dfcc1d40ba0d1368174437ef2e549d648bf39",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-optional-composite",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_daemon.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "b5a917b635df8d08c4ea8537b53db94b6eeda03acbc295db83891a76780ed6cd",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-precise-object-contract",
+      "path": "tests/runtime/test_cleanup_inspection.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "b196cb35c6ad5d33c55fa05467922cdb47d3ec1ffa11cea5204add09e5296647",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/client/cloud.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "b2d072946fef0e795c6ae7c95d5a34825ac99e1f1a9a23bf0fc60630e233975b",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/client/cloud.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "bbd6c1c743b04b1bcf9b71fc55d8bea3c130e490707c966896ad0d5211b30fe1",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/client/cloud.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "8879af5fcce6771f88e6587e56d9bc0fc2e898ec43c36c5fa123560abe55f4b6",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/client/controller.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "9f2562b5a21375360ee33bbd044680a5b57b1b3e7fc9e594200b054e792ed681",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/client/controller.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "bdbebe92c6ebd44926dd4059cfe799ccdd9d31ec960e998228268144fad1dc60",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/client/controller.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "c373d9c1cc7ff90c6c57874d2958ad782ef226899981585bf309506fd8ec0926",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/client/controller.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "d6d6b0b866edb0c06e3216638632806e626c37277d67dd64dff750d0503d7d03",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/client/controller.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "d703c7f27ea0acd47ff142ef373f877ae54b0a8dffbdb61077f945561487d70d",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/client/controller.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "71e3a03a457f253fed3d603f29c4616624bf195d7b73d3c306fc51db72cc0a8f",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/client/terminal.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "8a49e26343144dc8f83ba95ab76617df7ba8a53e9583f3a73621e4b5786ae742",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_inspection.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "6327179620d4ad3e901762ed135347ba757d0b66d84770dea63a9fff084ab3e0",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_probe.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "145fad0782d174ef34c3894829261d67aceeaaa4d266601886a8e23348353edd",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "ec402c801044ec6f1771a441c16f5acb7dbd51a84b820dac2042f6fab5769133",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-required-constructor-parameters",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "b74d69bc8707ed823ad2db5838253c93378813b8536786c1a163f068d206a341",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-runtime-validation",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/admin_worker.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "0e387ca22e7e7d3c996ec8f3ce3889823f70abd8d83451ce197f01783022775d",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-runtime-validation",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_probe.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "d05980980b659e029de30b663d53f7f9b3ef6a90ce2de4271022009953ec27e5",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-runtime-validation",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/maintenance_worker.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "e6fa52e61b6c474bdf77eae86f43d8690208016a3a3593b6b6cda1b68e2d2ecb",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-runtime-validation",
+      "path": "scripts/generate_docs.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "a4f92dabedf71637577354a83e6b5b1c01c2d17331097b367d2d35be988efcab",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-single-parametrize-contract",
+      "path": "tests/runtime/test_codex_retry_state.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "6cb0e1784ef885747ebd5744c8b8e0843514038734f7903c8dac555f754efc89",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-single-parametrize-contract",
+      "path": "tests/runtime/test_host.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "b25c0c34a02f7ecfa7ca9e39af2b1dc2decf8e8f020263f8413f8e70e8771397",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-mapping-get",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/admin_worker.py",
+      "count": 10
+    },
+    {
+      "fingerprint": "5b7d9ad16d1b80195587fc85ae730233111204a080a8920663f41b2fcbfc7da3",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-mapping-get",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_probe.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "5ee99514e1482dd7a85e24cc2e22721760aa6eb56ba9ea38ba6aba7b16064a55",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-mapping-get",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/maintenance_worker.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "639227912ebda074a4dec512cf99de1f8dc370edcd7cf55de4db2b0073c357be",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-mapping-get",
+      "path": "scripts/generate_docs.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "07a8dd3b3fc81555b7fdb0f61f5540284369ec5fbc8bfb79a05aff4f980f4432",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/client/browser.py",
+      "count": 5
+    },
+    {
+      "fingerprint": "2b03e068997dfc75c9ad00e004ae41d20feffc60ca46146e762882ce506d7a89",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/admin.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "bff3db4f3aaabaeb38185dbf2b871e37a270612f4f7ac624696acaaa977ecc37",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_activity.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "d9137c911382d59a6b3a036d4f2c3086b932ba7fa6b09a98d330a378516dbe33",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_artifacts.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "0e4f150d6c9f1e9049a16783e972011c2cbb7d06e91adc2464f257b7b173f089",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_capacity.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "975850a0bc315914b1fa86655009a6fde531b052b4507e527d798464a30df0fe",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_capacity.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "f95cf51fc0cef460015bf98d7ffc304bb75f6c3bb6a36957367e3f4ecdb4f28c",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_capacity.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "435114e4ff06842279d687014af819c52a0ca155876768edea37afe0176e87a9",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_daemon.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "d04de29879757e463da8c615c9302f8c2e45246255f2a88e6b4734fa088b7fc6",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_daemon.py",
+      "count": 7
+    },
+    {
+      "fingerprint": "1cec63aef37e6427e35f1ae20fd905534a58dc64419fb4e3a9c3516c3b660ce4",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_inspection.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "eeb3eb5768f92e1be8a50dd63323182812e62eb7076f54f575d6cdd21e07ad46",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_node_cache.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "9b4cefd34c6e50bb0c3e5f9d26e108508c0a33aed96df04146095e9688a2a2f4",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_publication.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "3d0e5ab3f57a07eca306da40af6484c5e1f8765bcd9dda82ba1ab100efe8fc62",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_state.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "55c56d09177cf4cd24ea89cb5520c69e9ae81c1320454d814753de1082e0c851",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_state.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "89253859185a34e11fa39b7a17a0034175462e08ad15ccb003a41ed9a373235b",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "25a71079adf7576a1f154d769136bc77376cd94e9b29edc0fe2368f264f79847",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_recovery.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "61b8c62ca57046a552e0806cad1dddb17483dfa982f1c8afbb0dae0e404fb383",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_recovery.py",
+      "count": 5
+    },
+    {
+      "fingerprint": "b6464027ee9601fecca2f8af92712a6d1502e1bb42d0d56172e20e90ca6fbc02",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_recovery.py",
+      "count": 8
+    },
+    {
+      "fingerprint": "d359ea2560d5f942648f2c6031313915e7ecb2b462f3a4744952419917b27591",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_retry_state.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "e01de926566d2206180f9e935114ae1b3d87611fed624efc32e3c26a5d66d75e",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/transfer.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "21930a07f6a83df068d374fa541c8bf9ff4b880d7ab81a650a213573ff0beb80",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-typed-settings-field",
+      "path": "tests/client/test_native_bridge.py",
+      "count": 3
+    },
+    {
+      "fingerprint": "5b1056cc62b118939993d3d178bcd50859ce5c3c20d66e203225a1c254f532d6",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-walrus-comprehension-filter",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/codex_recovery.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "061ff02838e50c3369f48ecfb55c106e33fd56ea9443948ed00240a2e5bb2a69",
+      "source": "sarj-python-lint",
+      "ruleId": "prefer-walrus-comprehension-filter",
+      "path": "scripts/generate_docs.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "34d769242fe3b4693f7b8263e1c16f67a78424d31daa9f72eb6805dca3beaf02",
+      "source": "sarj-python-lint",
+      "ruleId": "require-port-for-service",
+      "path": "packages/long-running-agent/src/long_running_agent/client/controller.py",
+      "count": 1
+    },
+    {
+      "fingerprint": "b929941639020ac3de974d96775370d01a9c39863bd7fa8bb3aaf036505807cb",
+      "source": "sarj-python-lint",
+      "ruleId": "require-pydantic-for-mapping-shape",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/admin_worker.py",
+      "count": 2
+    },
+    {
+      "fingerprint": "94b83a493cb925bea56c0644e269430e6da38faabdf906807cb098115065a99c",
+      "source": "sarj-python-lint",
+      "ruleId": "require-pydantic-for-mapping-shape",
+      "path": "packages/long-running-agent/src/long_running_agent/runtime/cleanup_probe.py",
+      "count": 4
+    },
+    {
+      "fingerprint": "3332b191bb2c5fd3eab7d33e2239bb66e0644014932b6a54de5c53a8507b4748",
+      "source": "zizmor",
+      "ruleId": "adhoc-packages",
+      "path": ".github/workflows/docs.yml",
+      "count": 2
+    },
+    {
+      "fingerprint": "793384734221404eb8aa57fe4feb747b23b65a68407a6a9da6b8943fd9392818",
+      "source": "zizmor",
+      "ruleId": "adhoc-packages",
+      "path": ".github/workflows/standards.yml",
+      "count": 1
+    }
+  ]
+}

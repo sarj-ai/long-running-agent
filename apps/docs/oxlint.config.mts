@@ -20,6 +20,10 @@ export default defineConfig({
   ignorePatterns: [...ignorePatterns],
   overrides: [
     {
+      files: ["public/ui/**/*.js"],
+      env: { browser: true },
+    },
+    {
       files: ["astro.config.ts", "scripts/verify-deployment.ts"],
       rules: {
         // These entrypoints reference output directories created by the build.

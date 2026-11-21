@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import json
 import signal
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from long_running_agent.process import DEVNULL, PIPE, run, spawn
 from long_running_agent.runtime import codex
@@ -327,11 +327,11 @@ def test_rejected_native_authentication_never_restarts_a_pane(
     assert not capsys.readouterr().out
 
 
-@pytest.mark.parametrize("state", ["reopened", "held"])
+@pytest.mark.parametrize("state", ["reopened", "failed"])
 def test_switch_reports_verified_account_then_each_pane_outcome(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    state: str,
+    state: Literal["reopened", "failed"],
 ) -> None:
     plan = codex.codex_panes.PanePlan(tmp_path, tmp_path / "native-codex", (), tmp_path / "checkpoint.json")
     calls: list[str] = []
