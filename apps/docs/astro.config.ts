@@ -46,7 +46,10 @@ export default defineConfig({
   },
   integrations: [
     sitemap({
-      customPages: [`${SITE_ORIGIN}/`, `${SITE_ORIGIN}/projects/wiki/`],
+      customPages: [
+        `${SITE_ORIGIN}/engineering/`,
+        `${SITE_ORIGIN}/engineering/projects/wiki/`,
+      ],
       filter: (page) =>
         ![ENGINEERING_ROUTE, WIKI_ROUTE, INTERNAL_APPS_ROUTE].some(
           (route) => page === new URL(route, SITE_HOMEPAGE).href,

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "homepage": "https://engineering.sarj.ai/projects/lra/",
+  "homepage": "https://sarj.ai/engineering/projects/lra/",
   "packageManager": "npm@12.2.1",
   "scripts": {
     "generate": "cd ../.. && uv run --locked python scripts/generate_docs.py",

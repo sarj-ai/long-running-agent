@@ -12,6 +12,7 @@ export function siteHref(path: string): string {
 
 export function isWikiProjectPath(pathname: string): boolean {
   return (
-    pathname === "/projects/wiki/" || pathname === siteHref("/wiki-project/")
+    pathname === "/engineering/projects/wiki/" ||
+    pathname === siteHref("/wiki-project/")
   );
 }

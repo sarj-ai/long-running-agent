@@ -137,15 +137,15 @@ export default function cloudflareArtifacts(assetRoot: URL): AstroIntegration {
         const [globalHeaders = ""] = headers.split("\n\n", 1);
         const homepageHeaders = globalHeaders.replace(
           "/*\n",
-          () => `/\n${homepageHeader}\n`,
+          () => `/engineering/\n${homepageHeader}\n`,
         );
         const wikiHeaders = globalHeaders.replace(
           "/*\n",
-          () => `/projects/wiki/*\n${wikiHeader}\n`,
+          () => `/engineering/projects/wiki/*\n${wikiHeader}\n`,
         );
         const internalAppsHeaders = globalHeaders.replace(
           "/*\n",
-          () => `/internal/*\n${internalAppsHeader}\n`,
+          () => `/engineering/internal/*\n${internalAppsHeader}\n`,
         );
         await writeFile(
           new URL("_headers", assetRoot),
@@ -153,21 +153,25 @@ export default function cloudflareArtifacts(assetRoot: URL): AstroIntegration {
           "utf8",
         );
         await writeFile(
-          new URL("index.html", assetRoot),
+          new URL("engineering/index.html", assetRoot),
           homepage.document.replace(POLICY_PATTERN, ""),
           "utf8",
         );
         await rm(new URL(ENGINEERING_ROUTE, dir), { recursive: true });
-        await mkdir(new URL("projects/wiki/", assetRoot), { recursive: true });
+        await mkdir(new URL("engineering/projects/wiki/", assetRoot), {
+          recursive: true,
+        });
         await writeFile(
-          new URL("projects/wiki/index.html", assetRoot),
+          new URL("engineering/projects/wiki/index.html", assetRoot),
           wiki.document.replace(POLICY_PATTERN, ""),
           "utf8",
         );
         await rm(new URL(WIKI_ROUTE, dir), { recursive: true });
-        await mkdir(new URL("internal/", assetRoot), { recursive: true });
+        await mkdir(new URL("engineering/internal/", assetRoot), {
+          recursive: true,
+        });
         await writeFile(
-          new URL("internal/index.html", assetRoot),
+          new URL("engineering/internal/index.html", assetRoot),
           internalApps.document.replace(POLICY_PATTERN, ""),
           "utf8",
         );
