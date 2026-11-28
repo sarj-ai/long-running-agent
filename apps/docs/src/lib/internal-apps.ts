@@ -1,14 +1,14 @@
 export const INTERNAL_APPS = [
   {
     name: "Quick Review",
-    href: "/internal/quick-review",
+    href: "/engineering/internal/quick-review",
     category: "Engineering",
     description:
       "Review PRs, annotate source, and pick up your personal queue. Owner access.",
   },
   {
     name: "Architecture",
-    href: "/internal/architecture",
+    href: "/engineering/internal/architecture",
     category: "Engineering",
     description:
       "Explore source-backed architecture maps, dependencies, and exports. Internal-admin access.",

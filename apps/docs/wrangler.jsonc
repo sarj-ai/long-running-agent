@@ -13,6 +13,8 @@
     "html_handling": "force-trailing-slash",
   },
   "routes": [
+    { "pattern": "sarj.ai/engineering", "zone_name": "sarj.ai" },
+    { "pattern": "sarj.ai/engineering/*", "zone_name": "sarj.ai" },
     { "pattern": "engineering.sarj.ai", "custom_domain": true },
     { "pattern": "lra.sarj.ai", "custom_domain": true },
   ],

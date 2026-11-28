@@ -8,7 +8,7 @@ import { INTERNAL_APPS } from "../lib/internal-apps";
 import { SITE_ORIGIN, siteHref } from "../lib/paths";
 
 const CATEGORIES = [...new Set(INTERNAL_APPS.map((app) => app.category))];
-const CANONICAL = `${SITE_ORIGIN}/internal/`;
+const CANONICAL = `${SITE_ORIGIN}/engineering/internal/`;
 ---
 
 <!doctype html>
@@ -30,7 +30,7 @@ const CANONICAL = `${SITE_ORIGIN}/internal/`;
     <main data-app-directory id="main-content" tabindex="-1">
       <section class="engineering-intro engineering-band">
         <div class="engineering-frame engineering-intro-inner">
-          <p class="engineering-eyebrow"><a href="/">Engineering</a><span aria-hidden="true">/</span> Internal</p>
+          <p class="engineering-eyebrow"><a href="/engineering/">Engineering</a><span aria-hidden="true">/</span> Internal</p>
           <h1>Internal apps</h1>
           <p class="engineering-summary">The tools we use to build and run Sarj.</p>
           <p class="internal-access-note">Each app keeps its own sign-in and access permissions.</p>
@@ -65,7 +65,7 @@ const CANONICAL = `${SITE_ORIGIN}/internal/`;
                   <a class="internal-app-card" href={app.href}>
                     <div class="internal-app-card-heading"><h3>{app.name}</h3><span aria-hidden="true" class="internal-app-arrow">↗</span></div>
                     <p>{app.description}</p>
-                    <span aria-hidden="true" class="internal-app-address">{app.href.startsWith("/") ? `engineering.sarj.ai${app.href}` : app.href.replace(/^https:\/\//u, "").replace(/\/$/u, "")}</span>
+                    <span aria-hidden="true" class="internal-app-address">{app.href.startsWith("/") ? `sarj.ai${app.href}` : app.href.replace(/^https:\/\//u, "").replace(/\/$/u, "")}</span>
                   </a>
                 </li>
               ))}
@@ -81,7 +81,7 @@ const CANONICAL = `${SITE_ORIGIN}/internal/`;
         </div>
       </section>
     </main>
-    <footer class="engineering-font-notices"><a href="/">Explore engineering projects and documentation <span aria-hidden="true">↗</span></a></footer>
+    <footer class="engineering-font-notices"><a href="/engineering/">Explore engineering projects and documentation <span aria-hidden="true">↗</span></a></footer>
     <script>
       import { mountAppDirectory } from "../lib/mount-app-directory";
       mountAppDirectory();

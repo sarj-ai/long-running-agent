@@ -48,8 +48,8 @@ for (const host of document.querySelectorAll(
       slug === "blog"
         ? "https://sarj.ai/blog/"
         : slug
-          ? `/projects/${slug}/`
-          : "/";
+          ? `/engineering/projects/${slug}/`
+          : "/engineering/";
     link.textContent = name;
     if (slug === current[0]) link.setAttribute("aria-current", "true");
     item.append(link);

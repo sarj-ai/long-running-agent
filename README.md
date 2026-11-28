@@ -4,7 +4,7 @@
 
 Open your terminal or browser.
 
-[Documentation](https://engineering.sarj.ai/projects/lra/) · [Source](https://github.com/sarj-ai/long-running-agent)
+[Documentation](https://sarj.ai/engineering/projects/lra/) · [Source](https://github.com/sarj-ai/long-running-agent)
 
 ```bash
 uv tool install --editable ./packages/long-running-agent

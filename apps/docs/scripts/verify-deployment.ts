@@ -68,20 +68,23 @@ async function main(): Promise<void> {
 
 async function verifyInternalApps(mode: VerificationMode): Promise<void> {
   const artifact = await readFile(
-    new URL("internal/index.html", DIST_ROOT),
+    new URL("engineering/internal/index.html", DIST_ROOT),
     "utf8",
   );
   const ownedDocument = activeDocument(artifact);
   const response =
     mode === "live"
-      ? await deployedResponse(new URL("/internal/", SITE_URL), "text/html")
+      ? await deployedResponse(
+          new URL("/engineering/internal/", SITE_URL),
+          "text/html",
+        )
       : undefined;
   const document = response
     ? activeDocument(await response.text())
     : ownedDocument;
   const headers = await readFile(new URL("_headers", DIST_ROOT), "utf8");
   const expectedPolicy =
-    /(?:^|\n\n)\/internal\/\*\n {2}Content-Security-Policy: ([^\n]+)/u.exec(
+    /(?:^|\n\n)\/engineering\/internal\/\*\n {2}Content-Security-Policy: ([^\n]+)/u.exec(
       headers,
     )?.[1];
   assert.ok(expectedPolicy, "Internal app directory CSP missing");
@@ -91,7 +94,9 @@ async function verifyInternalApps(mode: VerificationMode): Promise<void> {
   assert.ok(policy, "Published internal app directory CSP missing");
   verifyPolicy(policy, expectedPolicy, document);
   assert.match(document.markup, /<h1\b[^>]*>\s*Internal apps\s*<\/h1>/u);
-  assert.ok(document.markup.includes(`href="${SITE_URL.origin}/internal/"`));
+  assert.ok(
+    document.markup.includes(`href="${SITE_URL.origin}/engineering/internal/"`),
+  );
   for (const app of INTERNAL_APPS)
     assert.ok(
       document.markup.includes(`href="${app.href}"`),
@@ -111,14 +116,14 @@ async function verifyInternalApps(mode: VerificationMode): Promise<void> {
 
 async function verifyWiki(mode: VerificationMode): Promise<void> {
   const artifact = await readFile(
-    new URL("projects/wiki/index.html", DIST_ROOT),
+    new URL("engineering/projects/wiki/index.html", DIST_ROOT),
     "utf8",
   );
   const ownedDocument = activeDocument(artifact);
   const response =
     mode === "live"
       ? await deployedResponse(
-          new URL("/projects/wiki/", SITE_URL),
+          new URL("/engineering/projects/wiki/", SITE_URL),
           "text/html",
         )
       : undefined;
@@ -127,7 +132,7 @@ async function verifyWiki(mode: VerificationMode): Promise<void> {
     : ownedDocument;
   const headers = await readFile(new URL("_headers", DIST_ROOT), "utf8");
   const expectedPolicy =
-    /(?:^|\n\n)\/projects\/wiki\/\*\n {2}Content-Security-Policy: ([^\n]+)/u.exec(
+    /(?:^|\n\n)\/engineering\/projects\/wiki\/\*\n {2}Content-Security-Policy: ([^\n]+)/u.exec(
       headers,
     )?.[1];
   assert.ok(expectedPolicy, "Immutable Wiki CSP missing");
@@ -152,7 +157,9 @@ async function verifyWiki(mode: VerificationMode): Promise<void> {
     "Wiki heading missing",
   );
   assert.ok(
-    document.markup.includes(`href="${SITE_URL.origin}/projects/wiki/"`),
+    document.markup.includes(
+      `href="${SITE_URL.origin}/engineering/projects/wiki/"`,
+    ),
     "Wiki canonical URL differs",
   );
   for (const href of [
@@ -181,18 +188,23 @@ async function verifyWiki(mode: VerificationMode): Promise<void> {
 }
 
 async function verifyEngineering(mode: VerificationMode): Promise<void> {
-  const artifact = await readFile(new URL("index.html", DIST_ROOT), "utf8");
+  const artifact = await readFile(
+    new URL("engineering/index.html", DIST_ROOT),
+    "utf8",
+  );
   const ownedDocument = activeDocument(artifact);
   const response =
     mode === "live"
-      ? await deployedResponse(new URL("/", SITE_URL), "text/html")
+      ? await deployedResponse(new URL("/engineering/", SITE_URL), "text/html")
       : undefined;
   const document = response
     ? activeDocument(await response.text())
     : ownedDocument;
   const headers = await readFile(new URL("_headers", DIST_ROOT), "utf8");
   const expectedPolicy =
-    /(?:^|\n\n)\/\n {2}Content-Security-Policy: ([^\n]+)/u.exec(headers)?.[1];
+    /(?:^|\n\n)\/engineering\/\n {2}Content-Security-Policy: ([^\n]+)/u.exec(
+      headers,
+    )?.[1];
   assert.ok(expectedPolicy, "Immutable Engineering root CSP missing");
   const policy = response
     ? response.headers.get("Content-Security-Policy")
@@ -227,7 +239,7 @@ async function verifyEngineering(mode: VerificationMode): Promise<void> {
       ),
     );
     const sitemap = sitemapDocuments.join("\n");
-    assert.ok(sitemap.includes(`<loc>${SITE_URL.origin}/</loc>`));
+    assert.ok(sitemap.includes(`<loc>${SITE_URL.origin}/engineering/</loc>`));
     assert.doesNotMatch(sitemap, /\/engineering-home\//u);
     assert.doesNotMatch(
       await readFile(new URL("_redirects", DIST_ROOT), "utf8"),
@@ -399,7 +411,7 @@ function verifyEngineeringMarkup(document: string): void {
     .matchAll(/<link\b[^>]*>/gu)
     .find(([tag]) => /\brel="canonical"/u.test(tag))?.[0];
   assert.ok(
-    canonical?.includes(`href="${SITE_URL.origin}/"`),
+    canonical?.includes(`href="${SITE_URL.origin}/engineering/"`),
     "Engineering canonical URL differs",
   );
   assert.doesNotMatch(
